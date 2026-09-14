@@ -12,11 +12,10 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Layer-cache deps before copying source
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
+# Copy everything first — local editable packages (commerce-common, etc.)
+# must exist on disk before pip can install them.
 COPY . .
+RUN pip install --no-cache-dir -r requirements.txt
 
 EXPOSE 8000
 

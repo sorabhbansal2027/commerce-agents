@@ -5,10 +5,11 @@ Uvicorn target: retail.api.main_production:app  (--app-dir examples)
 The base app only allows localhost origins. This module adds CORSMiddleware that
 reads CORS_ORIGINS (comma-separated) so Railway deployments can serve Salesforce.
 
-It also patches AsyncAnthropic before the agent is created so that the `custom`
-field added by the Anthropic SDK (e.g. eager_input_streaming) is stripped from
-tool definitions before every request reaches LiteLLM / Bedrock. AWS Bedrock
-rejects tool definitions that contain unknown extra fields.
+It also patches AsyncAnthropic before the agent is created so that the
+`eager_input_streaming` field — added to each streaming tool by
+commerce_common.prompt_assembly.with_eager_input — is stripped before every
+request reaches LiteLLM / Bedrock. AWS Bedrock rejects tool definitions that
+contain non-standard fields (it reports them as "custom.<field>" in errors).
 """
 
 from __future__ import annotations
@@ -20,10 +21,10 @@ import httpx
 from starlette.middleware.cors import CORSMiddleware
 
 # ── Bedrock compatibility patch ────────────────────────────────────────────────
-# Anthropic SDK >= 0.100 adds {"custom": {"eager_input_streaming": true}} to
-# every tool definition when streaming. AWS Bedrock InvokeModel rejects it.
-# We inject a custom httpx transport that strips the `custom` key before the
-# request body leaves the process (before it reaches the LiteLLM proxy).
+# commerce_common.prompt_assembly.with_eager_input() adds eager_input_streaming=True
+# to certain tools at orchestrator setup time.  Bedrock InvokeModel rejects that
+# field ("Extra inputs are not permitted").  Inject a custom httpx transport that
+# strips it from every /messages request before it reaches LiteLLM.
 try:
     from anthropic import AsyncAnthropic
 
@@ -32,9 +33,13 @@ try:
             if '/messages' in request.url.path and request.content:
                 try:
                     body = json.loads(request.content)
-                    if any('custom' in t for t in body.get('tools', [])):
+                    # commerce_common.prompt_assembly.with_eager_input adds
+                    # eager_input_streaming=True as a top-level tool field for
+                    # the Anthropic API's fine-grained streaming feature.
+                    # Bedrock rejects it (reports as "custom.eager_input_streaming").
+                    if any('eager_input_streaming' in t for t in body.get('tools', [])):
                         for tool in body['tools']:
-                            tool.pop('custom', None)
+                            tool.pop('eager_input_streaming', None)
                         content = json.dumps(body).encode('utf-8')
                         headers = dict(request.headers)
                         headers['content-length'] = str(len(content))

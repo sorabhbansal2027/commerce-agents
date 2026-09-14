@@ -6,6 +6,8 @@ deployment knobs from the environment."""
 
 from __future__ import annotations
 
+import os
+
 from demo_common import host_approval_default
 from merchant_agent import MerchantAgentConfig
 from shopping_agent import ShoppingAgentConfig

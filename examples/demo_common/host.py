@@ -74,6 +74,13 @@ def host_approval_default() -> bool:
     return os.environ.get("MERCHANT_REQUIRE_HOST_APPROVAL", "1") != "0"
 
 
+def build_anthropic_client() -> anthropic.AsyncAnthropic | None:
+    """Shared client for all agents, or None to let each agent build its own.
+    Returns None in standard Anthropic API mode (ANTHROPIC_API_KEY picked up
+    from the environment). Set ANTHROPIC_BASE_URL to point at a LiteLLM proxy."""
+    return None
+
+
 # The event loop holds only weak references to tasks, so fire-and-forget work (memory
 # extraction after a turn) is kept alive here until it completes.
 _background_tasks: set[asyncio.Task[Any]] = set()

@@ -185,6 +185,7 @@ export default class CommerceAgentPanel extends LightningElement {
         const reader  = body.getReader();
         const decoder = new TextDecoder();
         let buf = '';
+        let sseEventType = null;
         while (true) {
             const { done, value } = await reader.read();
             if (done) break;
@@ -193,10 +194,20 @@ export default class CommerceAgentPanel extends LightningElement {
             while ((nl = buf.indexOf('\n')) !== -1) {
                 const line = buf.slice(0, nl).trimEnd();
                 buf = buf.slice(nl + 1);
+                if (line.startsWith('event:')) {
+                    sseEventType = line.slice(6).trim();
+                    continue;
+                }
                 if (!line.startsWith('data:')) continue;
                 const raw = line.slice(5).trim();
-                if (!raw || raw === '[DONE]') continue;
-                try { this._handleEvent(JSON.parse(raw)); } catch (_) { /* parse error */ }
+                if (!raw || raw === '[DONE]') { sseEventType = null; continue; }
+                try {
+                    const ev = JSON.parse(raw);
+                    // Merge SSE event: field as type if the JSON has none
+                    if (!ev.type && sseEventType) ev.type = sseEventType;
+                    this._handleEvent(ev);
+                } catch (_) { /* parse error */ }
+                sseEventType = null;
             }
         }
     }

@@ -8,3 +8,5 @@
 FROM ghcr.io/berriai/litellm:main-stable
 # Path is relative to repo root — no custom build context needed on Railway
 COPY embed/litellm-config.yaml /app/config.yaml
+# Without --config the image starts with no model mappings; --detailed_debug helps Railway logs
+CMD ["--config", "/app/config.yaml", "--port", "4000", "--detailed_debug"]

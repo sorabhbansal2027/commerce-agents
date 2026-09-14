@@ -1,0 +1,229 @@
+<template>
+
+    <!-- ── Toggle button (shown when panel is closed) ─────────────────────── -->
+    <template lwc:if={isOpen}></template>
+    <template lwc:else>
+        <button class={toggleClass} onclick={handleToggle} aria-label="Open merchant assistant">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true" style="color:#d97f5f">
+                <path d="M8 1.5l1.6 4.9H14l-3.8 2.8 1.4 4.3L8 10.7l-3.6 2.8 1.4-4.3L2 6.4h4.4L8 1.5z" fill="currentColor"/>
+            </svg>
+            <span>{panelTitle}</span>
+            <span class="ca-toggle-ping" aria-hidden="true"></span>
+        </button>
+    </template>
+
+    <!-- ── Panel (shown when open) ────────────────────────────────────────── -->
+    <template lwc:if={isOpen}>
+        <section class="ca-panel" role="dialog" aria-modal="true" aria-label={panelTitle}>
+
+            <!-- Header -->
+            <header class="ca-header">
+                <div class="ca-hmark" aria-hidden="true">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                        <path d="M8 1.5l1.6 4.9H14l-3.8 2.8 1.4 4.3L8 10.7l-3.6 2.8 1.4-4.3L2 6.4h4.4L8 1.5z" fill="currentColor"/>
+                    </svg>
+                </div>
+                <div class="ca-htext">
+                    <div class="ca-htitle">{panelTitle}</div>
+                    <div class="ca-hsub">AI-powered insights</div>
+                </div>
+                <div class="ca-act-badge">
+                    <span class={actDotClass} aria-hidden="true"></span>
+                    <span>{actLabel}</span>
+                </div>
+                <button class="ca-icon-btn" onclick={handleClose} aria-label="Close panel">
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                        <path d="M1 1l12 12M13 1L1 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                    </svg>
+                </button>
+            </header>
+
+            <!-- Scroll area -->
+            <div class="ca-scroll" role="log" aria-live="polite" aria-atomic="false">
+
+                <!-- Empty-state starters -->
+                <template lwc:if={showIntro}>
+                    <p class="ca-intro">{introText}</p>
+                    <div class="ca-starters">
+                        <template for:each={starters} for:item="s">
+                            <button key={s.id}
+                                    class="ca-starter"
+                                    data-label={s.label}
+                                    disabled={s.disabled}
+                                    onclick={handleStarter}>
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                                    <rect x="1" y="7" width="3" height="7" rx="1" fill="currentColor" opacity=".5"/>
+                                    <rect x="6" y="4" width="3" height="10" rx="1" fill="currentColor" opacity=".75"/>
+                                    <rect x="11" y="1" width="3" height="13" rx="1" fill="currentColor"/>
+                                </svg>
+                                <span class="ca-starter-label">{s.label}</span>
+                                <svg class="ca-starter-arrow" width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                                    <path d="M2 6h8M7 3l3 3-3 3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                            </button>
+                        </template>
+                    </div>
+                </template>
+
+                <!-- Transcript — each item wrapped in a keyed div for for:each -->
+                <div class="ca-transcript">
+                    <template for:each={itemViews} for:item="item">
+                        <div key={item.uid} class="ca-item">
+
+                            <!-- User bubble -->
+                            <template lwc:if={item.isUser}>
+                                <div class="ca-user-row">
+                                    <div class="ca-user-bubble">{item.text}</div>
+                                </div>
+                            </template>
+
+                            <!-- Assistant text -->
+                            <template lwc:if={item.isText}>
+                                <div class="ca-turn">
+                                    <div class={item.textClass}>{item.text}</div>
+                                </div>
+                            </template>
+
+                            <!-- Activity line -->
+                            <template lwc:if={item.isActivity}>
+                                <div class="ca-activity" aria-live="polite">
+                                    <span class="ca-activity-pulse" aria-hidden="true"></span>
+                                    <span class="ca-activity-label">{item.label}</span>
+                                </div>
+                            </template>
+
+                            <!-- Skeleton loader -->
+                            <template lwc:if={item.isSkeleton}>
+                                <div class="ca-skeleton-wrap" aria-label="Loading response">
+                                    <div class="ca-skeleton"></div>
+                                    <div class="ca-skeleton w60"></div>
+                                    <div class="ca-skeleton w40"></div>
+                                </div>
+                            </template>
+
+                            <!-- Generative data card -->
+                            <template lwc:if={item.isCard}>
+                                <div class="ca-card">
+                                    <div class="ca-card-hdr">
+                                        <span class={item.dotClass} aria-hidden="true"></span>
+                                        <span>{item.header}</span>
+                                    </div>
+                                    <div class="ca-card-body">
+                                        <template lwc:if={item.hasPairs}>
+                                            <div class="ca-kv">
+                                                <template for:each={item.pairs} for:item="p">
+                                                    <div key={p.uid} class="ca-kv-row">
+                                                        <span class="ca-kv-k">{p.k}</span>
+                                                        <span class="ca-kv-v">{p.v}</span>
+                                                    </div>
+                                                </template>
+                                            </div>
+                                        </template>
+                                        <template lwc:if={item.hasRows}>
+                                            <ul class="ca-list">
+                                                <template for:each={item.rows} for:item="row">
+                                                    <li key={row.uid} class="ca-list-row">
+                                                        <span class="ca-list-idx">{row.idx}</span>
+                                                        <div class="ca-list-body">
+                                                            <div class="ca-list-title">{row.title}</div>
+                                                            <template lwc:if={row.hasDetail}>
+                                                                <div class="ca-list-detail">{row.detail}</div>
+                                                            </template>
+                                                        </div>
+                                                    </li>
+                                                </template>
+                                            </ul>
+                                        </template>
+                                    </div>
+                                </div>
+                            </template>
+
+                            <!-- Change-preview card -->
+                            <template lwc:if={item.isChange}>
+                                <div class="ca-card">
+                                    <div class="ca-change-hdr">
+                                        <span class="ca-change-name">{item.name}</span>
+                                        <span class={item.statusClass}>{item.statusLabel}</span>
+                                    </div>
+                                    <div class="ca-change-diff">
+                                        <template lwc:if={item.hasFrom}>
+                                            <div class="ca-diff-from">{item.fromValue}</div>
+                                        </template>
+                                        <div class="ca-diff-to">{item.toValue}</div>
+                                    </div>
+                                    <template lwc:if={item.isStaged}>
+                                        <div class="ca-change-actions">
+                                            <button class="ca-btn-approve"
+                                                    data-id={item.changeId}
+                                                    onclick={handleApprove}
+                                                    aria-label="Approve change">
+                                                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                                                    <path d="M2 7l4 4 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                                </svg>
+                                                Approve
+                                            </button>
+                                            <button class="ca-btn-discard"
+                                                    data-id={item.changeId}
+                                                    onclick={handleDiscard}
+                                                    aria-label="Discard change">
+                                                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                                                    <path d="M1 1l12 12M13 1L1 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                                                </svg>
+                                                Discard
+                                            </button>
+                                        </div>
+                                    </template>
+                                </div>
+                            </template>
+
+                            <!-- Error notice -->
+                            <template lwc:if={item.isError}>
+                                <div class="ca-error" role="alert">{item.text}</div>
+                            </template>
+
+                            <!-- Suggestion chips -->
+                            <template lwc:if={item.isChips}>
+                                <div class="ca-chips">
+                                    <template for:each={item.chips} for:item="chip">
+                                        <button key={chip.id}
+                                                class="ca-chip"
+                                                data-label={chip.label}
+                                                disabled={isBusy}
+                                                onclick={handleChip}>
+                                            {chip.label}
+                                        </button>
+                                    </template>
+                                </div>
+                            </template>
+
+                        </div>
+                    </template>
+                </div>
+
+            </div>
+
+            <!-- Composer -->
+            <footer class="ca-footer">
+                <form class="ca-form" onsubmit={handleFormSubmit}>
+                    <textarea class="ca-textarea"
+                              rows="1"
+                              placeholder={placeholder}
+                              aria-label="Message"
+                              value={draftValue}
+                              oninput={handleInput}
+                              onkeydown={handleKeyDown}></textarea>
+                    <button type="submit"
+                            class="ca-send-btn"
+                            disabled={cannotSend}
+                            aria-label="Send message">
+                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                            <path d="M7 12V2M2 7l5-5 5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </button>
+                </form>
+            </footer>
+
+        </section>
+    </template>
+
+</template>

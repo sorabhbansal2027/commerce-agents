@@ -1,0 +1,9 @@
+# Custom LiteLLM image with commerce-agents config baked in.
+# Build and push to Docker Hub (or any registry) so Railway can pull it.
+#
+# Build:  docker build -f embed/Dockerfile.litellm embed/ -t YOUR_HUB/litellm-commerce:latest
+# Push:   docker push YOUR_HUB/litellm-commerce:latest
+# Then use YOUR_HUB/litellm-commerce:latest as the Railway image.
+
+FROM ghcr.io/berriai/litellm:main-stable
+COPY litellm-config.yaml /app/config.yaml

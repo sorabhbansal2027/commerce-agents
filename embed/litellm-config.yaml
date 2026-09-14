@@ -1,0 +1,46 @@
+# LiteLLM proxy — Bedrock backend for commerce-agents.
+#
+# Why this file exists:
+#   The FastAPI app calls the Anthropic Python SDK with its default AsyncAnthropic client,
+#   which reads ANTHROPIC_BASE_URL and ANTHROPIC_API_KEY from the environment.  LiteLLM
+#   exposes an Anthropic-compatible API at http://litellm:4000 and forwards every call to
+#   Bedrock using the container's IAM role (or the AWS_* env vars you set).  Zero changes
+#   to any existing source file are required.
+#
+# How to update model ids:
+#   1. Open the AWS Bedrock console → Model access → confirm which Claude models are enabled
+#      in your region.
+#   2. Copy the Model ID shown (e.g. "anthropic.claude-sonnet-5-20261001-v1:0").
+#   3. Replace the placeholder values below for each model_name that the agents use
+#      (claude-sonnet-5 for shopping, claude-opus-5 for merchant, claude-haiku-* for memory).
+#   4. Restart the LiteLLM container.
+
+model_list:
+
+  # Shopping agent main model (ShoppingAgentConfig.model default: "claude-sonnet-5")
+  # Verify this ID is enabled: AWS Console → Bedrock → Model access → us-east-1
+  - model_name: claude-sonnet-5
+    litellm_params:
+      model: bedrock/anthropic.claude-3-5-sonnet-20241022-v2:0
+      aws_region_name: us-east-1
+
+  # Merchant agent main model (MerchantAgentConfig.model default: "claude-opus-5")
+  # Using Claude 3.5 Sonnet as the most capable widely-available Bedrock model.
+  # If anthropic.claude-3-opus-20240229-v1:0 is enabled in your account, prefer that.
+  - model_name: claude-opus-5
+    litellm_params:
+      model: bedrock/anthropic.claude-3-5-sonnet-20241022-v2:0
+      aws_region_name: us-east-1
+
+  # Memory extraction model (DEFAULT_MEMORY_MODEL: "claude-haiku-4-5-20251001")
+  - model_name: claude-haiku-4-5-20251001
+    litellm_params:
+      model: bedrock/anthropic.claude-3-5-haiku-20241022-v1:0
+      aws_region_name: us-east-1
+
+general_settings:
+  # The FastAPI container sets ANTHROPIC_API_KEY=sk-litellm-key to satisfy the SDK's
+  # key check; LiteLLM validates against this master key before forwarding to Bedrock.
+  master_key: sk-litellm-key
+  # Drop streaming keep-alives that confuse some proxies
+  drop_params: true

@@ -1,16 +1,25 @@
-"""Production entry point: Salesforce OMS backend + CORS + Bedrock-compatible tools.
+"""Production entry point: Salesforce OMS backend + CORS + proxy-compat patch.
 
 Uvicorn target: salesforce.api.main_production:app  (--app-dir examples)
 
-Applies the same two production patches as retail.api.main_production:
-  1. Strips eager_input_streaming from tool definitions (Bedrock rejects it).
-  2. Adds CORSMiddleware for the Salesforce sandbox origin via CORS_ORIGINS env var.
+Direct Anthropic API (recommended — full Claude thinking + streaming):
+  ANTHROPIC_API_KEY  — key from console.anthropic.com
+  (leave ANTHROPIC_BASE_URL unset)
+
+Via LiteLLM/Bedrock proxy:
+  ANTHROPIC_BASE_URL — http://litellm-service:4000
+  ANTHROPIC_API_KEY  — proxy master key
+
+When ANTHROPIC_BASE_URL points to a proxy the transport patch strips:
+  - eager_input_streaming (Bedrock rejects non-standard tool fields)
+  - thinking (Bedrock rejects thinking + forced tool_choice together)
+
+With direct Anthropic API neither strip is applied so full thinking works.
 
 Required env vars (set in Railway):
   SF_INSTANCE_URL   — https://<org>.sandbox.my.salesforce.com
   SF_CLIENT_ID      — Connected App consumer key
   SF_CLIENT_SECRET  — Connected App consumer secret
-  ANTHROPIC_BASE_URL / ANTHROPIC_API_KEY — LiteLLM proxy (same as retail)
   CORS_ORIGINS      — comma-separated allowed origins
 """
 
@@ -22,26 +31,28 @@ import os
 import httpx
 from starlette.middleware.cors import CORSMiddleware
 
-# ── Bedrock compatibility patch (must run before salesforce.api.main is imported) ─
+# Only apply Bedrock-compat strips when routing through a proxy (LiteLLM/Bedrock).
+# Direct Anthropic API supports both eager_input_streaming and thinking natively.
+_VIA_PROXY = bool(os.environ.get('ANTHROPIC_BASE_URL', '').strip())
+
+# ── Transport patch (must run before salesforce.api.main is imported) ──────────
 try:
     from anthropic import AsyncAnthropic
 
     class _BedrockCompatTransport(httpx.AsyncHTTPTransport):
         async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
-            if '/messages' in request.url.path and request.content:
+            if _VIA_PROXY and '/messages' in request.url.path and request.content:
                 try:
                     body = json.loads(request.content)
                     dirty = False
 
-                    # Strip eager_input_streaming — Bedrock rejects non-standard tool fields.
+                    # Bedrock rejects non-standard top-level tool fields.
                     if any('eager_input_streaming' in t for t in body.get('tools', [])):
                         for tool in body['tools']:
                             tool.pop('eager_input_streaming', None)
                         dirty = True
 
-                    # Strip thinking — Bedrock rejects thinking when tool_choice forces
-                    # a specific tool ("Thinking may not be enabled when tool_choice
-                    # forces tool use").
+                    # Bedrock rejects thinking when tool_choice forces a specific tool.
                     if 'thinking' in body:
                         body.pop('thinking')
                         dirty = True

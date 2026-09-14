@@ -20,7 +20,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 EXPOSE 8000
 
 # --app-dir adds examples/ to sys.path so "retail.api.main" resolves correctly.
-CMD ["uvicorn", "retail.api.main:app", \
+CMD ["uvicorn", "retail.api.main_production:app", \
      "--app-dir", "examples", \
      "--host", "0.0.0.0", \
      "--port", "8000"]

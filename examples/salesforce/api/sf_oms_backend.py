@@ -16,7 +16,7 @@ import os
 import time
 import urllib.parse
 from collections import defaultdict
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -95,11 +95,48 @@ def _since_ts(period: str | None) -> str:
     """Convert a period hint to a SOQL-ready ISO-8601 timestamp.
 
     Handles: None, "YYYY-MM-DD", "YYYY-MM-DDTHH:MM:SS.sssZ",
-    and range strings like "2026-08-18 to 2026-09-09" or "2026-08-18/2026-09-09"
-    (always uses the start date).
+    range strings like "2026-08-18 to 2026-09-09" or "2026-08-18/2026-09-09"
+    (always uses the start date), and natural-language expressions like
+    "last_7_days", "last_30_days", "last_week", "last_month", "this_month".
     """
+    import re
+
     if not period:
         return _DEFAULT_SINCE
+
+    now = datetime.now(UTC)
+    p = period.strip().lower().replace(" ", "_")
+
+    # "last_N_days" / "last_N_day"
+    m = re.match(r'^last_(\d+)_days?$', p)
+    if m:
+        return (now - timedelta(days=int(m.group(1)))).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+
+    # "last_N_weeks"
+    m = re.match(r'^last_(\d+)_weeks?$', p)
+    if m:
+        return (now - timedelta(weeks=int(m.group(1)))).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+
+    # "last_N_months" — approximate as 30*N days
+    m = re.match(r'^last_(\d+)_months?$', p)
+    if m:
+        return (now - timedelta(days=30 * int(m.group(1)))).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+
+    simple = {
+        "last_week":  timedelta(weeks=1),
+        "last_month": timedelta(days=30),
+        "last_quarter": timedelta(days=90),
+        "last_year":  timedelta(days=365),
+        "this_week":  timedelta(days=now.weekday()),
+    }
+    if p in simple:
+        return (now - simple[p]).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+
+    if p == "this_month":
+        return now.replace(day=1, hour=0, minute=0, second=0, microsecond=0).strftime(
+            "%Y-%m-%dT%H:%M:%S.000Z"
+        )
+
     # Normalize any range separator to extract the start date
     for sep in (" to ", "/", " - ", "–"):
         if sep in period:

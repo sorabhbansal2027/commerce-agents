@@ -81,6 +81,13 @@ def build_anthropic_client() -> anthropic.AsyncAnthropic | None:
     return None
 
 
+def model_overrides(**field_to_var: str) -> dict[str, str]:
+    """Config kwargs for any field whose named env var is set.
+    e.g. model_overrides(model="SHOPPING_MODEL", memory_model="MEMORY_MODEL")
+    A field whose var is unset is omitted so the config class keeps its default."""
+    return {field: os.environ[var] for field, var in field_to_var.items() if os.environ.get(var)}
+
+
 # The event loop holds only weak references to tasks, so fire-and-forget work (memory
 # extraction after a turn) is kept alive here until it completes.
 _background_tasks: set[asyncio.Task[Any]] = set()

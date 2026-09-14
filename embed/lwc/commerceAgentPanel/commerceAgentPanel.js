@@ -121,6 +121,10 @@ export default class CommerceAgentPanel extends LightningElement {
 
     // ── Session ────────────────────────────────────────────────────────────────
     async _createSession() {
+        if (!(this.apiUrl ?? '').trim()) {
+            this._pushError('API URL is not configured. Set the apiUrl property in the Lightning App Builder.');
+            return;
+        }
         try {
             const res = await fetch(this._url('session'), { method: 'POST', headers: this._hdrs() });
             if (!res.ok) throw new Error(`Session ${res.status}`);
@@ -146,7 +150,8 @@ export default class CommerceAgentPanel extends LightningElement {
         this._busy = true;
         this._disableStarters(true);
         if (this._abortCtrl) this._abortCtrl.abort();
-        this._abortCtrl = new AbortController();
+        // AbortController is not available in Salesforce Lightning Web Security
+        this._abortCtrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
 
         const skelId = this._id();
         this._skeletonId = skelId;
@@ -155,13 +160,11 @@ export default class CommerceAgentPanel extends LightningElement {
         const payload = { message: text };
         if (this._sessionId) payload.session_id = this._sessionId;
 
+        const fetchOpts = { method: 'POST', headers: this._hdrs(), body: JSON.stringify(payload) };
+        if (this._abortCtrl) fetchOpts.signal = this._abortCtrl.signal;
+
         try {
-            const res = await fetch(this._url('chat'), {
-                method: 'POST',
-                headers: this._hdrs(),
-                body: JSON.stringify(payload),
-                signal: this._abortCtrl.signal,
-            });
+            const res = await fetch(this._url('chat'), fetchOpts);
             if (!res.ok) throw new Error(`Chat ${res.status}`);
             this._removeSkeleton();
             await this._readStream(res.body);

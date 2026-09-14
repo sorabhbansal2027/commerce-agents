@@ -22,6 +22,7 @@ def build_merchant_config(store_name: str) -> MerchantAgentConfig:
         require_host_approval=host_approval_default(),
         approval_surface="the Approve button on the change preview card",
         enable_analysis=False,
+        thinking_effort=None,
         metrics_intent_terms=(
             "sales", "revenue", "orders", "traffic", "conversion", "aov",
             "average order value", "performance", "performing", "trend",

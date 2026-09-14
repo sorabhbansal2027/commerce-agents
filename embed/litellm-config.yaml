@@ -21,19 +21,19 @@ model_list:
   # Verify this ID is enabled: AWS Console → Bedrock → Model access → us-east-1
   - model_name: claude-sonnet-5
     litellm_params:
-      model: bedrock/us.anthropic.claude-sonnet-4-5-20250929-v1:0
+      model: bedrock_converse/us.anthropic.claude-sonnet-4-5-20250929-v1:0
       aws_region_name: us-east-1
 
   # Merchant agent main model (MerchantAgentConfig.model default: "claude-opus-5")
   - model_name: claude-opus-5
     litellm_params:
-      model: bedrock/us.anthropic.claude-sonnet-4-5-20250929-v1:0
+      model: bedrock_converse/us.anthropic.claude-sonnet-4-5-20250929-v1:0
       aws_region_name: us-east-1
 
   # Memory extraction model (DEFAULT_MEMORY_MODEL: "claude-haiku-4-5-20251001")
   - model_name: claude-haiku-4-5-20251001
     litellm_params:
-      model: bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0
+      model: bedrock_converse/us.anthropic.claude-haiku-4-5-20251001-v1:0
       aws_region_name: us-east-1
 
 general_settings:

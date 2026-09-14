@@ -6,4 +6,5 @@
 # Then use YOUR_HUB/litellm-commerce:latest as the Railway image.
 
 FROM ghcr.io/berriai/litellm:main-stable
-COPY litellm-config.yaml /app/config.yaml
+# Path is relative to repo root — no custom build context needed on Railway
+COPY embed/litellm-config.yaml /app/config.yaml

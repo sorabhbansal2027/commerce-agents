@@ -222,10 +222,12 @@ export default class CommerceAgentPanel extends LightningElement {
                 this._pushItem({ kind: KIND.TEXT, id, text: '', streaming: true });
             }
             this._removeActivity();
-            this._mutateItem(this._pendingTurnId, it => ({ ...it, text: it.text + (ev.delta ?? ''), streaming: true }));
+            // server sends {"text":"..."} (not {"delta":"..."})
+            this._mutateItem(this._pendingTurnId, it => ({ ...it, text: it.text + (ev.text ?? ev.delta ?? ''), streaming: true }));
         }
         else if (t === 'progress' || t === 'tool_call') {
-            const label = ev.label ?? ev.tool ?? ev.name ?? 'Working…';
+            // progress: {"message":"...", "tool":"..."}, tool_call: {"tool":"...", "label":"..."}
+            const label = ev.message ?? ev.label ?? ev.tool ?? ev.name ?? 'Working…';
             if (!this._activityId) {
                 const id = this._id();
                 this._activityId = id;
@@ -235,7 +237,11 @@ export default class CommerceAgentPanel extends LightningElement {
             }
         }
         else if (t === 'ui' || t === 'ui_partial') {
-            this._renderUIBlock(ev.block ?? ev, t === 'ui_partial');
+            // ui: {"component":"products","payload":{...}} — merge so _renderUIBlock sees type
+            const block = ev.payload
+                ? { type: ev.component, ...ev.payload }
+                : (ev.block ?? ev);
+            this._renderUIBlock(block, t === 'ui_partial');
         }
         else if (t === 'change_update') {
             const ch = ev.change ?? ev;

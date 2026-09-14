@@ -37,9 +37,15 @@ try:
                     # eager_input_streaming=True as a top-level tool field for
                     # the Anthropic API's fine-grained streaming feature.
                     # Bedrock rejects it (reports as "custom.eager_input_streaming").
+                    dirty = False
                     if any('eager_input_streaming' in t for t in body.get('tools', [])):
                         for tool in body['tools']:
                             tool.pop('eager_input_streaming', None)
+                        dirty = True
+                    if 'thinking' in body:
+                        body.pop('thinking')
+                        dirty = True
+                    if dirty:
                         content = json.dumps(body).encode('utf-8')
                         headers = dict(request.headers)
                         headers['content-length'] = str(len(content))

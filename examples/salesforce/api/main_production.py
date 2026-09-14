@@ -31,9 +31,22 @@ try:
             if '/messages' in request.url.path and request.content:
                 try:
                     body = json.loads(request.content)
+                    dirty = False
+
+                    # Strip eager_input_streaming — Bedrock rejects non-standard tool fields.
                     if any('eager_input_streaming' in t for t in body.get('tools', [])):
                         for tool in body['tools']:
                             tool.pop('eager_input_streaming', None)
+                        dirty = True
+
+                    # Strip thinking — Bedrock rejects thinking when tool_choice forces
+                    # a specific tool ("Thinking may not be enabled when tool_choice
+                    # forces tool use").
+                    if 'thinking' in body:
+                        body.pop('thinking')
+                        dirty = True
+
+                    if dirty:
                         content = json.dumps(body).encode('utf-8')
                         headers = dict(request.headers)
                         headers['content-length'] = str(len(content))

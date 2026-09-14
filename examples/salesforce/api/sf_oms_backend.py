@@ -11,6 +11,7 @@ per-user token is needed because this is a merchant (back-office) agent.
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import time
 import urllib.parse
@@ -20,6 +21,9 @@ from pathlib import Path
 from typing import Any
 
 import httpx
+
+log = logging.getLogger(__name__)
+
 from merchant_agent import (
     ActorKind,
     AlertCounts,
@@ -167,6 +171,15 @@ class SalesforceOMSBackend(MerchantBackend):
                         "client_secret": self._client_secret,
                     },
                 )
+                if resp.status_code >= 400:
+                    log.error(
+                        "SF OAuth token request failed: HTTP %s\nURL: %s/services/oauth2/token\n"
+                        "client_id prefix: %s...\nResponse: %s",
+                        resp.status_code,
+                        self._base,
+                        self._client_id[:8] if self._client_id else "(empty)",
+                        resp.text,
+                    )
                 resp.raise_for_status()
                 data = resp.json()
             self._token = data["access_token"]

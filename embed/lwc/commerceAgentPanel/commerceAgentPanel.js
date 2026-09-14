@@ -158,9 +158,9 @@ export default class CommerceAgentPanel extends LightningElement {
         this._pushItem({ kind: KIND.SKELETON, id: skelId });
 
         const payload = { message: text };
-        if (this._sessionId) payload.session_id = this._sessionId;
+        const sessionHdr = this._sessionId ? { 'X-Session-Id': this._sessionId } : {};
 
-        const fetchOpts = { method: 'POST', headers: this._hdrs(), body: JSON.stringify(payload) };
+        const fetchOpts = { method: 'POST', headers: this._hdrs(sessionHdr), body: JSON.stringify(payload) };
         if (this._abortCtrl) fetchOpts.signal = this._abortCtrl.signal;
 
         try {
@@ -266,8 +266,9 @@ export default class CommerceAgentPanel extends LightningElement {
         const existing = this._items.find(i => i.kind === KIND.CHANGE && i.changeId === changeId);
         if (!existing) return;
         this._mutateItem(existing.id, it => ({ ...it, status: action === 'apply' ? 'applying…' : 'discarding…' }));
+        const sessionHdr = this._sessionId ? { 'X-Session-Id': this._sessionId } : {};
         try {
-            const res = await fetch(this._url(`changes/${changeId}/${action}`), { method: 'POST', headers: this._hdrs() });
+            const res = await fetch(this._url(`changes/${changeId}/${action}`), { method: 'POST', headers: this._hdrs(sessionHdr) });
             if (!res.ok) throw new Error(`${action} ${res.status}`);
             this._mutateItem(existing.id, it => ({ ...it, status: action === 'apply' ? 'applied' : 'discarded' }));
         } catch (err) {
@@ -312,7 +313,7 @@ export default class CommerceAgentPanel extends LightningElement {
         return `${base}${prefix}/${path}`;
     }
 
-    _hdrs() {
-        return { 'Content-Type': 'application/json', 'Accept': 'text/event-stream, application/json' };
+    _hdrs(extra) {
+        return { 'Content-Type': 'application/json', 'Accept': 'text/event-stream, application/json', ...extra };
     }
 }

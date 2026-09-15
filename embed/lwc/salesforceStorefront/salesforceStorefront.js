@@ -681,6 +681,9 @@ export default class SalesforceStorefront extends LightningElement {
             if (!partial) {
                 this._pushItem({ kind: KIND.CHECKOUT, id: this._id(), cart: block.cart ?? {}, note: block.note ?? null, handoffs: block.handoffs ?? [] });
             }
+        } else if (comp === 'suggestions') {
+            const chips = (block.suggestions ?? []).map(s => ({ id: this._id(), label: s }));
+            if (chips.length) this._pushItem({ kind: KIND.CHIPS, id: this._id(), chips });
         }
     }
 

@@ -12,347 +12,521 @@
         </button>
     </template>
 
-    <!-- ── Full panel (open state) ────────────────────────────────────────────── -->
+    <!-- ── Full panel ─────────────────────────────────────────────────────────── -->
     <template lwc:if={isOpen}>
         <div class="sf-outer">
 
-            <!-- ═══ LEFT: Dashboard ═══════════════════════════════════════════ -->
-            <div class="sf-dashboard">
+            <!-- ═══ LEFT NAV SIDEBAR ══════════════════════════════════════════ -->
+            <nav class="sf-nav" role="navigation" aria-label="Merchant workspace">
 
-                <!-- Greeting -->
-                <div class="sf-greeting-bar">
-                    <div class="sf-greeting-title">{greetingText}, Salesforce Operator</div>
-                    <div class="sf-greeting-sub">{dateText} · {summaryText}</div>
+                <!-- Brand -->
+                <div class="sf-nav-brand">
+                    <div class="sf-nav-avatar" aria-hidden="true">A</div>
+                    <div class="sf-nav-brand-text">
+                        <div class="sf-nav-brand-name">Salesforce</div>
+                        <div class="sf-nav-brand-sub">Merchant workspace</div>
+                    </div>
                 </div>
 
-                <!-- Overview loading skeleton -->
-                <template lwc:if={overviewLoading}>
-                    <div class="sf-ov-loading">
-                        <div class="sf-skeleton sf-sk-wide" style="height:72px; margin-bottom:12px;"></div>
-                        <div class="sf-skeleton sf-sk-wide" style="height:180px;"></div>
+                <!-- Nav items -->
+                <ul class="sf-nav-list" role="list">
+                    <li class={homeNavClass} data-tab="home" onclick={handleNavTab} role="button" tabindex="0">
+                        <svg width="18" height="18" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                            <path d="M3 9.5L10 3l7 6.5V17a1 1 0 01-1 1H4a1 1 0 01-1-1V9.5z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+                            <path d="M7 18v-6h6v6" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+                        </svg>
+                        <span>Home</span>
+                    </li>
+                    <li class={catalogNavClass} data-tab="catalog" onclick={handleNavTab} role="button" tabindex="0">
+                        <svg width="18" height="18" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                            <path d="M3 5a2 2 0 012-2h2l2 3H5a2 2 0 01-2-2z" stroke="currentColor" stroke-width="1.5"/>
+                            <rect x="3" y="6" width="14" height="11" rx="1.5" stroke="currentColor" stroke-width="1.5"/>
+                            <path d="M7 11h6M7 14h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                        </svg>
+                        <span>Catalog</span>
+                    </li>
+                    <li class={ordersNavClass} data-tab="orders" onclick={handleNavTab} role="button" tabindex="0">
+                        <svg width="18" height="18" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                            <rect x="3" y="4" width="14" height="13" rx="1.5" stroke="currentColor" stroke-width="1.5"/>
+                            <path d="M7 4V3a1 1 0 011-1h4a1 1 0 011 1v1" stroke="currentColor" stroke-width="1.5"/>
+                            <path d="M7 9h6M7 12h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                        </svg>
+                        <span>Orders</span>
+                    </li>
+                    <li class={inventoryNavClass} data-tab="inventory" onclick={handleNavTab} role="button" tabindex="0">
+                        <svg width="18" height="18" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                            <path d="M10 2L3 6v4c0 4 3.1 7.4 7 8 3.9-.6 7-4 7-8V6L10 2z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+                        </svg>
+                        <span>Inventory</span>
+                        <template lwc:if={lowStockCount}>
+                            <span class="sf-nav-badge">{lowStockCount}</span>
+                        </template>
+                    </li>
+                    <li class={assistantNavClass} data-tab="assistant" onclick={handleNavTab} role="button" tabindex="0">
+                        <svg width="18" height="18" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                            <path d="M8 1.5l1.6 4.9H14l-3.8 2.8 1.4 4.3L8 10.7l-3.6 2.8 1.4-4.3L2 6.4h4.4L8 1.5z" fill="currentColor"/>
+                        </svg>
+                        <span>Assistant</span>
+                        <span class="sf-nav-dot" aria-hidden="true"></span>
+                    </li>
+                </ul>
+
+                <!-- User -->
+                <div class="sf-nav-user">
+                    <div class="sf-nav-user-avatar" aria-hidden="true">N</div>
+                    <div class="sf-nav-user-text">
+                        <div class="sf-nav-user-name">Salesforce Operator</div>
+                        <div class="sf-nav-user-role">Store manager</div>
                     </div>
-                </template>
+                </div>
+            </nav>
 
-                <!-- Overview data -->
-                <template lwc:if={hasOverview}>
+            <!-- ═══ MAIN CONTENT ══════════════════════════════════════════════ -->
+            <div class="sf-main">
 
-                    <!-- KPI strip -->
-                    <div class="sf-kpi-section">
-                        <div class="sf-kpi-header">
-                            <span class="sf-kpi-period-label">{overviewPeriodLabel}</span>
-                            <span class="sf-kpi-period-since">{overviewPeriodSince}</span>
-                        </div>
-                        <div class="sf-kpi-grid">
-                            <div class="sf-kpi-cell">
-                                <div class="sf-kpi-label">Sales</div>
-                                <div class="sf-kpi-value">{overviewSales}</div>
-                            </div>
-                            <div class="sf-kpi-cell">
-                                <div class="sf-kpi-label">Orders</div>
-                                <div class="sf-kpi-value">{overviewOrders}</div>
-                            </div>
-                            <div class="sf-kpi-cell">
-                                <div class="sf-kpi-label">Conversion</div>
-                                <div class="sf-kpi-value">{overviewConversion}</div>
-                            </div>
-                            <div class="sf-kpi-cell">
-                                <div class="sf-kpi-label">Average order</div>
-                                <div class="sf-kpi-value">{overviewAov}</div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Needs you today -->
-                    <div class="sf-needs-section">
-                        <div class="sf-needs-hdr">
-                            <span class="sf-needs-title">Needs you today</span>
-                            <div class="sf-tab-bar">
-                                <button class={allTabClass}    data-tab="all"    onclick={handleTab}>All {needsTotalCount}</button>
-                                <button class={ordersTabClass} data-tab="orders" onclick={handleTab}>Orders {orderIssueCount}</button>
-                                <button class={stockTabClass}  data-tab="stock"  onclick={handleTab}>Low stock {lowStockCount}</button>
-                                <button class="sf-tab-btn"     data-tab="slow"   onclick={handleTab}>Slow 0</button>
-                            </div>
+                <!-- ── HOME ── -->
+                <template lwc:if={isHomeTab}>
+                    <div class="sf-dashboard">
+                        <div class="sf-greeting-bar">
+                            <div class="sf-greeting-title">{greetingText}, Salesforce Operator</div>
+                            <div class="sf-greeting-sub">{dateText} · {summaryText}</div>
                         </div>
 
-                        <ul class="sf-needs-list" role="list">
-                            <template for:each={visibleNeedsItems} for:item="item">
-                                <li key={item.uid} class="sf-needs-item">
-                                    <div class={item.iconClass} aria-hidden="true"></div>
-                                    <div class="sf-needs-body">
-                                        <div class="sf-needs-headline">{item.headline}</div>
-                                        <div class="sf-needs-sub">{item.subtitle}</div>
-                                    </div>
-                                    <button class="sf-needs-action"
-                                            data-uid={item.uid}
-                                            onclick={handleNeedsAction}>{item.actionLabel}</button>
-                                </li>
-                            </template>
-                        </ul>
-
-                        <template lwc:if={hasMoreNeeds}>
-                            <div class="sf-needs-footer">
-                                <span class="sf-more-label">{moreNeedsText}</span>
-                                <button class="sf-see-all" onclick={handleSeeAll}>See all →</button>
+                        <template lwc:if={overviewLoading}>
+                            <div class="sf-ov-loading">
+                                <div class="sf-skeleton sf-sk-wide" style="height:72px; margin-bottom:12px;"></div>
+                                <div class="sf-skeleton sf-sk-wide" style="height:200px;"></div>
                             </div>
                         </template>
-                    </div>
 
-                </template>
-            </div>
-            <!-- /sf-dashboard -->
-
-            <!-- ═══ RIGHT: Recent orders + Chat ═══════════════════════════════ -->
-            <div class="sf-right-col">
-
-                <!-- Recent orders -->
-                <template lwc:if={hasRecentOrders}>
-                    <div class="sf-orders-section">
-                        <div class="sf-orders-hdr">
-                            <span class="sf-orders-title">Recent orders</span>
-                            <button class="sf-link-btn" onclick={handleSeeAllOrders}>All orders →</button>
-                        </div>
-                        <ul class="sf-orders-list" role="list">
-                            <template for:each={recentOrderViews} for:item="order">
-                                <li key={order.uid} class="sf-order-row">
-                                    <div class="sf-order-info">
-                                        <div class="sf-order-id">{order.id}</div>
-                                        <div class="sf-order-meta">{order.meta}</div>
+                        <template lwc:if={hasOverview}>
+                            <div class="sf-kpi-section">
+                                <div class="sf-kpi-header">
+                                    <span class="sf-kpi-period-label">{overviewPeriodLabel}</span>
+                                    <span class="sf-kpi-period-since">{overviewPeriodSince}</span>
+                                </div>
+                                <div class="sf-kpi-grid">
+                                    <div class="sf-kpi-cell">
+                                        <div class="sf-kpi-label">Sales</div>
+                                        <div class="sf-kpi-value">{overviewSales}</div>
                                     </div>
-                                    <span class={order.statusClass}>{order.statusLabel}</span>
-                                </li>
-                            </template>
-                        </ul>
-                    </div>
-                </template>
+                                    <div class="sf-kpi-cell">
+                                        <div class="sf-kpi-label">Orders</div>
+                                        <div class="sf-kpi-value">{overviewOrders}</div>
+                                    </div>
+                                    <div class="sf-kpi-cell">
+                                        <div class="sf-kpi-label">Conversion</div>
+                                        <div class="sf-kpi-value">{overviewConversion}</div>
+                                    </div>
+                                    <div class="sf-kpi-cell">
+                                        <div class="sf-kpi-label">Average order</div>
+                                        <div class="sf-kpi-value">{overviewAov}</div>
+                                    </div>
+                                </div>
+                            </div>
 
-                <!-- Chat panel -->
-                <section class="sf-chat-panel" role="complementary" aria-label={panelTitle}>
-
-                    <header class="sf-chat-hdr">
-                        <div class="sf-chat-mark" aria-hidden="true">
-                            <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-                                <path d="M8 1.5l1.6 4.9H14l-3.8 2.8 1.4 4.3L8 10.7l-3.6 2.8 1.4-4.3L2 6.4h4.4L8 1.5z" fill="currentColor"/>
-                            </svg>
-                        </div>
-                        <div class="sf-chat-hdr-text">
-                            <div class="sf-chat-hdr-title">{panelTitle}</div>
-                            <div class="sf-chat-hdr-sub">You approve every change</div>
-                        </div>
-                        <div class="sf-act-badge">
-                            <span class={actDotClass} aria-hidden="true"></span>
-                            <span>{actLabel}</span>
-                        </div>
-                        <button class="sf-icon-btn" onclick={handleClose} aria-label="Close">
-                            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-                                <path d="M1 1l12 12M13 1L1 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-                            </svg>
-                        </button>
-                    </header>
-
-                    <div class="sf-scroll" role="log" aria-live="polite" aria-atomic="false">
-
-                        <template lwc:if={showIntro}>
-                            <p class="sf-intro">{introText}</p>
-                            <div class="sf-starters">
-                                <template for:each={starters} for:item="s">
-                                    <button key={s.id} class="sf-starter"
-                                            data-label={s.label}
-                                            disabled={s.disabled}
-                                            onclick={handleStarter}>
-                                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-                                            <rect x="1" y="7" width="2.5" height="6" rx=".8" fill="currentColor" opacity=".4"/>
-                                            <rect x="5.5" y="4" width="2.5" height="9" rx=".8" fill="currentColor" opacity=".7"/>
-                                            <rect x="10" y="1" width="2.5" height="12" rx=".8" fill="currentColor"/>
-                                        </svg>
-                                        <span>{s.label}</span>
-                                        <svg class="sf-starter-arrow" width="11" height="11" viewBox="0 0 11 11" fill="none" aria-hidden="true">
-                                            <path d="M2 5.5h7M6 2.5l3 3-3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                                        </svg>
-                                    </button>
+                            <div class="sf-needs-section">
+                                <div class="sf-needs-hdr">
+                                    <span class="sf-needs-title">Needs you today</span>
+                                    <div class="sf-tab-bar">
+                                        <button class={allTabClass}    data-tab="all"    onclick={handleNeedsTab}>All {needsTotalCount}</button>
+                                        <button class={ordersTabClass} data-tab="orders" onclick={handleNeedsTab}>Orders {orderIssueCount}</button>
+                                        <button class={stockTabClass}  data-tab="stock"  onclick={handleNeedsTab}>Low stock {lowStockCount}</button>
+                                        <button class="sf-tab-btn"     onclick={handleNeedsTab}>Slow 0</button>
+                                    </div>
+                                </div>
+                                <ul class="sf-needs-list" role="list">
+                                    <template for:each={visibleNeedsItems} for:item="item">
+                                        <li key={item.uid} class="sf-needs-item">
+                                            <div class={item.iconClass} aria-hidden="true"></div>
+                                            <div class="sf-needs-body">
+                                                <div class="sf-needs-headline">{item.headline}</div>
+                                                <div class="sf-needs-sub">{item.subtitle}</div>
+                                            </div>
+                                            <button class="sf-needs-action" data-uid={item.uid} onclick={handleNeedsAction}>{item.actionLabel}</button>
+                                        </li>
+                                    </template>
+                                </ul>
+                                <template lwc:if={hasMoreNeeds}>
+                                    <div class="sf-needs-footer">
+                                        <span class="sf-more-label">{moreNeedsText}</span>
+                                        <button class="sf-see-all" onclick={handleSeeAll}>See all →</button>
+                                    </div>
                                 </template>
                             </div>
                         </template>
+                    </div>
+                </template>
 
-                        <!-- Transcript -->
-                        <div class="sf-transcript">
-                            <template for:each={itemViews} for:item="item">
-                                <div key={item.uid} class="sf-item">
-
-                                    <template lwc:if={item.isUser}>
-                                        <div class="sf-user-row">
-                                            <div class="sf-user-bubble">{item.text}</div>
-                                        </div>
+                <!-- ── CATALOG ── -->
+                <template lwc:if={isCatalogTab}>
+                    <div class="sf-tab-page">
+                        <div class="sf-page-hdr">
+                            <span class="sf-page-title">Catalog</span>
+                            <span class="sf-page-count">{catalogCount} listings</span>
+                        </div>
+                        <template lwc:if={catalogLoading}>
+                            <div class="sf-ov-loading">
+                                <div class="sf-skeleton sf-sk-wide" style="height:40px; margin-bottom:8px;"></div>
+                                <div class="sf-skeleton sf-sk-wide" style="height:40px; margin-bottom:8px;"></div>
+                                <div class="sf-skeleton sf-sk-wide" style="height:40px;"></div>
+                            </div>
+                        </template>
+                        <template lwc:if={hasCatalog}>
+                            <table class="sf-table">
+                                <thead>
+                                    <tr>
+                                        <th>Product</th>
+                                        <th>Category</th>
+                                        <th>Price</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <template for:each={catalogViews} for:item="row">
+                                        <tr key={row.uid}>
+                                            <td class="sf-td-title">{row.title}</td>
+                                            <td class="sf-td-cat">{row.category}</td>
+                                            <td class="sf-td-price">{row.price}</td>
+                                            <td><span class={row.statusClass}>{row.status}</span></td>
+                                        </tr>
                                     </template>
+                                </tbody>
+                            </table>
+                        </template>
+                    </div>
+                </template>
 
-                                    <template lwc:if={item.isText}>
-                                        <div class="sf-turn">
-                                            <div class={item.textClass}>{item.text}</div>
-                                        </div>
+                <!-- ── ORDERS ── -->
+                <template lwc:if={isOrdersTab}>
+                    <div class="sf-tab-page">
+                        <div class="sf-page-hdr">
+                            <span class="sf-page-title">Orders</span>
+                            <span class="sf-page-count">Recent {recentOrderViews.length}</span>
+                        </div>
+                        <table class="sf-table">
+                            <thead>
+                                <tr>
+                                    <th>Order</th>
+                                    <th>Date</th>
+                                    <th>Items</th>
+                                    <th>Total</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template for:each={allOrderViews} for:item="order">
+                                    <tr key={order.uid}>
+                                        <td class="sf-td-title">{order.id}</td>
+                                        <td class="sf-td-cat">{order.date}</td>
+                                        <td class="sf-td-cat">{order.items} item{order.itemsPlural}</td>
+                                        <td class="sf-td-price">{order.total}</td>
+                                        <td><span class={order.statusClass}>{order.statusLabel}</span></td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                </template>
+
+                <!-- ── INVENTORY ── -->
+                <template lwc:if={isInventoryTab}>
+                    <div class="sf-tab-page">
+                        <div class="sf-page-hdr">
+                            <span class="sf-page-title">Inventory</span>
+                            <span class="sf-page-count">{lowStockCount} alerts</span>
+                        </div>
+                        <template lwc:if={hasInventoryAlerts}>
+                            <table class="sf-table">
+                                <thead>
+                                    <tr>
+                                        <th>Product</th>
+                                        <th>Kind</th>
+                                        <th>Stock</th>
+                                        <th>Sold (30d)</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <template for:each={inventoryViews} for:item="row">
+                                        <tr key={row.uid}>
+                                            <td class="sf-td-title">{row.title}</td>
+                                            <td><span class="sf-inv-pill">{row.kind}</span></td>
+                                            <td class="sf-td-cat">{row.stock}</td>
+                                            <td class="sf-td-cat">{row.sold}</td>
+                                            <td>
+                                                <button class="sf-needs-action" data-uid={row.uid} onclick={handleInventoryAction}>+ Draft restock</button>
+                                            </td>
+                                        </tr>
                                     </template>
+                                </tbody>
+                            </table>
+                        </template>
+                        <template lwc:if={noInventoryAlerts}>
+                            <div class="sf-empty">No inventory alerts right now.</div>
+                        </template>
+                    </div>
+                </template>
 
-                                    <template lwc:if={item.isActivity}>
-                                        <div class="sf-activity" aria-live="polite">
-                                            <span class="sf-activity-pulse" aria-hidden="true"></span>
-                                            <span class="sf-activity-label">{item.label}</span>
-                                        </div>
+                <!-- ── ASSISTANT (full-width chat when no right col) ── -->
+                <template lwc:if={isAssistantTab}>
+                    <div class="sf-assistant-full">
+                        <!-- re-use chat panel markup -->
+                        <div class="sf-scroll" role="log" aria-live="polite">
+                            <template lwc:if={showIntro}>
+                                <p class="sf-intro">{introText}</p>
+                                <div class="sf-starters">
+                                    <template for:each={starters} for:item="s">
+                                        <button key={s.id} class="sf-starter" data-label={s.label} disabled={s.disabled} onclick={handleStarter}>
+                                            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                                                <rect x="1" y="7" width="2.5" height="6" rx=".8" fill="currentColor" opacity=".4"/>
+                                                <rect x="5.5" y="4" width="2.5" height="9" rx=".8" fill="currentColor" opacity=".7"/>
+                                                <rect x="10" y="1" width="2.5" height="12" rx=".8" fill="currentColor"/>
+                                            </svg>
+                                            <span>{s.label}</span>
+                                            <svg class="sf-starter-arrow" width="11" height="11" viewBox="0 0 11 11" fill="none" aria-hidden="true">
+                                                <path d="M2 5.5h7M6 2.5l3 3-3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                            </svg>
+                                        </button>
                                     </template>
-
-                                    <template lwc:if={item.isSkeleton}>
-                                        <div class="sf-skeleton-wrap" aria-label="Loading response">
-                                            <div class="sf-skeleton"></div>
-                                            <div class="sf-skeleton w60"></div>
-                                            <div class="sf-skeleton w40"></div>
-                                        </div>
-                                    </template>
-
-                                    <template lwc:if={item.isError}>
-                                        <div class="sf-error-msg" role="alert">{item.text}</div>
-                                    </template>
-
-                                    <template lwc:if={item.isChips}>
-                                        <div class="sf-chips">
-                                            <template for:each={item.chips} for:item="chip">
-                                                <button key={chip.id} class="sf-chip"
-                                                        data-label={chip.label}
-                                                        disabled={isBusy}
-                                                        onclick={handleChip}>{chip.label}</button>
-                                            </template>
-                                        </div>
-                                    </template>
-
-                                    <template lwc:if={item.isMetrics}>
-                                        <div class="sf-card">
-                                            <div class="sf-card-hdr">
-                                                <span class="sf-card-title">{item.cardTitle}</span>
-                                                <template lwc:if={item.hasCardAside}>
-                                                    <span class="sf-card-aside">{item.cardAside}</span>
+                                </div>
+                            </template>
+                            <div class="sf-transcript">
+                                <template for:each={itemViews} for:item="item">
+                                    <div key={item.uid} class="sf-item">
+                                        <template lwc:if={item.isUser}>
+                                            <div class="sf-user-row"><div class="sf-user-bubble">{item.text}</div></div>
+                                        </template>
+                                        <template lwc:if={item.isText}>
+                                            <div class="sf-turn"><div class={item.textClass}>{item.text}</div></div>
+                                        </template>
+                                        <template lwc:if={item.isActivity}>
+                                            <div class="sf-activity"><span class="sf-activity-pulse"></span><span class="sf-activity-label">{item.label}</span></div>
+                                        </template>
+                                        <template lwc:if={item.isSkeleton}>
+                                            <div class="sf-skeleton-wrap"><div class="sf-skeleton"></div><div class="sf-skeleton w60"></div><div class="sf-skeleton w40"></div></div>
+                                        </template>
+                                        <template lwc:if={item.isError}>
+                                            <div class="sf-error-msg" role="alert">{item.text}</div>
+                                        </template>
+                                        <template lwc:if={item.isChips}>
+                                            <div class="sf-chips">
+                                                <template for:each={item.chips} for:item="chip">
+                                                    <button key={chip.id} class="sf-chip" data-label={chip.label} disabled={isBusy} onclick={handleChip}>{chip.label}</button>
                                                 </template>
                                             </div>
-                                            <div class="sf-metrics-grid">
-                                                <template for:each={item.metricCells} for:item="cell">
-                                                    <div key={cell.uid} class="sf-metric-cell">
-                                                        <div class="sf-metric-label">{cell.label}</div>
-                                                        <div class="sf-metric-row">
-                                                            <span class="sf-metric-value">{cell.value}</span>
-                                                            <template lwc:if={cell.hasChange}>
-                                                                <span class={cell.changeClass}>{cell.changeText}</span>
-                                                            </template>
+                                        </template>
+                                        <template lwc:if={item.isMetrics}>
+                                            <div class="sf-card">
+                                                <div class="sf-card-hdr"><span class="sf-card-title">{item.cardTitle}</span><template lwc:if={item.hasCardAside}><span class="sf-card-aside">{item.cardAside}</span></template></div>
+                                                <div class="sf-metrics-grid">
+                                                    <template for:each={item.metricCells} for:item="cell">
+                                                        <div key={cell.uid} class="sf-metric-cell">
+                                                            <div class="sf-metric-label">{cell.label}</div>
+                                                            <div class="sf-metric-row"><span class="sf-metric-value">{cell.value}</span><template lwc:if={cell.hasChange}><span class={cell.changeClass}>{cell.changeText}</span></template></div>
+                                                            <template lwc:if={cell.hasNote}><div class="sf-metric-note">{cell.note}</div></template>
                                                         </div>
-                                                        <template lwc:if={cell.hasNote}>
-                                                            <div class="sf-metric-note">{cell.note}</div>
-                                                        </template>
+                                                    </template>
+                                                </div>
+                                            </div>
+                                        </template>
+                                        <template lwc:if={item.isDigest}>
+                                            <div class="sf-card">
+                                                <div class="sf-card-hdr"><span class="sf-card-title">{item.cardTitle}</span><span class="sf-card-aside">{item.digestCount}</span></div>
+                                                <ul class="sf-digest-list">
+                                                    <template for:each={item.digestRows} for:item="row">
+                                                        <li key={row.uid} class="sf-digest-row"><span class={row.iconClass}></span><div class="sf-digest-body"><div class="sf-digest-headline">{row.headline}</div><template lwc:if={row.hasWhy}><div class="sf-digest-why">{row.why}</div></template><template lwc:if={row.hasCtx}><div class="sf-digest-ctx">{row.ctx}</div></template></div></li>
+                                                    </template>
+                                                </ul>
+                                            </div>
+                                        </template>
+                                        <template lwc:if={item.isChangePreview}>
+                                            <div class="sf-card sf-change-card">
+                                                <div class="sf-card-hdr"><span class="sf-card-title">{item.headline}</span><span class={item.statusClass}>{item.statusLabel}</span></div>
+                                                <p class="sf-change-summary">{item.changeSummary}</p>
+                                                <template lwc:if={item.hasChangeNote}><p class="sf-change-note">{item.changeNote}</p></template>
+                                                <table class="sf-diff-table">
+                                                    <template for:each={item.diffRows} for:item="row">
+                                                        <tr key={row.uid}><td class="sf-diff-target">{row.target}</td><td class="sf-diff-field">{row.field}</td><template lwc:if={row.hasBefore}><td class="sf-diff-before">{row.before}</td><td class="sf-diff-sep">→</td></template><td class="sf-diff-after">{row.after}</td></tr>
+                                                    </template>
+                                                </table>
+                                                <template lwc:if={item.hasMargin}><p class="sf-change-margin">Margin impact <span class={item.marginClass}>{item.marginText}</span></p></template>
+                                                <template lwc:if={item.isStaged}>
+                                                    <div class="sf-approve-bar">
+                                                        <button class="sf-btn-approve" data-id={item.changeId} onclick={handleApprove}>Approve</button>
+                                                        <button class="sf-btn-discard" data-id={item.changeId} onclick={handleDiscard}>Discard</button>
                                                     </div>
                                                 </template>
                                             </div>
-                                        </div>
-                                    </template>
+                                        </template>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                        <footer class="sf-footer">
+                            <form class="sf-form" onsubmit={handleFormSubmit}>
+                                <textarea class="sf-textarea" rows="1" placeholder={placeholder} value={draftValue} oninput={handleInput} onkeydown={handleKeyDown}></textarea>
+                                <button type="submit" class="sf-send-btn" disabled={cannotSend} aria-label="Send">
+                                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 12V2M2 7l5-5 5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                                </button>
+                            </form>
+                        </footer>
+                    </div>
+                </template>
 
-                                    <template lwc:if={item.isDigest}>
-                                        <div class="sf-card">
-                                            <div class="sf-card-hdr">
-                                                <span class="sf-card-title">{item.cardTitle}</span>
-                                                <span class="sf-card-aside">{item.digestCount}</span>
-                                            </div>
-                                            <ul class="sf-digest-list">
-                                                <template for:each={item.digestRows} for:item="row">
-                                                    <li key={row.uid} class="sf-digest-row">
-                                                        <span class={row.iconClass} aria-hidden="true"></span>
-                                                        <div class="sf-digest-body">
-                                                            <div class="sf-digest-headline">{row.headline}</div>
-                                                            <template lwc:if={row.hasWhy}>
-                                                                <div class="sf-digest-why">{row.why}</div>
-                                                            </template>
-                                                            <template lwc:if={row.hasCtx}>
-                                                                <div class="sf-digest-ctx">{row.ctx}</div>
-                                                            </template>
-                                                        </div>
-                                                    </li>
-                                                </template>
-                                            </ul>
-                                        </div>
-                                    </template>
+            </div>
+            <!-- /sf-main -->
 
-                                    <template lwc:if={item.isChangePreview}>
-                                        <div class="sf-card sf-change-card">
-                                            <div class="sf-card-hdr">
-                                                <span class="sf-card-title">{item.headline}</span>
-                                                <span class={item.statusClass}>{item.statusLabel}</span>
-                                            </div>
-                                            <p class="sf-change-summary">{item.changeSummary}</p>
-                                            <template lwc:if={item.hasChangeNote}>
-                                                <p class="sf-change-note">{item.changeNote}</p>
-                                            </template>
-                                            <table class="sf-diff-table">
-                                                <template for:each={item.diffRows} for:item="row">
-                                                    <tr key={row.uid}>
-                                                        <td class="sf-diff-target">{row.target}</td>
-                                                        <td class="sf-diff-field">{row.field}</td>
-                                                        <template lwc:if={row.hasBefore}>
-                                                            <td class="sf-diff-before">{row.before}</td>
-                                                            <td class="sf-diff-sep">→</td>
-                                                        </template>
-                                                        <td class="sf-diff-after">{row.after}</td>
-                                                    </tr>
-                                                </template>
-                                            </table>
-                                            <template lwc:if={item.hasMargin}>
-                                                <p class="sf-change-margin">
-                                                    Margin impact <span class={item.marginClass}>{item.marginText}</span>
-                                                </p>
-                                            </template>
-                                            <template lwc:if={item.isStaged}>
-                                                <div class="sf-approve-bar">
-                                                    <button class="sf-btn-approve"
-                                                            data-id={item.changeId}
-                                                            onclick={handleApprove}
-                                                            aria-label="Approve change">
-                                                        <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
-                                                            <path d="M1.5 7l3.5 3.5 6.5-6.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                                                        </svg>
-                                                        Approve
-                                                    </button>
-                                                    <button class="sf-btn-discard"
-                                                            data-id={item.changeId}
-                                                            onclick={handleDiscard}
-                                                            aria-label="Discard change">
-                                                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-                                                            <path d="M1 1l10 10M11 1L1 11" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-                                                        </svg>
-                                                        Discard
-                                                    </button>
-                                                </div>
-                                            </template>
+            <!-- ═══ RIGHT COL: Recent orders + Chat (hidden on Assistant tab) ═ -->
+            <template lwc:if={showRightCol}>
+                <div class="sf-right-col">
+                    <template lwc:if={hasRecentOrders}>
+                        <div class="sf-orders-section">
+                            <div class="sf-orders-hdr">
+                                <span class="sf-orders-title">Recent orders</span>
+                                <button class="sf-link-btn" onclick={handleSeeAllOrders}>All orders →</button>
+                            </div>
+                            <ul class="sf-orders-list" role="list">
+                                <template for:each={recentOrderViews} for:item="order">
+                                    <li key={order.uid} class="sf-order-row">
+                                        <div class="sf-order-info">
+                                            <div class="sf-order-id">{order.id}</div>
+                                            <div class="sf-order-meta">{order.meta}</div>
                                         </div>
-                                    </template>
+                                        <span class={order.statusClass}>{order.statusLabel}</span>
+                                    </li>
+                                </template>
+                            </ul>
+                        </div>
+                    </template>
 
+                    <section class="sf-chat-panel" role="complementary" aria-label={panelTitle}>
+                        <header class="sf-chat-hdr">
+                            <div class="sf-chat-mark" aria-hidden="true">
+                                <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                                    <path d="M8 1.5l1.6 4.9H14l-3.8 2.8 1.4 4.3L8 10.7l-3.6 2.8 1.4-4.3L2 6.4h4.4L8 1.5z" fill="currentColor"/>
+                                </svg>
+                            </div>
+                            <div class="sf-chat-hdr-text">
+                                <div class="sf-chat-hdr-title">{panelTitle}</div>
+                                <div class="sf-chat-hdr-sub">You approve every change</div>
+                            </div>
+                            <div class="sf-act-badge">
+                                <span class={actDotClass} aria-hidden="true"></span>
+                                <span>{actLabel}</span>
+                            </div>
+                            <button class="sf-icon-btn" onclick={handleClose} aria-label="Close">
+                                <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M1 1l12 12M13 1L1 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+                            </button>
+                        </header>
+
+                        <div class="sf-scroll" role="log" aria-live="polite" aria-atomic="false">
+                            <template lwc:if={showIntro}>
+                                <p class="sf-intro">{introText}</p>
+                                <div class="sf-starters">
+                                    <template for:each={starters} for:item="s">
+                                        <button key={s.id} class="sf-starter" data-label={s.label} disabled={s.disabled} onclick={handleStarter}>
+                                            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                                                <rect x="1" y="7" width="2.5" height="6" rx=".8" fill="currentColor" opacity=".4"/>
+                                                <rect x="5.5" y="4" width="2.5" height="9" rx=".8" fill="currentColor" opacity=".7"/>
+                                                <rect x="10" y="1" width="2.5" height="12" rx=".8" fill="currentColor"/>
+                                            </svg>
+                                            <span>{s.label}</span>
+                                            <svg class="sf-starter-arrow" width="11" height="11" viewBox="0 0 11 11" fill="none" aria-hidden="true">
+                                                <path d="M2 5.5h7M6 2.5l3 3-3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                            </svg>
+                                        </button>
+                                    </template>
                                 </div>
                             </template>
+                            <div class="sf-transcript">
+                                <template for:each={itemViews} for:item="item">
+                                    <div key={item.uid} class="sf-item">
+                                        <template lwc:if={item.isUser}>
+                                            <div class="sf-user-row"><div class="sf-user-bubble">{item.text}</div></div>
+                                        </template>
+                                        <template lwc:if={item.isText}>
+                                            <div class="sf-turn"><div class={item.textClass}>{item.text}</div></div>
+                                        </template>
+                                        <template lwc:if={item.isActivity}>
+                                            <div class="sf-activity"><span class="sf-activity-pulse"></span><span class="sf-activity-label">{item.label}</span></div>
+                                        </template>
+                                        <template lwc:if={item.isSkeleton}>
+                                            <div class="sf-skeleton-wrap"><div class="sf-skeleton"></div><div class="sf-skeleton w60"></div><div class="sf-skeleton w40"></div></div>
+                                        </template>
+                                        <template lwc:if={item.isError}>
+                                            <div class="sf-error-msg" role="alert">{item.text}</div>
+                                        </template>
+                                        <template lwc:if={item.isChips}>
+                                            <div class="sf-chips">
+                                                <template for:each={item.chips} for:item="chip">
+                                                    <button key={chip.id} class="sf-chip" data-label={chip.label} disabled={isBusy} onclick={handleChip}>{chip.label}</button>
+                                                </template>
+                                            </div>
+                                        </template>
+                                        <template lwc:if={item.isMetrics}>
+                                            <div class="sf-card">
+                                                <div class="sf-card-hdr"><span class="sf-card-title">{item.cardTitle}</span><template lwc:if={item.hasCardAside}><span class="sf-card-aside">{item.cardAside}</span></template></div>
+                                                <div class="sf-metrics-grid">
+                                                    <template for:each={item.metricCells} for:item="cell">
+                                                        <div key={cell.uid} class="sf-metric-cell">
+                                                            <div class="sf-metric-label">{cell.label}</div>
+                                                            <div class="sf-metric-row"><span class="sf-metric-value">{cell.value}</span><template lwc:if={cell.hasChange}><span class={cell.changeClass}>{cell.changeText}</span></template></div>
+                                                            <template lwc:if={cell.hasNote}><div class="sf-metric-note">{cell.note}</div></template>
+                                                        </div>
+                                                    </template>
+                                                </div>
+                                            </div>
+                                        </template>
+                                        <template lwc:if={item.isDigest}>
+                                            <div class="sf-card">
+                                                <div class="sf-card-hdr"><span class="sf-card-title">{item.cardTitle}</span><span class="sf-card-aside">{item.digestCount}</span></div>
+                                                <ul class="sf-digest-list">
+                                                    <template for:each={item.digestRows} for:item="row">
+                                                        <li key={row.uid} class="sf-digest-row"><span class={row.iconClass}></span><div class="sf-digest-body"><div class="sf-digest-headline">{row.headline}</div><template lwc:if={row.hasWhy}><div class="sf-digest-why">{row.why}</div></template><template lwc:if={row.hasCtx}><div class="sf-digest-ctx">{row.ctx}</div></template></div></li>
+                                                    </template>
+                                                </ul>
+                                            </div>
+                                        </template>
+                                        <template lwc:if={item.isChangePreview}>
+                                            <div class="sf-card sf-change-card">
+                                                <div class="sf-card-hdr"><span class="sf-card-title">{item.headline}</span><span class={item.statusClass}>{item.statusLabel}</span></div>
+                                                <p class="sf-change-summary">{item.changeSummary}</p>
+                                                <template lwc:if={item.hasChangeNote}><p class="sf-change-note">{item.changeNote}</p></template>
+                                                <table class="sf-diff-table">
+                                                    <template for:each={item.diffRows} for:item="row">
+                                                        <tr key={row.uid}><td class="sf-diff-target">{row.target}</td><td class="sf-diff-field">{row.field}</td><template lwc:if={row.hasBefore}><td class="sf-diff-before">{row.before}</td><td class="sf-diff-sep">→</td></template><td class="sf-diff-after">{row.after}</td></tr>
+                                                    </template>
+                                                </table>
+                                                <template lwc:if={item.hasMargin}><p class="sf-change-margin">Margin impact <span class={item.marginClass}>{item.marginText}</span></p></template>
+                                                <template lwc:if={item.isStaged}>
+                                                    <div class="sf-approve-bar">
+                                                        <button class="sf-btn-approve" data-id={item.changeId} onclick={handleApprove}>Approve</button>
+                                                        <button class="sf-btn-discard" data-id={item.changeId} onclick={handleDiscard}>Discard</button>
+                                                    </div>
+                                                </template>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </template>
+                            </div>
                         </div>
-                    </div>
 
-                    <footer class="sf-footer">
-                        <form class="sf-form" onsubmit={handleFormSubmit}>
-                            <textarea class="sf-textarea"
-                                      rows="1"
-                                      placeholder={placeholder}
-                                      aria-label="Message the merchant assistant"
-                                      value={draftValue}
-                                      oninput={handleInput}
-                                      onkeydown={handleKeyDown}></textarea>
-                            <button type="submit" class="sf-send-btn" disabled={cannotSend} aria-label="Send">
-                                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-                                    <path d="M7 12V2M2 7l5-5 5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                                </svg>
-                            </button>
-                        </form>
-                    </footer>
-
-                </section>
-            </div>
-            <!-- /sf-right-col -->
+                        <footer class="sf-footer">
+                            <form class="sf-form" onsubmit={handleFormSubmit}>
+                                <textarea class="sf-textarea" rows="1" placeholder={placeholder} aria-label="Message the merchant assistant" value={draftValue} oninput={handleInput} onkeydown={handleKeyDown}></textarea>
+                                <button type="submit" class="sf-send-btn" disabled={cannotSend} aria-label="Send">
+                                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                                        <path d="M7 12V2M2 7l5-5 5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                    </svg>
+                                </button>
+                            </form>
+                        </footer>
+                    </section>
+                </div>
+            </template>
 
         </div>
-        <!-- /sf-outer -->
     </template>
 
 </template>

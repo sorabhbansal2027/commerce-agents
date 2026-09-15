@@ -96,33 +96,36 @@ export default class SalesforceMerchant extends LightningElement {
     @api hideDigest         = false;
     @api hideChangePreview  = false;
 
-    @track _open       = false;
-    @track _busy       = false;
-    @track _items      = [];
-    @track _draft      = '';
-    @track _starters   = STARTER_PROMPTS.map(s => ({ ...s, disabled: false }));
-    @track _showIntro  = true;
-    @track _overview   = null;
-    @track _ovLoading  = false;
-    @track _activeTab  = 'all';
+    @track _open           = false;
+    @track _busy           = false;
+    @track _items          = [];
+    @track _draft          = '';
+    @track _starters       = STARTER_PROMPTS.map(s => ({ ...s, disabled: false }));
+    @track _showIntro      = true;
+    @track _overview       = null;
+    @track _ovLoading      = false;
+    @track _activeTab      = 'all';     // needs-today filter
+    @track _navTab         = 'home';    // sidebar navigation
+    @track _listings       = null;
+    @track _catalogLoading = false;
 
-    _sessionId     = null;
-    _rafId         = null;
-    _pendingTurnId = null;
-    _activityId    = null;
-    _skeletonId    = null;
-    _abortCtrl     = null;
-    _nextId        = 0;
-    // Store all needs items for lookup by uid in handleNeedsAction
-    _needsItems    = [];
+    _sessionId      = null;
+    _rafId          = null;
+    _pendingTurnId  = null;
+    _activityId     = null;
+    _skeletonId     = null;
+    _abortCtrl      = null;
+    _nextId         = 0;
+    _needsItems     = [];
+    _catalogLoaded  = false;
 
     // ── Lifecycle ──────────────────────────────────────────────────────────────
     connectedCallback()    { this._createSession(); }
     disconnectedCallback() { if (this._abortCtrl) this._abortCtrl.abort(); }
 
     // ── Greeting / date ────────────────────────────────────────────────────────
-    get greetingText()    { return greetingWord(); }
-    get dateText()        { return todayFull(); }
+    get greetingText() { return greetingWord(); }
+    get dateText()     { return todayFull(); }
 
     get summaryText() {
         if (!this._overview) return '';
@@ -134,13 +137,36 @@ export default class SalesforceMerchant extends LightningElement {
         return parts.length ? parts.join(' and ') + ' need you today.' : 'Everything looks good today.';
     }
 
+    // ── Sidebar nav ────────────────────────────────────────────────────────────
+    get isHomeTab()      { return this._navTab === 'home'; }
+    get isCatalogTab()   { return this._navTab === 'catalog'; }
+    get isOrdersTab()    { return this._navTab === 'orders'; }
+    get isInventoryTab() { return this._navTab === 'inventory'; }
+    get isAssistantTab() { return this._navTab === 'assistant'; }
+    get showRightCol()   { return this._navTab !== 'assistant'; }
+
+    _navClass(tab) { return 'sf-nav-item' + (this._navTab === tab ? ' active' : ''); }
+    get homeNavClass()      { return this._navClass('home'); }
+    get catalogNavClass()   { return this._navClass('catalog'); }
+    get ordersNavClass()    { return this._navClass('orders'); }
+    get inventoryNavClass() { return this._navClass('inventory'); }
+    get assistantNavClass() { return this._navClass('assistant'); }
+
+    handleNavTab(evt) {
+        const tab = evt.currentTarget.dataset.tab;
+        this._navTab = tab;
+        if (tab === 'catalog' && !this._catalogLoaded) {
+            this._loadCatalog();
+        }
+    }
+
     // ── Overview state ─────────────────────────────────────────────────────────
     get hasOverview()     { return !!this._overview; }
     get overviewLoading() { return this._ovLoading; }
 
     get overviewPeriodLabel() {
         const p = this._overview?.snapshot?.period || '';
-        if (p.includes('week')) return 'This week';
+        if (p.includes('week'))  return 'This week';
         if (p.includes('month')) return 'This month';
         return 'This period';
     }
@@ -196,7 +222,7 @@ export default class SalesforceMerchant extends LightningElement {
 
     get _allNeedsItems() {
         const items = this._buildNeedsItems();
-        this._needsItems = items; // keep reference for action lookup
+        this._needsItems = items;
         return items;
     }
 
@@ -227,7 +253,7 @@ export default class SalesforceMerchant extends LightningElement {
         return `${more} more item${more === 1 ? '' : 's'} in the queue`;
     }
 
-    // ── Recent orders ──────────────────────────────────────────────────────────
+    // ── Recent orders (right col) ──────────────────────────────────────────────
     get hasRecentOrders() {
         return (this._overview?.recent_orders || []).length > 0;
     }
@@ -239,6 +265,52 @@ export default class SalesforceMerchant extends LightningElement {
             meta:        `${fmtShortDate(o.placed_at)} · $${Number(o.total || 0).toFixed(2)} · ${o.items || 0} item${o.items === 1 ? '' : 's'}`,
             statusLabel: titleCase(o.status || 'delivered'),
             statusClass: 'sf-order-badge sf-badge-' + (o.status || 'delivered').replace(/\s+/g, '_'),
+        }));
+    }
+
+    // ── All orders (orders tab) ────────────────────────────────────────────────
+    get allOrderViews() {
+        return (this._overview?.recent_orders || []).map((o, i) => ({
+            uid:         `aord-${i}`,
+            id:          o.order_id,
+            date:        fmtShortDate(o.placed_at),
+            items:       o.items || 0,
+            itemsPlural: (o.items || 0) === 1 ? '' : 's',
+            total:       `$${Number(o.total || 0).toFixed(2)}`,
+            statusLabel: titleCase(o.status || 'delivered'),
+            statusClass: 'sf-order-badge sf-badge-' + (o.status || 'delivered').replace(/\s+/g, '_'),
+        }));
+    }
+
+    // ── Catalog (catalog tab) ──────────────────────────────────────────────────
+    get hasCatalog()     { return !!this._listings && this._listings.length > 0; }
+    get catalogLoading() { return this._catalogLoading; }
+    get catalogCount()   { return this._listings ? this._listings.length : 0; }
+
+    get catalogViews() {
+        return (this._listings || []).map((l, i) => ({
+            uid:         `cat-${i}`,
+            title:       l.title || l.listing_id || '—',
+            category:    l.category || '—',
+            price:       l.price != null ? fmtMoney(l.price, l.currency) : '—',
+            status:      titleCase(l.status || 'active'),
+            statusClass: 'sf-inv-pill sf-pill-' + (l.status || 'active'),
+        }));
+    }
+
+    // ── Inventory (inventory tab) ──────────────────────────────────────────────
+    get hasInventoryAlerts() {
+        return (this._overview?.needs_attention?.inventory || []).length > 0;
+    }
+    get noInventoryAlerts() { return !this.hasInventoryAlerts; }
+
+    get inventoryViews() {
+        return (this._overview?.needs_attention?.inventory || []).map((a, i) => ({
+            uid:   `iav-${i}`,
+            title: a.title || a.listing_id || '—',
+            kind:  titleCase(a.kind || 'low_stock'),
+            stock: a.stock != null ? String(a.stock) : '—',
+            sold:  a.sales_last_30d != null ? String(a.sales_last_30d) : '—',
         }));
     }
 
@@ -342,7 +414,7 @@ export default class SalesforceMerchant extends LightningElement {
     handleToggle() { this._open = !this._open; }
     handleClose()  { this._open = false; }
 
-    handleTab(evt) { this._activeTab = evt.currentTarget.dataset.tab; }
+    handleNeedsTab(evt) { this._activeTab = evt.currentTarget.dataset.tab; }
 
     handleNeedsAction(evt) {
         const uid  = evt.currentTarget.dataset.uid;
@@ -350,13 +422,14 @@ export default class SalesforceMerchant extends LightningElement {
         if (item?.actionMsg) this._submit(item.actionMsg);
     }
 
-    handleSeeAll() {
-        this._submit('Show me everything that needs my attention today.');
+    handleInventoryAction(evt) {
+        const uid = evt.currentTarget.dataset.uid;
+        const row = this.inventoryViews.find(r => r.uid === uid);
+        if (row) this._submit(`Draft a restock for ${row.title}`);
     }
 
-    handleSeeAllOrders() {
-        this._submit('Show me all recent orders.');
-    }
+    handleSeeAll()       { this._submit('Show me everything that needs my attention today.'); }
+    handleSeeAllOrders() { this._navTab = 'orders'; }
 
     // ── Draft input ────────────────────────────────────────────────────────────
     handleInput(evt) {
@@ -379,7 +452,7 @@ export default class SalesforceMerchant extends LightningElement {
     handleApprove(evt)    { this._applyChange(evt.currentTarget.dataset.id, 'apply'); }
     handleDiscard(evt)    { this._applyChange(evt.currentTarget.dataset.id, 'discard'); }
 
-    // ── Session + overview ─────────────────────────────────────────────────────
+    // ── Session + data loading ─────────────────────────────────────────────────
     async _createSession() {
         if (!(this.apiUrl ?? '').trim()) {
             this._pushError('API URL is not configured. Set the apiUrl property in Lightning App Builder.');
@@ -404,10 +477,26 @@ export default class SalesforceMerchant extends LightningElement {
             if (!res.ok) throw new Error(`Overview ${res.status}`);
             this._overview = await res.json();
         } catch (err) {
-            // Non-fatal — dashboard section stays hidden
             console.warn('[salesforceMerchant] overview load failed:', err.message);
         } finally {
             this._ovLoading = false;
+        }
+    }
+
+    async _loadCatalog() {
+        if (this._catalogLoading) return;
+        this._catalogLoading = true;
+        try {
+            const sessionHdr = this._sessionId ? { 'X-Session-Id': this._sessionId } : {};
+            const res = await fetch(this._url('listings'), { headers: this._hdrs(sessionHdr) });
+            if (!res.ok) throw new Error(`Listings ${res.status}`);
+            const body = await res.json();
+            this._listings = body.listings || [];
+            this._catalogLoaded = true;
+        } catch (err) {
+            console.warn('[salesforceMerchant] listings load failed:', err.message);
+        } finally {
+            this._catalogLoading = false;
         }
     }
 
@@ -419,6 +508,8 @@ export default class SalesforceMerchant extends LightningElement {
         if (ta) { ta.value = ''; ta.style.height = 'auto'; }
         this._showIntro = false;
         this._pushItem({ kind: KIND.USER, id: this._id(), text });
+        // Stay on home so the right col chat panel is visible while streaming
+        if (this._navTab !== 'home' && this._navTab !== 'assistant') this._navTab = 'home';
         this._startTurn(text);
     }
 

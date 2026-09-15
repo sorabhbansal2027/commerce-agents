@@ -825,12 +825,27 @@ class SalesforceOMSBackend(MerchantBackend):
             if not account_id:
                 return Cart()
             webstore_id = await self._ensure_webstore_id()
+            # fieldsToExpand=cartItems includes inline cart items in the response
             data = await self._b2b_request(
                 "GET",
                 f"/commerce/webstores/{webstore_id}/carts/active",
-                params={"effectiveAccountId": account_id},
+                params={"effectiveAccountId": account_id, "fieldsToExpand": "cartItems"},
             )
-            return self._parse_b2b_cart(data)
+            log.debug("get_cart response keys: %s totalProductCount: %s", list(data.keys()), data.get("totalProductCount"))
+            cart = self._parse_b2b_cart(data)
+            # If inline expansion returned nothing but a cart exists, fetch items separately
+            if not cart.items and data.get("cartId"):
+                cart_id = data["cartId"]
+                try:
+                    items_data = await self._b2b_request(
+                        "GET",
+                        f"/commerce/webstores/{webstore_id}/carts/{cart_id}/cart-items",
+                        params={"effectiveAccountId": account_id},
+                    )
+                    cart = self._parse_b2b_cart_items(items_data, data.get("currencyIsoCode", "USD"))
+                except Exception:
+                    log.debug("get_cart: cart-items fallback failed, returning header-only cart")
+            return cart
         except httpx.HTTPStatusError as exc:
             # 400 MISSING_RECORD = buyer has no active cart yet; return empty silently
             if exc.response.status_code == 400:
@@ -866,17 +881,49 @@ class SalesforceOMSBackend(MerchantBackend):
         return await self.get_cart(session)
 
     def _parse_b2b_cart(self, data: dict[str, Any]) -> Cart:
-        """Convert B2B Commerce cart API response to Cart."""
+        """Parse cart from GET /carts/active?fieldsToExpand=cartItems response.
+
+        Records are flat objects when expanded inline (no nested 'cartItem' key).
+        """
         from shopping_agent import CartItem
         items = []
-        for entry in data.get("cartItems", {}).get("records", []):
-            cart_product = entry.get("cartItem", entry)
-            product_id = cart_product.get("productId", "")
-            name = cart_product.get("name", product_id)
-            price = float(cart_product.get("unitAdjustedPrice") or cart_product.get("listPrice") or 0)
-            qty = int(float(cart_product.get("quantity") or 1))
+        cart_items_block = data.get("cartItems") or {}
+        records = cart_items_block.get("records", []) if isinstance(cart_items_block, dict) else []
+        for entry in records:
+            # Inline expansion: fields are flat; nested format has a 'cartItem' sub-key
+            row = entry.get("cartItem") if "cartItem" in entry else entry
+            product_id = row.get("productId", "")
+            name = row.get("name", product_id)
+            price = float(
+                row.get("unitAdjustedPrice")
+                or row.get("salesPrice")
+                or row.get("listPrice")
+                or 0
+            )
+            qty = int(float(row.get("quantity") or 1))
             items.append(CartItem(product_id=product_id, title=name, price=price, quantity=qty))
         currency = data.get("currencyIsoCode", "USD")
+        return Cart(items=items, currency=currency)
+
+    def _parse_b2b_cart_items(self, data: dict[str, Any], currency: str = "USD") -> Cart:
+        """Parse cart from GET /carts/{cartId}/cart-items response.
+
+        Each record has the item nested under a 'cartItem' key.
+        """
+        from shopping_agent import CartItem
+        items = []
+        for entry in data.get("cartItems", []):
+            row = entry.get("cartItem", entry)
+            product_id = row.get("productId", "")
+            name = row.get("name", product_id)
+            price = float(
+                row.get("unitAdjustedPrice")
+                or row.get("salesPrice")
+                or row.get("listPrice")
+                or 0
+            )
+            qty = int(float(row.get("quantity") or 1))
+            items.append(CartItem(product_id=product_id, title=name, price=price, quantity=qty))
         return Cart(items=items, currency=currency)
 
     # ------------------------------------------------------------------

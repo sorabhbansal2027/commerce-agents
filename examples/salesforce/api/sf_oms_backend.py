@@ -859,8 +859,9 @@ class SalesforceOMSBackend(MerchantBackend):
         self._active_cart_id = cart_id
 
         # Read cart items directly from WebCartItem
+        # Note: relationship from WebCartItem.ProductId to Product2 is "Product" (not "Product2")
         item_rows = await self._soql(
-            f"SELECT Id, ProductId, Product2.Name, Quantity, SalesPrice "
+            f"SELECT Id, ProductId, Product.Name, Quantity, SalesPrice "
             f"FROM WebCartItem WHERE CartId = '{cart_id}'"
         )
         from shopping_agent import CartItem
@@ -868,7 +869,7 @@ class SalesforceOMSBackend(MerchantBackend):
         item_ids: dict[str, str] = {}
         for row in item_rows:
             product_id = row.get("ProductId", "")
-            p2 = row.get("Product2") or {}
+            p2 = row.get("Product") or {}
             name = p2.get("Name") or product_id
             price = float(row.get("SalesPrice") or 0)
             qty = int(float(row.get("Quantity") or 1))

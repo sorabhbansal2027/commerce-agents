@@ -259,7 +259,11 @@ class SalesforceOMSBackend(MerchantBackend):
         return self._webstore_id
 
     async def _account_id_for_user(self, sf_user_id: str) -> str | None:
-        """Return the AccountId associated with a Salesforce User record."""
+        """Return the AccountId associated with a Salesforce User record.
+        Returns None for non-SF IDs (e.g. 'demo-user') so the cart call
+        proceeds without an effectiveAccountId."""
+        if not sf_user_id or not sf_user_id.startswith("005") or len(sf_user_id) not in (15, 18):
+            return None
         if sf_user_id in self._account_cache:
             return self._account_cache[sf_user_id]
         rows = await self._soql(

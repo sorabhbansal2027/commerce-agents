@@ -75,6 +75,16 @@ ORDER BY CreatedDate DESC
 LIMIT 500
 """.strip()
 
+# Fallback for B2B Commerce orgs where OrderSummary (OMS) is not enabled.
+# B2B Commerce checkout creates standard Order records instead.
+_B2B_ORDERS_QUERY = """
+SELECT Id, OrderNumber, CreatedDate, TotalAmount, Status
+FROM Order
+WHERE CreatedDate > {since}
+ORDER BY CreatedDate DESC
+LIMIT 500
+""".strip()
+
 # Default "since" date — the date from the original requirement
 _DEFAULT_SINCE = "2026-08-18T02:36:42.000Z"
 
@@ -399,15 +409,22 @@ class SalesforceOMSBackend(MerchantBackend):
         if not self._products_loaded:
             asyncio.ensure_future(self._ensure_products_loaded())
 
+        # If OrderSummary (OMS) returned nothing, fall back to the standard
+        # Order object used by B2B Commerce checkout.
+        use_b2b_order = not orders_raw
+        if use_b2b_order:
+            orders_raw = await self._soql(_B2B_ORDERS_QUERY.format(since=since))
+
+        amount_field = "TotalAmount" if use_b2b_order else "GrandTotalAmount"
+
         profile_count = len(profiles_raw)
         order_count = len(orders_raw)
-        total_revenue = sum(float(r.get("GrandTotalAmount") or 0) for r in orders_raw)
+        total_revenue = sum(float(r.get(amount_field) or 0) for r in orders_raw)
         aov = round(total_revenue / order_count, 2) if order_count else None
-        # Fulfillment rate as a conversion proxy: orders that reached Fulfilled or
-        # Approved status out of all orders in the period.
-        fulfilled = sum(
-            1 for r in orders_raw if r.get("Status") in ("Fulfilled", "Approved")
+        fulfilled_statuses = (
+            ("Activated", "Completed") if use_b2b_order else ("Fulfilled", "Approved")
         )
+        fulfilled = sum(1 for r in orders_raw if r.get("Status") in fulfilled_statuses)
         conversion_rate = round(fulfilled / order_count * 100, 1) if order_count else None
 
         # Fetch line items for the 6 most-recent orders.
@@ -416,25 +433,43 @@ class SalesforceOMSBackend(MerchantBackend):
         items_by_order: dict[str, list[OrderItem]] = {oid: [] for oid in recent_ids}
         if recent_ids:
             id_list = "','".join(recent_ids)
-            line_items_raw = await self._soql(
-                f"SELECT OrderSummaryId, ProductCode, Description, Quantity, UnitPrice "
-                f"FROM OrderItemSummary WHERE OrderSummaryId IN ('{id_list}')"
-            )
-            for li in line_items_raw:
-                oid = li.get("OrderSummaryId", "")
-                if oid not in items_by_order:
-                    continue
-                items_by_order[oid].append(
-                    OrderItem(
-                        product_id=li.get("ProductCode") or oid,
-                        title=li.get("Description") or li.get("ProductCode") or "Item",
-                        quantity=int(float(li.get("Quantity") or 1)),
-                        price=float(li.get("UnitPrice") or 0),
-                    )
+            if use_b2b_order:
+                line_items_raw = await self._soql(
+                    f"SELECT OrderId, Product2.ProductCode, Product2.Name, Quantity, UnitPrice "
+                    f"FROM OrderItem WHERE OrderId IN ('{id_list}')"
                 )
+                for li in line_items_raw:
+                    oid = li.get("OrderId", "")
+                    if oid not in items_by_order:
+                        continue
+                    p2 = li.get("Product2") or {}
+                    items_by_order[oid].append(
+                        OrderItem(
+                            product_id=p2.get("ProductCode") or oid,
+                            title=p2.get("Name") or p2.get("ProductCode") or "Item",
+                            quantity=int(float(li.get("Quantity") or 1)),
+                            price=float(li.get("UnitPrice") or 0),
+                        )
+                    )
+            else:
+                line_items_raw = await self._soql(
+                    f"SELECT OrderSummaryId, ProductCode, Description, Quantity, UnitPrice "
+                    f"FROM OrderItemSummary WHERE OrderSummaryId IN ('{id_list}')"
+                )
+                for li in line_items_raw:
+                    oid = li.get("OrderSummaryId", "")
+                    if oid not in items_by_order:
+                        continue
+                    items_by_order[oid].append(
+                        OrderItem(
+                            product_id=li.get("ProductCode") or oid,
+                            title=li.get("Description") or li.get("ProductCode") or "Item",
+                            quantity=int(float(li.get("Quantity") or 1)),
+                            price=float(li.get("UnitPrice") or 0),
+                        )
+                    )
 
         # Cache the 6 most-recent orders so recent_orders() (sync) can serve them.
-        # Use OrderNumber (human-readable, e.g. "5000000862") as the display ID.
         self._recent_orders_cache = [
             Order(
                 order_id=r.get("OrderNumber") or r.get("Id", r.get("id", "")),
@@ -443,7 +478,7 @@ class SalesforceOMSBackend(MerchantBackend):
                     (r.get("CreatedDate") or "2026-01-01T00:00:00.000Z").replace("Z", "+00:00")
                 ),
                 items=items_by_order.get(r.get("Id", r.get("id", "")), []),
-                total=float(r.get("GrandTotalAmount") or 0),
+                total=float(r.get(amount_field) or 0),
                 currency="USD",
             )
             for r in recent_six
@@ -472,9 +507,13 @@ class SalesforceOMSBackend(MerchantBackend):
         granularity: str = "day",
         segment: str | None = None,
     ) -> MetricSeries:
-        """Return daily revenue or order-count series from OrderSummary."""
+        """Return daily revenue or order-count series from OrderSummary (falls back to Order)."""
         since = _since_ts(period)
         orders_raw = await self._soql(_ORDERS_QUERY.format(since=since))
+        use_b2b_order = not orders_raw
+        if use_b2b_order:
+            orders_raw = await self._soql(_B2B_ORDERS_QUERY.format(since=since))
+        amount_field = "TotalAmount" if use_b2b_order else "GrandTotalAmount"
 
         # Bucket records by date (YYYY-MM-DD)
         buckets: dict[str, float] = defaultdict(float)
@@ -485,19 +524,20 @@ class SalesforceOMSBackend(MerchantBackend):
             if metric == "order_count":
                 buckets[day] += 1
             else:
-                buckets[day] += float(r.get("GrandTotalAmount") or 0)
+                buckets[day] += float(r.get(amount_field) or 0)
 
         points = [
             MetricPoint(date=d, value=round(v, 2))
             for d, v in sorted(buckets.items())
         ]
+        source = "Order" if use_b2b_order else "OrderSummary"
         return MetricSeries(
             metric="order_count" if metric == "order_count" else "revenue",
             unit="orders" if metric == "order_count" else "USD",
             granularity="day",
             period=f"since {since[:10]}",
             points=points,
-            note=f"{len(orders_raw)} OrderSummary records (LIMIT 500 per query)",
+            note=f"{len(orders_raw)} {source} records (LIMIT 500 per query)",
         )
 
     async def get_campaign_performance(
@@ -561,7 +601,8 @@ class SalesforceOMSBackend(MerchantBackend):
         self, session: MerchantSessionContext
     ) -> list[InventoryAlert]:
         await self._ensure_products_loaded()
-        # Top-selling non-shipping products from OrderItemSummary, all with stock=0.
+        # Top-selling products by order line items. Try OrderItemSummary (OMS) first,
+        # fall back to OrderItem (B2B Commerce).
         rows = await self._soql(
             "SELECT ProductCode, Description, COUNT(Id) total "
             "FROM OrderItemSummary "
@@ -569,6 +610,22 @@ class SalesforceOMSBackend(MerchantBackend):
             "GROUP BY ProductCode, Description "
             "ORDER BY COUNT(Id) DESC LIMIT 6"
         )
+        if not rows:
+            rows = await self._soql(
+                "SELECT Product2.ProductCode, Product2.Name, COUNT(Id) total "
+                "FROM OrderItem "
+                "WHERE Product2.ProductCode != '001' "
+                "GROUP BY Product2.ProductCode, Product2.Name "
+                "ORDER BY COUNT(Id) DESC LIMIT 6"
+            )
+            rows = [
+                {
+                    "ProductCode": (r.get("Product2") or {}).get("ProductCode", ""),
+                    "Description": (r.get("Product2") or {}).get("Name", ""),
+                    "total": r.get("total", 0),
+                }
+                for r in rows
+            ]
         alerts: list[InventoryAlert] = []
         seen_ids: set[str] = set()
         for row in rows:
@@ -598,11 +655,18 @@ class SalesforceOMSBackend(MerchantBackend):
         self, session: MerchantSessionContext
     ) -> list[OrderIssue]:
         # Orders with a $0 total — likely test/data anomalies needing review.
+        # Try OrderSummary (OMS) first; fall back to Order (B2B Commerce).
         rows = await self._soql(
             "SELECT Id, OrderNumber, CreatedDate, GrandTotalAmount "
             "FROM OrderSummary WHERE GrandTotalAmount = 0 "
             "ORDER BY CreatedDate DESC LIMIT 6"
         )
+        if not rows:
+            rows = await self._soql(
+                "SELECT Id, OrderNumber, CreatedDate, TotalAmount "
+                "FROM Order WHERE TotalAmount = 0 "
+                "ORDER BY CreatedDate DESC LIMIT 6"
+            )
         issues: list[OrderIssue] = []
         for row in rows:
             order_num = row.get("OrderNumber") or row.get("Id", "")
@@ -679,11 +743,14 @@ class SalesforceOMSBackend(MerchantBackend):
 
     async def get_cart(self, session: ShoppingSessionContext) -> Cart:
         try:
-            webstore_id = await self._ensure_webstore_id()
             account_id = await self._account_id_for_user(session.user_id)
-            params = {"effectiveAccountId": account_id} if account_id else {}
+            if not account_id:
+                return Cart()
+            webstore_id = await self._ensure_webstore_id()
             data = await self._b2b_request(
-                "GET", f"/commerce/webstores/{webstore_id}/carts/active", params=params
+                "GET",
+                f"/commerce/webstores/{webstore_id}/carts/active",
+                params={"effectiveAccountId": account_id},
             )
             return self._parse_b2b_cart(data)
         except Exception:
@@ -728,27 +795,54 @@ class SalesforceOMSBackend(MerchantBackend):
             f"SELECT Id, OrderNumber, CreatedDate, GrandTotalAmount "
             f"FROM OrderSummary ORDER BY CreatedDate DESC LIMIT {limit}"
         )
+        use_b2b_order = not orders_raw
+        if use_b2b_order:
+            orders_raw = await self._soql(
+                f"SELECT Id, OrderNumber, CreatedDate, TotalAmount "
+                f"FROM Order ORDER BY CreatedDate DESC LIMIT {limit}"
+            )
         if not orders_raw:
             return []
         recent_ids = [r.get("Id", "") for r in orders_raw if r.get("Id")]
         id_list = "','".join(recent_ids)
-        line_items_raw = await self._soql(
-            f"SELECT OrderSummaryId, ProductCode, Description, Quantity, UnitPrice "
-            f"FROM OrderItemSummary WHERE OrderSummaryId IN ('{id_list}')"
-        )
         items_by_order: dict[str, list[OrderItem]] = {oid: [] for oid in recent_ids}
-        for li in line_items_raw:
-            oid = li.get("OrderSummaryId", "")
-            if oid not in items_by_order:
-                continue
-            items_by_order[oid].append(
-                OrderItem(
-                    product_id=li.get("ProductCode") or oid,
-                    title=li.get("Description") or li.get("ProductCode") or "Item",
-                    quantity=int(float(li.get("Quantity") or 1)),
-                    price=float(li.get("UnitPrice") or 0),
-                )
+        if use_b2b_order:
+            line_items_raw = await self._soql(
+                f"SELECT OrderId, Product2.ProductCode, Product2.Name, Quantity, UnitPrice "
+                f"FROM OrderItem WHERE OrderId IN ('{id_list}')"
             )
+            for li in line_items_raw:
+                oid = li.get("OrderId", "")
+                if oid not in items_by_order:
+                    continue
+                p2 = li.get("Product2") or {}
+                items_by_order[oid].append(
+                    OrderItem(
+                        product_id=p2.get("ProductCode") or oid,
+                        title=p2.get("Name") or p2.get("ProductCode") or "Item",
+                        quantity=int(float(li.get("Quantity") or 1)),
+                        price=float(li.get("UnitPrice") or 0),
+                    )
+                )
+            amount_field = "TotalAmount"
+        else:
+            line_items_raw = await self._soql(
+                f"SELECT OrderSummaryId, ProductCode, Description, Quantity, UnitPrice "
+                f"FROM OrderItemSummary WHERE OrderSummaryId IN ('{id_list}')"
+            )
+            for li in line_items_raw:
+                oid = li.get("OrderSummaryId", "")
+                if oid not in items_by_order:
+                    continue
+                items_by_order[oid].append(
+                    OrderItem(
+                        product_id=li.get("ProductCode") or oid,
+                        title=li.get("Description") or li.get("ProductCode") or "Item",
+                        quantity=int(float(li.get("Quantity") or 1)),
+                        price=float(li.get("UnitPrice") or 0),
+                    )
+                )
+            amount_field = "GrandTotalAmount"
         result = []
         for r in orders_raw:
             oid = r.get("Id", "")
@@ -760,7 +854,7 @@ class SalesforceOMSBackend(MerchantBackend):
                         (r.get("CreatedDate") or "2026-01-01T00:00:00.000Z").replace("Z", "+00:00")
                     ),
                     items=items_by_order.get(oid, []),
-                    total=float(r.get("GrandTotalAmount") or 0),
+                    total=float(r.get(amount_field) or 0),
                     currency="USD",
                 )
             )

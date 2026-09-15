@@ -316,35 +316,91 @@ class SalesforceOMSBackend(MerchantBackend):
     # Product catalog — loaded once from PricebookEntry + Product2
     # ------------------------------------------------------------------
 
+    async def _load_products_from_b2b(self, webstore_id: str) -> tuple[dict, dict]:
+        """Load products via B2B Commerce Products API — returns only catalog-visible products."""
+        cache: dict[str, Listing] = {}
+        code_to_id: dict[str, str] = {}
+        page_token: str | None = None
+        while True:
+            params: dict = {"pageSize": 100}
+            if page_token:
+                params["pageParam"] = page_token
+            try:
+                data = await self._b2b_request(
+                    "GET", f"/commerce/webstores/{webstore_id}/products", params=params
+                )
+            except Exception as exc:
+                log.warning("B2B Products API failed: %s — falling back to PricebookEntry", exc)
+                return {}, {}
+            for item in data.get("products", []):
+                pid = item.get("id") or ""
+                if not pid or pid in cache:
+                    continue
+                name = item.get("name") or pid
+                code = item.get("productCode") or ""
+                desc = item.get("description") or None
+                family = item.get("productClass") or None
+                # Price comes from the entitlement's defaultPricebook
+                price_info = item.get("prices") or {}
+                price = float(price_info.get("listPrice") or price_info.get("unitPrice") or 0)
+                cache[pid] = Listing(
+                    listing_id=pid,
+                    title=name,
+                    price=price,
+                    currency=price_info.get("currencyIsoCode") or "USD",
+                    stock=0,
+                    category=family,
+                    status="active",
+                    short_description=desc,
+                    content_quality="good" if desc else "needs_work",
+                )
+                if code:
+                    code_to_id[code] = pid
+            next_page = data.get("nextPageUrl") or data.get("nextPageToken")
+            if not next_page or not cache:
+                break
+            page_token = next_page
+        log.info("B2B Products API loaded %d products", len(cache))
+        return cache, code_to_id
+
     async def _ensure_products_loaded(self) -> None:
         if self._products_loaded:
             return
-        records = await self._soql(_PRODUCTS_QUERY)
-        cache: dict[str, Listing] = {}
-        code_to_id: dict[str, str] = {}
-        for r in records:
-            pid = r.get("Product2Id", "")
-            if not pid or pid in cache:
-                continue
-            p2 = r.get("Product2") or {}
-            name = p2.get("Name") or pid
-            family = p2.get("Family") or None
-            desc = p2.get("Description") or None
-            code = p2.get("ProductCode") or ""
-            price = float(r.get("UnitPrice") or 0)
-            cache[pid] = Listing(
-                listing_id=pid,
-                title=name,
-                price=price,
-                currency="USD",
-                stock=0,
-                category=family,
-                status="active",
-                short_description=desc,
-                content_quality="good" if desc else "needs_work",
-            )
-            if code:
-                code_to_id[code] = pid
+        # Try B2B Commerce Products API first (returns only catalog-entitlement products).
+        # Fall back to PricebookEntry if B2B API is unavailable.
+        try:
+            webstore_id = await self._ensure_webstore_id()
+            cache, code_to_id = await self._load_products_from_b2b(webstore_id)
+        except Exception:
+            cache, code_to_id = {}, {}
+        if not cache:
+            log.info("Falling back to PricebookEntry for product catalog")
+            records = await self._soql(_PRODUCTS_QUERY)
+            cache = {}
+            code_to_id = {}
+            for r in records:
+                pid = r.get("Product2Id", "")
+                if not pid or pid in cache:
+                    continue
+                p2 = r.get("Product2") or {}
+                name = p2.get("Name") or pid
+                family = p2.get("Family") or None
+                desc = p2.get("Description") or None
+                code = p2.get("ProductCode") or ""
+                price = float(r.get("UnitPrice") or 0)
+                cache[pid] = Listing(
+                    listing_id=pid,
+                    title=name,
+                    price=price,
+                    currency="USD",
+                    stock=0,
+                    category=family,
+                    status="active",
+                    short_description=desc,
+                    content_quality="good" if desc else "needs_work",
+                )
+                if code:
+                    code_to_id[code] = pid
         self._products_cache = cache
         self._code_to_id = code_to_id
         # Also populate the DemoStorefront.products dict so the /api/products
@@ -775,6 +831,18 @@ class SalesforceOMSBackend(MerchantBackend):
                 params={"effectiveAccountId": account_id},
             )
             return self._parse_b2b_cart(data)
+        except httpx.HTTPStatusError as exc:
+            # 400 MISSING_RECORD = buyer has no active cart yet; return empty silently
+            if exc.response.status_code == 400:
+                try:
+                    body = exc.response.json()
+                    codes = [e.get("errorCode") for e in (body if isinstance(body, list) else [])]
+                    if "MISSING_RECORD" in codes:
+                        return Cart()
+                except Exception:
+                    pass
+            log.exception("get_cart failed; returning empty cart")
+            return Cart()
         except Exception:
             log.exception("get_cart failed; returning empty cart")
             return Cart()

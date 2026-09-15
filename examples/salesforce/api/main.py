@@ -20,6 +20,7 @@ from demo_common import (
     build_storefront_host,
     load_demo_env,
 )
+from fastapi import Response
 from shopping_agent_runtime import ShoppingAgent
 
 from .agent_config import build_shopping_config
@@ -59,3 +60,13 @@ host = build_storefront_host(
 )
 app = host.app
 app.include_router(create_merchant_router(backend, InMemoryMemoryStore()), prefix="/api/merchant")
+
+
+@app.post("/api/reload-products")
+async def reload_products() -> Response:
+    """Force a fresh product catalog load from Salesforce (clears the in-memory cache)."""
+    backend._products_loaded = False
+    await backend._ensure_products_loaded()
+    count = len(backend._products_cache)
+    log.info("Product catalog reloaded: %d products", count)
+    return Response(content=f'{{"products": {count}}}', media_type="application/json")

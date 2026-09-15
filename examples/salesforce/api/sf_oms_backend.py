@@ -191,6 +191,8 @@ class SalesforceOMSBackend(MerchantBackend):
         self._products_loaded: bool = False
         self._webstore_id: str = ""  # resolved lazily from WebStore SOQL
         self._account_cache: dict[str, str] = {}  # sf_user_id → AccountId
+        self._active_cart_id: str = ""  # cartId from last get_cart
+        self._cart_item_ids: dict[str, str] = {}  # product_id → cartItemId
 
         # ChangeLedger is required by the DemoMerchant protocol and the
         # merchant router's /overview endpoint.
@@ -832,19 +834,22 @@ class SalesforceOMSBackend(MerchantBackend):
                 params={"effectiveAccountId": account_id, "fieldsToExpand": "cartItems"},
             )
             log.debug("get_cart response keys: %s totalProductCount: %s", list(data.keys()), data.get("totalProductCount"))
-            cart = self._parse_b2b_cart(data)
+            cart_id = data.get("cartId", "")
+            if cart_id:
+                self._active_cart_id = cart_id
+            cart, item_ids = self._parse_b2b_cart(data)
             # If inline expansion returned nothing but a cart exists, fetch items separately
-            if not cart.items and data.get("cartId"):
-                cart_id = data["cartId"]
+            if not cart.items and cart_id:
                 try:
                     items_data = await self._b2b_request(
                         "GET",
                         f"/commerce/webstores/{webstore_id}/carts/{cart_id}/cart-items",
                         params={"effectiveAccountId": account_id},
                     )
-                    cart = self._parse_b2b_cart_items(items_data, data.get("currencyIsoCode", "USD"))
+                    cart, item_ids = self._parse_b2b_cart_items(items_data, data.get("currencyIsoCode", "USD"))
                 except Exception:
                     log.debug("get_cart: cart-items fallback failed, returning header-only cart")
+            self._cart_item_ids = item_ids
             return cart
         except httpx.HTTPStatusError as exc:
             # 400 MISSING_RECORD = buyer has no active cart yet; return empty silently
@@ -880,19 +885,21 @@ class SalesforceOMSBackend(MerchantBackend):
         )
         return await self.get_cart(session)
 
-    def _parse_b2b_cart(self, data: dict[str, Any]) -> Cart:
+    def _parse_b2b_cart(self, data: dict[str, Any]) -> tuple[Cart, dict[str, str]]:
         """Parse cart from GET /carts/active?fieldsToExpand=cartItems response.
 
-        Records are flat objects when expanded inline (no nested 'cartItem' key).
+        Returns (Cart, {product_id: cartItemId}) — flat records when expanded inline.
         """
         from shopping_agent import CartItem
         items = []
+        item_ids: dict[str, str] = {}
         cart_items_block = data.get("cartItems") or {}
         records = cart_items_block.get("records", []) if isinstance(cart_items_block, dict) else []
         for entry in records:
             # Inline expansion: fields are flat; nested format has a 'cartItem' sub-key
             row = entry.get("cartItem") if "cartItem" in entry else entry
             product_id = row.get("productId", "")
+            cart_item_id = row.get("cartItemId", "")
             name = row.get("name", product_id)
             price = float(
                 row.get("unitAdjustedPrice")
@@ -902,19 +909,23 @@ class SalesforceOMSBackend(MerchantBackend):
             )
             qty = int(float(row.get("quantity") or 1))
             items.append(CartItem(product_id=product_id, title=name, price=price, quantity=qty))
+            if product_id and cart_item_id:
+                item_ids[product_id] = cart_item_id
         currency = data.get("currencyIsoCode", "USD")
-        return Cart(items=items, currency=currency)
+        return Cart(items=items, currency=currency), item_ids
 
-    def _parse_b2b_cart_items(self, data: dict[str, Any], currency: str = "USD") -> Cart:
+    def _parse_b2b_cart_items(self, data: dict[str, Any], currency: str = "USD") -> tuple[Cart, dict[str, str]]:
         """Parse cart from GET /carts/{cartId}/cart-items response.
 
-        Each record has the item nested under a 'cartItem' key.
+        Returns (Cart, {product_id: cartItemId}) — each record nested under 'cartItem'.
         """
         from shopping_agent import CartItem
         items = []
+        item_ids: dict[str, str] = {}
         for entry in data.get("cartItems", []):
             row = entry.get("cartItem", entry)
             product_id = row.get("productId", "")
+            cart_item_id = row.get("cartItemId", "")
             name = row.get("name", product_id)
             price = float(
                 row.get("unitAdjustedPrice")
@@ -924,7 +935,9 @@ class SalesforceOMSBackend(MerchantBackend):
             )
             qty = int(float(row.get("quantity") or 1))
             items.append(CartItem(product_id=product_id, title=name, price=price, quantity=qty))
-        return Cart(items=items, currency=currency)
+            if product_id and cart_item_id:
+                item_ids[product_id] = cart_item_id
+        return Cart(items=items, currency=currency), item_ids
 
     # ------------------------------------------------------------------
     # Storefront orders — fetched live from OrderSummary + OrderItemSummary
@@ -1016,12 +1029,49 @@ class SalesforceOMSBackend(MerchantBackend):
     async def update_cart_item(
         self, session: ShoppingSessionContext, product_id: str, quantity: int
     ) -> Cart:
-        return Cart()
+        account_id = await self._account_id_for_user(session.user_id)
+        if not account_id:
+            return Cart()
+        # Refresh to get current cart item IDs
+        await self.get_cart(session)
+        cart_item_id = self._cart_item_ids.get(product_id)
+        if not cart_item_id or not self._active_cart_id:
+            return await self.get_cart(session)
+        webstore_id = await self._ensure_webstore_id()
+        if quantity <= 0:
+            await self._b2b_request(
+                "DELETE",
+                f"/commerce/webstores/{webstore_id}/carts/{self._active_cart_id}/cart-items/{cart_item_id}",
+                params={"effectiveAccountId": account_id},
+            )
+        else:
+            await self._b2b_request(
+                "PATCH",
+                f"/commerce/webstores/{webstore_id}/carts/{self._active_cart_id}/cart-items/{cart_item_id}",
+                params={"effectiveAccountId": account_id},
+                json={"quantity": str(quantity)},
+            )
+        return await self.get_cart(session)
 
     async def remove_from_cart(
         self, session: ShoppingSessionContext, product_id: str
     ) -> Cart:
-        return Cart()
+        account_id = await self._account_id_for_user(session.user_id)
+        if not account_id:
+            return Cart()
+        # Refresh to get current cart item IDs
+        cart = await self.get_cart(session)
+        cart_item_id = self._cart_item_ids.get(product_id)
+        if not cart_item_id or not self._active_cart_id:
+            # product not found in cart — return current state
+            return cart
+        webstore_id = await self._ensure_webstore_id()
+        await self._b2b_request(
+            "DELETE",
+            f"/commerce/webstores/{webstore_id}/carts/{self._active_cart_id}/cart-items/{cart_item_id}",
+            params={"effectiveAccountId": account_id},
+        )
+        return await self.get_cart(session)
 
     # ------------------------------------------------------------------
     # Optional: merchant context sent on every turn

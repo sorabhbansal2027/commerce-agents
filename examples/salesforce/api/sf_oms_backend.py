@@ -829,73 +829,92 @@ class SalesforceOMSBackend(MerchantBackend):
             return []
         return [CheckoutHandoff(label="Proceed to checkout", url=f"{community_url}/cart")]
 
+    async def _get_buyer_cart_id(self, sf_user_id: str, webstore_id: str) -> tuple[str, str]:
+        """Return (cartId, currencyIsoCode) for the buyer's active WebCart via SOQL.
+
+        Reading via SOQL on WebCart.OwnerId guarantees we see the same cart the native
+        B2B Commerce storefront shows.  Returns ("", "USD") when no active cart exists.
+        """
+        rows = await self._soql(
+            f"SELECT Id, CurrencyIsoCode FROM WebCart "
+            f"WHERE OwnerId = '{sf_user_id}' AND Status = 'Active' "
+            f"AND WebStoreId = '{webstore_id}' "
+            f"ORDER BY LastModifiedDate DESC LIMIT 1"
+        )
+        if not rows:
+            return "", "USD"
+        return rows[0].get("Id", ""), rows[0].get("CurrencyIsoCode", "USD")
+
     async def get_cart(self, session: ShoppingSessionContext) -> Cart:
-        account_id = await self._account_id_for_user(session.user_id)
-        if not account_id:
+        sf_user_id = session.user_id
+        if not sf_user_id or not sf_user_id.startswith("005"):
             return Cart()
         webstore_id = await self._ensure_webstore_id()
 
-        # Step 1: get cart header to resolve cartId and currency
-        try:
-            header = await self._b2b_request(
-                "GET",
-                f"/commerce/webstores/{webstore_id}/carts/active",
-                params={"effectiveAccountId": account_id},
-            )
-        except httpx.HTTPStatusError as exc:
-            if exc.response.status_code == 400:
-                try:
-                    body = exc.response.json()
-                    if any(e.get("errorCode") == "MISSING_RECORD" for e in (body if isinstance(body, list) else [])):
-                        return Cart()
-                except Exception:
-                    pass
-            log.warning("get_cart: GET /carts/active failed: %s", exc)
-            return Cart()
-        except Exception as exc:
-            log.warning("get_cart: GET /carts/active error: %s", exc)
-            return Cart()
-
-        cart_id = header.get("cartId", "")
-        currency = header.get("currencyIsoCode", "USD")
-        log.debug("get_cart: cartId=%s totalProductCount=%s", cart_id, header.get("totalProductCount"))
-        if cart_id:
-            self._active_cart_id = cart_id
-
+        # Read via SOQL so we see the same cart as the native B2B storefront
+        cart_id, currency = await self._get_buyer_cart_id(sf_user_id, webstore_id)
+        log.debug("get_cart: cartId=%s currency=%s user=%s", cart_id, currency, sf_user_id)
         if not cart_id:
-            return Cart(currency=currency)
+            return Cart()
+        self._active_cart_id = cart_id
 
-        # Step 2: fetch items from the dedicated cart-items endpoint
-        try:
-            items_data = await self._b2b_request(
-                "GET",
-                f"/commerce/webstores/{webstore_id}/carts/{cart_id}/cart-items",
-                params={"effectiveAccountId": account_id},
-            )
-            cart, item_ids = self._parse_b2b_cart_items(items_data, currency)
-            self._cart_item_ids = item_ids
-            log.debug("get_cart: %d items loaded", len(cart.items))
-            return cart
-        except Exception as exc:
-            log.warning("get_cart: GET /carts/%s/cart-items failed: %s", cart_id, exc)
-            return Cart(currency=currency)
+        # Read cart items directly from WebCartItem
+        item_rows = await self._soql(
+            f"SELECT Id, ProductId, Product2.Name, Quantity, SalesPrice "
+            f"FROM WebCartItem WHERE CartId = '{cart_id}'"
+        )
+        from shopping_agent import CartItem
+        items = []
+        item_ids: dict[str, str] = {}
+        for row in item_rows:
+            product_id = row.get("ProductId", "")
+            p2 = row.get("Product2") or {}
+            name = p2.get("Name") or product_id
+            price = float(row.get("SalesPrice") or 0)
+            qty = int(float(row.get("Quantity") or 1))
+            cart_item_id = row.get("Id", "")
+            items.append(CartItem(product_id=product_id, title=name, price=price, quantity=qty))
+            if product_id and cart_item_id:
+                item_ids[product_id] = cart_item_id
+        self._cart_item_ids = item_ids
+        log.debug("get_cart: %d items from WebCartItem", len(items))
+        return Cart(items=items, currency=currency)
 
     async def add_to_cart(
         self, session: ShoppingSessionContext, product_id: str, quantity: int
     ) -> Cart:
-        account_id = await self._account_id_for_user(session.user_id)
+        sf_user_id = session.user_id
+        if not sf_user_id or not sf_user_id.startswith("005"):
+            raise ValueError(
+                "Cannot add to cart: no valid Salesforce user in session. "
+                "Please ensure you are logged in as a B2B Commerce community user."
+            )
+        account_id = await self._account_id_for_user(sf_user_id)
         if not account_id:
             raise ValueError(
                 "Cannot add to cart: no buyer account found for this user. "
                 "Please ensure you are logged in as a B2B Commerce community user."
             )
         webstore_id = await self._ensure_webstore_id()
-        await self._b2b_request(
-            "POST",
-            f"/commerce/webstores/{webstore_id}/carts/active/cart-items",
-            params={"effectiveAccountId": account_id},
-            json={"productId": product_id, "quantity": str(quantity), "type": "Product"},
-        )
+
+        # Find the buyer's actual cart so we add to the same one the storefront shows
+        cart_id, _ = await self._get_buyer_cart_id(sf_user_id, webstore_id)
+        if cart_id:
+            # Add to the buyer's existing cart by its specific ID
+            await self._b2b_request(
+                "POST",
+                f"/commerce/webstores/{webstore_id}/carts/{cart_id}/cart-items",
+                params={"effectiveAccountId": account_id},
+                json={"productId": product_id, "quantity": str(quantity), "type": "Product"},
+            )
+        else:
+            # No cart yet — create one via active-cart endpoint; SF will create it for this account
+            await self._b2b_request(
+                "POST",
+                f"/commerce/webstores/{webstore_id}/carts/active/cart-items",
+                params={"effectiveAccountId": account_id},
+                json={"productId": product_id, "quantity": str(quantity), "type": "Product"},
+            )
         return await self.get_cart(session)
 
     def _parse_b2b_cart(self, data: dict[str, Any]) -> tuple[Cart, dict[str, str]]:

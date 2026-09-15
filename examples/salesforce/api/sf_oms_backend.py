@@ -272,15 +272,30 @@ class SalesforceOMSBackend(MerchantBackend):
         Returns None for non-SF IDs (e.g. 'demo-user') so the cart call
         proceeds without an effectiveAccountId."""
         if not sf_user_id or not sf_user_id.startswith("005") or len(sf_user_id) not in (15, 18):
+            log.debug("_account_id_for_user: skipping non-SF user_id=%r", sf_user_id)
             return None
         if sf_user_id in self._account_cache:
             return self._account_cache[sf_user_id]
         rows = await self._soql(
-            f"SELECT AccountId FROM User WHERE Id = '{sf_user_id}' LIMIT 1"
+            f"SELECT AccountId, ContactId FROM User WHERE Id = '{sf_user_id}' LIMIT 1"
         )
-        if not rows or not rows[0].get("AccountId"):
+        log.info("_account_id_for_user: user_id=%s rows=%s", sf_user_id, rows)
+        if not rows:
             return None
-        account_id = rows[0]["AccountId"]
+        # Direct AccountId (set for community/portal users)
+        account_id = rows[0].get("AccountId")
+        # Fallback: resolve via Contact for internal users linked to a Contact
+        if not account_id:
+            contact_id = rows[0].get("ContactId")
+            if contact_id:
+                c_rows = await self._soql(
+                    f"SELECT AccountId FROM Contact WHERE Id = '{contact_id}' LIMIT 1"
+                )
+                log.info("_account_id_for_user: contact lookup contact_id=%s rows=%s", contact_id, c_rows)
+                account_id = (c_rows[0].get("AccountId") if c_rows else None)
+        if not account_id:
+            log.warning("_account_id_for_user: no AccountId for user_id=%s", sf_user_id)
+            return None
         self._account_cache[sf_user_id] = account_id
         return account_id
 

@@ -191,7 +191,10 @@ def build_storefront_host(
 
     @app.post("/api/session")
     async def start_session(request: StartSessionRequest | None = None) -> dict:
-        record = host.sessions.start((request or StartSessionRequest()).user_id)
+        req = request or StartSessionRequest()
+        import logging as _logging
+        _logging.getLogger(__name__).info("start_session: user_id=%r", req.user_id)
+        record = host.sessions.start(req.user_id)
         profile = await backend.get_preferences(host.context(record))
         return {
             "session_id": record.session_id,

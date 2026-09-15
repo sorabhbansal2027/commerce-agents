@@ -821,51 +821,64 @@ class SalesforceOMSBackend(MerchantBackend):
     async def get_account_context(self, session: ShoppingSessionContext) -> dict | None:
         return None
 
+    async def checkout_handoff(self, session: ShoppingSessionContext, cart: Cart) -> list:
+        """Return link to native B2B Commerce checkout so user can complete purchase there."""
+        from shopping_agent import CheckoutHandoff
+        community_url = os.environ.get("SF_COMMUNITY_URL", "").rstrip("/")
+        if not community_url:
+            return []
+        return [CheckoutHandoff(label="Proceed to checkout", url=f"{community_url}/cart")]
+
     async def get_cart(self, session: ShoppingSessionContext) -> Cart:
+        account_id = await self._account_id_for_user(session.user_id)
+        if not account_id:
+            return Cart()
+        webstore_id = await self._ensure_webstore_id()
+
+        # Step 1: get cart header to resolve cartId and currency
         try:
-            account_id = await self._account_id_for_user(session.user_id)
-            if not account_id:
-                return Cart()
-            webstore_id = await self._ensure_webstore_id()
-            # fieldsToExpand=cartItems includes inline cart items in the response
-            data = await self._b2b_request(
+            header = await self._b2b_request(
                 "GET",
                 f"/commerce/webstores/{webstore_id}/carts/active",
-                params={"effectiveAccountId": account_id, "fieldsToExpand": "cartItems"},
+                params={"effectiveAccountId": account_id},
             )
-            log.debug("get_cart response keys: %s totalProductCount: %s", list(data.keys()), data.get("totalProductCount"))
-            cart_id = data.get("cartId", "")
-            if cart_id:
-                self._active_cart_id = cart_id
-            cart, item_ids = self._parse_b2b_cart(data)
-            # If inline expansion returned nothing but a cart exists, fetch items separately
-            if not cart.items and cart_id:
-                try:
-                    items_data = await self._b2b_request(
-                        "GET",
-                        f"/commerce/webstores/{webstore_id}/carts/{cart_id}/cart-items",
-                        params={"effectiveAccountId": account_id},
-                    )
-                    cart, item_ids = self._parse_b2b_cart_items(items_data, data.get("currencyIsoCode", "USD"))
-                except Exception:
-                    log.debug("get_cart: cart-items fallback failed, returning header-only cart")
-            self._cart_item_ids = item_ids
-            return cart
         except httpx.HTTPStatusError as exc:
-            # 400 MISSING_RECORD = buyer has no active cart yet; return empty silently
             if exc.response.status_code == 400:
                 try:
                     body = exc.response.json()
-                    codes = [e.get("errorCode") for e in (body if isinstance(body, list) else [])]
-                    if "MISSING_RECORD" in codes:
+                    if any(e.get("errorCode") == "MISSING_RECORD" for e in (body if isinstance(body, list) else [])):
                         return Cart()
                 except Exception:
                     pass
-            log.exception("get_cart failed; returning empty cart")
+            log.warning("get_cart: GET /carts/active failed: %s", exc)
             return Cart()
-        except Exception:
-            log.exception("get_cart failed; returning empty cart")
+        except Exception as exc:
+            log.warning("get_cart: GET /carts/active error: %s", exc)
             return Cart()
+
+        cart_id = header.get("cartId", "")
+        currency = header.get("currencyIsoCode", "USD")
+        log.debug("get_cart: cartId=%s totalProductCount=%s", cart_id, header.get("totalProductCount"))
+        if cart_id:
+            self._active_cart_id = cart_id
+
+        if not cart_id:
+            return Cart(currency=currency)
+
+        # Step 2: fetch items from the dedicated cart-items endpoint
+        try:
+            items_data = await self._b2b_request(
+                "GET",
+                f"/commerce/webstores/{webstore_id}/carts/{cart_id}/cart-items",
+                params={"effectiveAccountId": account_id},
+            )
+            cart, item_ids = self._parse_b2b_cart_items(items_data, currency)
+            self._cart_item_ids = item_ids
+            log.debug("get_cart: %d items loaded", len(cart.items))
+            return cart
+        except Exception as exc:
+            log.warning("get_cart: GET /carts/%s/cart-items failed: %s", cart_id, exc)
+            return Cart(currency=currency)
 
     async def add_to_cart(
         self, session: ShoppingSessionContext, product_id: str, quantity: int

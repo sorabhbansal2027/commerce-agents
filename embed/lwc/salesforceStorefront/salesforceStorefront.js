@@ -1,4 +1,5 @@
 import { LightningElement, api, track } from 'lwc';
+import userId from '@salesforce/user/Id';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants
@@ -126,7 +127,12 @@ export default class SalesforceStorefront extends LightningElement {
     // ── Session ────────────────────────────────────────────────────────────────
     async _createSession() {
         try {
-            const res = await fetch(this._url('session'), { method: 'POST', headers: this._hdrs() });
+            const body_payload = userId ? JSON.stringify({ user_id: userId }) : undefined;
+            const res = await fetch(this._url('session'), {
+                method: 'POST',
+                headers: this._hdrs(),
+                body: body_payload,
+            });
             if (!res.ok) throw new Error(`Session ${res.status}`);
             const body = await res.json();
             this._sessionId = body.session_id ?? body.id ?? null;

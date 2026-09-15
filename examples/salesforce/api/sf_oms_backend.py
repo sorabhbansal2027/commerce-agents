@@ -180,6 +180,8 @@ class SalesforceOMSBackend(MerchantBackend):
         self._products_cache: dict[str, Listing] = {}
         self._code_to_id: dict[str, str] = {}  # ProductCode → Product2Id
         self._products_loaded: bool = False
+        self._webstore_id: str = ""  # resolved lazily from WebStore SOQL
+        self._account_cache: dict[str, str] = {}  # sf_user_id → AccountId
 
         # ChangeLedger is required by the DemoMerchant protocol and the
         # merchant router's /overview endpoint.
@@ -241,6 +243,44 @@ class SalesforceOMSBackend(MerchantBackend):
                 next_path = body.get("nextRecordsUrl")
                 url = f"{self._base}{next_path}" if next_path else None
         return records
+
+    # ------------------------------------------------------------------
+    # B2B Commerce helpers — WebStore ID + buyer account resolution
+    # ------------------------------------------------------------------
+
+    async def _ensure_webstore_id(self) -> str:
+        """Resolve the WebStore ID once from SOQL; cache for the process lifetime."""
+        if self._webstore_id:
+            return self._webstore_id
+        rows = await self._soql("SELECT Id FROM WebStore LIMIT 1")
+        if not rows:
+            raise RuntimeError("No WebStore found in this org")
+        self._webstore_id = rows[0]["Id"]
+        return self._webstore_id
+
+    async def _account_id_for_user(self, sf_user_id: str) -> str | None:
+        """Return the AccountId associated with a Salesforce User record."""
+        if sf_user_id in self._account_cache:
+            return self._account_cache[sf_user_id]
+        rows = await self._soql(
+            f"SELECT AccountId FROM User WHERE Id = '{sf_user_id}' LIMIT 1"
+        )
+        if not rows or not rows[0].get("AccountId"):
+            return None
+        account_id = rows[0]["AccountId"]
+        self._account_cache[sf_user_id] = account_id
+        return account_id
+
+    async def _b2b_request(
+        self, method: str, path: str, *, params: dict | None = None, json: dict | None = None
+    ) -> dict[str, Any]:
+        """Make an authenticated B2B Commerce REST API call."""
+        headers = await self._token_headers()
+        url = f"{self._base}/services/data/v62.0{path}"
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.request(method, url, headers=headers, params=params, json=json)
+            resp.raise_for_status()
+            return resp.json() if resp.content else {}
 
     # ------------------------------------------------------------------
     # Product catalog — loaded once from PricebookEntry + Product2
@@ -634,12 +674,46 @@ class SalesforceOMSBackend(MerchantBackend):
         return None
 
     async def get_cart(self, session: ShoppingSessionContext) -> Cart:
-        return Cart()
+        try:
+            webstore_id = await self._ensure_webstore_id()
+            account_id = await self._account_id_for_user(session.user_id)
+            params = {"effectiveAccountId": account_id} if account_id else {}
+            data = await self._b2b_request(
+                "GET", f"/commerce/webstores/{webstore_id}/carts/active", params=params
+            )
+            return self._parse_b2b_cart(data)
+        except Exception:
+            log.exception("get_cart failed; returning empty cart")
+            return Cart()
 
     async def add_to_cart(
         self, session: ShoppingSessionContext, product_id: str, quantity: int
     ) -> Cart:
-        raise NotImplementedError("Salesforce OMS agent has no shopping cart")
+        webstore_id = await self._ensure_webstore_id()
+        account_id = await self._account_id_for_user(session.user_id)
+        params = {"effectiveAccountId": account_id} if account_id else {}
+        # Resolve product ID to product2 ID if needed (catalog uses Product2Id)
+        await self._b2b_request(
+            "POST",
+            f"/commerce/webstores/{webstore_id}/carts/active/cart-items",
+            params=params,
+            json={"productId": product_id, "quantity": str(quantity), "type": "Product"},
+        )
+        return await self.get_cart(session)
+
+    def _parse_b2b_cart(self, data: dict[str, Any]) -> Cart:
+        """Convert B2B Commerce cart API response to Cart."""
+        from shopping_agent import CartItem
+        items = []
+        for entry in data.get("cartItems", {}).get("records", []):
+            cart_product = entry.get("cartItem", entry)
+            product_id = cart_product.get("productId", "")
+            name = cart_product.get("name", product_id)
+            price = float(cart_product.get("unitAdjustedPrice") or cart_product.get("listPrice") or 0)
+            qty = int(float(cart_product.get("quantity") or 1))
+            items.append(CartItem(product_id=product_id, title=name, price=price, quantity=qty))
+        currency = data.get("currencyIsoCode", "USD")
+        return Cart(items=items, currency=currency)
 
     # ------------------------------------------------------------------
     # Storefront orders — fetched live from OrderSummary + OrderItemSummary

@@ -630,6 +630,9 @@ class SalesforceOMSBackend(MerchantBackend):
         # Populated after the first get_business_snapshot() call (async SOQL result cache).
         return self._recent_orders_cache[:limit]
 
+    async def get_account_context(self, session: ShoppingSessionContext) -> dict | None:
+        return None
+
     async def get_cart(self, session: ShoppingSessionContext) -> Cart:
         return Cart()
 

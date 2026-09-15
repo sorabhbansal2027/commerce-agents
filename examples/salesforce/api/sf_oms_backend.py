@@ -858,19 +858,31 @@ class SalesforceOMSBackend(MerchantBackend):
             return Cart()
         self._active_cart_id = cart_id
 
-        # Read cart items directly from WebCartItem
-        # Note: relationship from WebCartItem.ProductId to Product2 is "Product" (not "Product2")
+        # Read cart items without relationship traversal (avoids cross-object permission issues)
         item_rows = await self._soql(
-            f"SELECT Id, ProductId, Product.Name, Quantity, SalesPrice "
+            f"SELECT Id, ProductId, Quantity, SalesPrice "
             f"FROM WebCartItem WHERE CartId = '{cart_id}'"
         )
+
+        # Resolve product names in a separate query on Product2
+        product_ids = [r["ProductId"] for r in item_rows if r.get("ProductId")]
+        name_map: dict[str, str] = {}
+        if product_ids:
+            id_list = ", ".join(f"'{pid}'" for pid in product_ids)
+            try:
+                name_rows = await self._soql(
+                    f"SELECT Id, Name FROM Product2 WHERE Id IN ({id_list})"
+                )
+                name_map = {r["Id"]: r["Name"] for r in name_rows if r.get("Id") and r.get("Name")}
+            except Exception:
+                pass  # names are cosmetic; proceed with product IDs as titles
+
         from shopping_agent import CartItem
         items = []
         item_ids: dict[str, str] = {}
         for row in item_rows:
             product_id = row.get("ProductId", "")
-            p2 = row.get("Product") or {}
-            name = p2.get("Name") or product_id
+            name = name_map.get(product_id) or product_id
             price = float(row.get("SalesPrice") or 0)
             qty = int(float(row.get("Quantity") or 1))
             cart_item_id = row.get("Id", "")

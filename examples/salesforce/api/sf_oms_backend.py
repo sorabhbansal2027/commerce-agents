@@ -59,10 +59,9 @@ STORE_NAME = "Salesforce"
 # ---------------------------------------------------------------------------
 
 _PROFILES_QUERY = """
-SELECT CreatedDate, OETS_etsProfileId__c, id, LastName, CreatedBy.name
+SELECT Id, LastName, CreatedDate, CreatedBy.Name
 FROM Account
-WHERE CreatedBy.name LIKE '%Plat%'
-AND CreatedDate > {since}
+WHERE CreatedDate > {since}
 ORDER BY CreatedDate DESC
 LIMIT 15
 """.strip()
@@ -401,10 +400,17 @@ class SalesforceOMSBackend(MerchantBackend):
         - profile count goes in the note field (supplementary context)
         """
         since = _since_ts(period)
-        profiles_raw, orders_raw = await asyncio.gather(
+        results = await asyncio.gather(
             self._soql(_PROFILES_QUERY.format(since=since)),
             self._soql(_ORDERS_QUERY.format(since=since)),
+            return_exceptions=True,
         )
+        profiles_raw = results[0] if isinstance(results[0], list) else []
+        orders_raw = results[1] if isinstance(results[1], list) else []
+        if isinstance(results[0], Exception):
+            log.warning("profiles query failed: %s", results[0])
+        if isinstance(results[1], Exception):
+            log.warning("orders query failed: %s", results[1])
         # Pre-warm the product cache in the background while we build the snapshot.
         if not self._products_loaded:
             asyncio.ensure_future(self._ensure_products_loaded())
@@ -493,9 +499,8 @@ class SalesforceOMSBackend(MerchantBackend):
             currency="USD",
             alerts=AlertCounts(),
             note=(
-                f"{profile_count} Platform-created profiles "
-                f"(CreatedBy LIKE '%Plat%') since {since[:10]}. "
-                f"Conversion shows order fulfillment rate (Fulfilled+Approved/total)."
+                f"{profile_count} accounts created since {since[:10]}. "
+                f"Conversion shows order fulfillment rate."
             ),
         )
 

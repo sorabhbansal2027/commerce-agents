@@ -292,6 +292,8 @@ class SalesforceOMSBackend(MerchantBackend):
         url = f"{self._base}/services/data/v62.0{path}"
         async with httpx.AsyncClient(timeout=30) as client:
             resp = await client.request(method, url, headers=headers, params=params, json=json)
+            if resp.is_error:
+                log.error("B2B API %s %s → %s: %s", method, path, resp.status_code, resp.text[:500])
             resp.raise_for_status()
             return resp.json() if resp.content else {}
 
@@ -765,14 +767,17 @@ class SalesforceOMSBackend(MerchantBackend):
     async def add_to_cart(
         self, session: ShoppingSessionContext, product_id: str, quantity: int
     ) -> Cart:
-        webstore_id = await self._ensure_webstore_id()
         account_id = await self._account_id_for_user(session.user_id)
-        params = {"effectiveAccountId": account_id} if account_id else {}
-        # Resolve product ID to product2 ID if needed (catalog uses Product2Id)
+        if not account_id:
+            raise ValueError(
+                "Cannot add to cart: no buyer account found for this user. "
+                "Please ensure you are logged in as a B2B Commerce community user."
+            )
+        webstore_id = await self._ensure_webstore_id()
         await self._b2b_request(
             "POST",
             f"/commerce/webstores/{webstore_id}/carts/active/cart-items",
-            params=params,
+            params={"effectiveAccountId": account_id},
             json={"productId": product_id, "quantity": str(quantity), "type": "Product"},
         )
         return await self.get_cart(session)

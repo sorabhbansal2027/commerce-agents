@@ -858,40 +858,21 @@ class SalesforceOMSBackend(MerchantBackend):
             return Cart()
         self._active_cart_id = cart_id
 
-        # Read cart items without relationship traversal (avoids cross-object permission issues)
-        item_rows = await self._soql(
-            f"SELECT Id, ProductId, Quantity, SalesPrice "
-            f"FROM WebCartItem WHERE CartId = '{cart_id}'"
+        # Use B2B Commerce REST API for cart items — the integration user has B2B API access
+        # but lacks SOQL read on WebCartItem; the API call handles buyer context via effectiveAccountId
+        account_id = await self._account_id_for_user(sf_user_id)
+        params: dict = {}
+        if account_id:
+            params["effectiveAccountId"] = account_id
+        data = await self._b2b_request(
+            "GET",
+            f"/commerce/webstores/{webstore_id}/carts/{cart_id}/cart-items",
+            params=params,
         )
-
-        # Resolve product names in a separate query on Product2
-        product_ids = [r["ProductId"] for r in item_rows if r.get("ProductId")]
-        name_map: dict[str, str] = {}
-        if product_ids:
-            id_list = ", ".join(f"'{pid}'" for pid in product_ids)
-            try:
-                name_rows = await self._soql(
-                    f"SELECT Id, Name FROM Product2 WHERE Id IN ({id_list})"
-                )
-                name_map = {r["Id"]: r["Name"] for r in name_rows if r.get("Id") and r.get("Name")}
-            except Exception:
-                pass  # names are cosmetic; proceed with product IDs as titles
-
-        from shopping_agent import CartItem
-        items = []
-        item_ids: dict[str, str] = {}
-        for row in item_rows:
-            product_id = row.get("ProductId", "")
-            name = name_map.get(product_id) or product_id
-            price = float(row.get("SalesPrice") or 0)
-            qty = int(float(row.get("Quantity") or 1))
-            cart_item_id = row.get("Id", "")
-            items.append(CartItem(product_id=product_id, title=name, price=price, quantity=qty))
-            if product_id and cart_item_id:
-                item_ids[product_id] = cart_item_id
+        cart, item_ids = self._parse_b2b_cart_items(data, currency)
         self._cart_item_ids = item_ids
-        log.debug("get_cart: %d items from WebCartItem", len(items))
-        return Cart(items=items, currency=currency)
+        log.debug("get_cart: %d items from B2B cart-items API", len(cart.items))
+        return cart
 
     async def add_to_cart(
         self, session: ShoppingSessionContext, product_id: str, quantity: int

@@ -1117,6 +1117,13 @@ class SalesforceOMSBackend(MerchantBackend):
     # ------------------------------------------------------------------
 
     async def _fetch_recent_orders(self, limit: int = 20) -> list[Order]:
+        try:
+            return await self._fetch_recent_orders_inner(limit)
+        except Exception as exc:
+            log.warning("_fetch_recent_orders failed: %s", exc)
+            return []
+
+    async def _fetch_recent_orders_inner(self, limit: int = 20) -> list[Order]:
         orders_raw = await self._soql(
             f"SELECT Id, OrderNumber, CreatedDate, GrandTotalAmount "
             f"FROM OrderSummary ORDER BY CreatedDate DESC LIMIT {limit}"
@@ -1177,7 +1184,9 @@ class SalesforceOMSBackend(MerchantBackend):
                     order_id=r.get("OrderNumber") or oid,
                     status=OrderStatus.DELIVERED,
                     placed_at=datetime.fromisoformat(
-                        (r.get("CreatedDate") or "2026-01-01T00:00:00.000Z").replace("Z", "+00:00")
+                        (r.get("CreatedDate") or "2026-01-01T00:00:00.000+00:00")
+                        .replace("Z", "+00:00")
+                        .replace("+0000", "+00:00")
                     ),
                     items=items_by_order.get(oid, []),
                     total=float(r.get(amount_field) or 0),
@@ -1190,7 +1199,7 @@ class SalesforceOMSBackend(MerchantBackend):
         return await self._fetch_recent_orders(limit)
 
     async def get_order(self, session: ShoppingSessionContext, order_id: str) -> Order | None:
-        orders = await self._fetch_recent_orders(50)
+        orders = await self._fetch_recent_orders(20)
         return next((o for o in orders if o.order_id == order_id), None)
 
     async def get_preferences(self, session: ShoppingSessionContext) -> UserPreferences:

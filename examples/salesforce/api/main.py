@@ -21,11 +21,12 @@ from demo_common import (
     load_demo_env,
 )
 from fastapi import Response
+from fastapi.staticfiles import StaticFiles
 from shopping_agent_runtime import ShoppingAgent
 
 from .agent_config import build_shopping_config
 from .merchant import create_merchant_router
-from .sf_oms_backend import DATA_DIR, SalesforceOMSBackend
+from .sf_oms_backend import DATA_DIR, PRODUCT_IMAGES_DIR, SalesforceOMSBackend
 
 log = logging.getLogger(__name__)
 
@@ -60,6 +61,7 @@ host = build_storefront_host(
 )
 app = host.app
 app.include_router(create_merchant_router(backend, InMemoryMemoryStore()), prefix="/api/merchant")
+app.mount("/products", StaticFiles(directory=PRODUCT_IMAGES_DIR, check_dir=False), name="products")
 
 
 @app.post("/api/reload-products")

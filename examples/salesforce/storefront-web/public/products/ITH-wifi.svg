@@ -1,0 +1,19 @@
+<svg viewBox="0 0 400 300" xmlns="http://www.w3.org/2000/svg">
+  <rect width="400" height="300" fill="#0f172a"/>
+  <rect x="1" y="1" width="398" height="298" fill="none" stroke="#0d9488" stroke-width="1.5" stroke-opacity="0.3" rx="8"/>
+  <!-- grid lines -->
+  <line x1="0" y1="150" x2="400" y2="150" stroke="#0d9488" stroke-opacity="0.06" stroke-width="1"/>
+  <line x1="200" y1="0" x2="200" y2="300" stroke="#0d9488" stroke-opacity="0.06" stroke-width="1"/>
+  <!-- glow circle -->
+  <circle cx="200" cy="135" r="72" fill="#0d9488" fill-opacity="0.08"/>
+  <circle cx="200" cy="135" r="52" fill="#0d9488" fill-opacity="0.08"/>
+  <!-- icon (scaled up from 24px viewBox to ~80px) -->
+  <g transform="translate(167,102) scale(3.5)" stroke="#0d9488" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0"/>
+  </g>
+  <!-- label -->
+  <text x="200" y="236" text-anchor="middle" fill="#0d9488" fill-opacity="0.9"
+        font-family="ui-monospace,monospace" font-size="13" letter-spacing="2">WIFI AP</text>
+  <!-- bottom accent bar -->
+  <rect x="170" y="248" width="60" height="2" rx="1" fill="#0d9488" fill-opacity="0.5"/>
+</svg>

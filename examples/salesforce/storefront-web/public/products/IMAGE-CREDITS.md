@@ -17,3 +17,16 @@ Products without an image here intentionally fall back to the storefront's built
 | `AR-1508.webp` | ACME Paws 10-Gallon Aquarium Starter Kit | [flickr](https://www.flickr.com/photos/43296902@N00/103922316) | Dennis S. Hurd | CC0 1.0 |
 | `AR-2104.webp` | ACME Makers 300-Piece Meadow Puzzle | [rawpixel](https://www.rawpixel.com/image/5924996/photo-image-public-domain-free-game) | — | CC0 1.0 |
 | `AR-2108.webp` | ACME Playroom Solar System Poster Set (4 pc) | [rawpixel](https://www.rawpixel.com/image/7689067/map-the-solar-system) | libraryofcongress | Public domain (1880s print, Library of Congress) |
+| `ITH-laptop.svg` | ProBook laptops (category illustration) | Generated SVG — no source image | — | CC0 1.0 |
+| `ITH-workstation.svg` | ProBook Mobile Workstation (category illustration) | Generated SVG — no source image | — | CC0 1.0 |
+| `ITH-server.svg` | PowerEdge servers (category illustration) | Generated SVG — no source image | — | CC0 1.0 |
+| `ITH-monitor.svg` | ViewClear monitors (category illustration) | Generated SVG — no source image | — | CC0 1.0 |
+| `ITH-switch.svg` | ProSwitch network switches (category illustration) | Generated SVG — no source image | — | CC0 1.0 |
+| `ITH-firewall.svg` | SecureGuard Firewall (category illustration) | Generated SVG — no source image | — | CC0 1.0 |
+| `ITH-wifi.svg` | WiFi6 Access Point (category illustration) | Generated SVG — no source image | — | CC0 1.0 |
+| `ITH-keyboard.svg` | MechPro Keyboard (category illustration) | Generated SVG — no source image | — | CC0 1.0 |
+| `ITH-mouse.svg` | Precision Mouse (category illustration) | Generated SVG — no source image | — | CC0 1.0 |
+| `ITH-dock.svg` | USB-C Dock Pro (category illustration) | Generated SVG — no source image | — | CC0 1.0 |
+| `ITH-webcam.svg` | HD Webcam (category illustration) | Generated SVG — no source image | — | CC0 1.0 |
+| `ITH-ups.svg` | UPS Battery 1500VA (category illustration) | Generated SVG — no source image | — | CC0 1.0 |
+| `ITH-kvm.svg` | KVM Switch (category illustration) | Generated SVG — no source image | — | CC0 1.0 |

@@ -51,8 +51,34 @@ from merchant_agent import (
 )
 from shopping_agent import Cart, Order, OrderItem, OrderStatus, Policy, Product, ProductDetails, SearchFilters, ShoppingSessionContext, UserPreferences
 
-DATA_DIR = Path(__file__).parent.parent  # examples/ets/
+DATA_DIR = Path(__file__).parent.parent  # examples/salesforce/
 STORE_NAME = "Salesforce"
+
+PRODUCT_IMAGES_DIR = DATA_DIR / "storefront-web" / "public" / "products"
+
+# Maps ProductCode → image path served from /products/
+_PRODUCT_IMAGES: dict[str, str] = {
+    "ITH-LPT-001": "/products/ITH-laptop.svg",
+    "ITH-LPT-002": "/products/ITH-laptop.svg",
+    "ITH-LPT-003": "/products/ITH-workstation.svg",
+    "ITH-LPT-004": "/products/ITH-laptop.svg",
+    "ITH-SRV-001": "/products/ITH-server.svg",
+    "ITH-SRV-002": "/products/ITH-server.svg",
+    "ITH-SRV-003": "/products/ITH-server.svg",
+    "ITH-MON-001": "/products/ITH-monitor.svg",
+    "ITH-MON-002": "/products/ITH-monitor.svg",
+    "ITH-MON-003": "/products/ITH-monitor.svg",
+    "ITH-NET-001": "/products/ITH-switch.svg",
+    "ITH-NET-002": "/products/ITH-switch.svg",
+    "ITH-NET-003": "/products/ITH-firewall.svg",
+    "ITH-NET-004": "/products/ITH-wifi.svg",
+    "ITH-ACC-001": "/products/ITH-keyboard.svg",
+    "ITH-ACC-002": "/products/ITH-mouse.svg",
+    "ITH-ACC-003": "/products/ITH-dock.svg",
+    "ITH-ACC-004": "/products/ITH-webcam.svg",
+    "ITH-ACC-005": "/products/ITH-ups.svg",
+    "ITH-ACC-006": "/products/ITH-kvm.svg",
+}
 
 # ---------------------------------------------------------------------------
 # SOQL query templates — parameterised by ISO-8601 timestamp
@@ -487,6 +513,7 @@ class SalesforceOMSBackend(MerchantBackend):
                     status="active",
                     short_description=desc,
                     content_quality="good" if desc else "needs_work",
+                    image_url=_PRODUCT_IMAGES.get(code),
                 )
                 if code:
                     code_to_id[code] = pid
@@ -510,6 +537,7 @@ class SalesforceOMSBackend(MerchantBackend):
             short_description=listing.short_description,
             long_description=listing.short_description,
             in_stock=listing.status == "active",
+            image_url=listing.image_url,
         )
 
     # ------------------------------------------------------------------

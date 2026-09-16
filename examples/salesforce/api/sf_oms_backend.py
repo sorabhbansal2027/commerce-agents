@@ -1077,7 +1077,9 @@ class SalesforceOMSBackend(MerchantBackend):
                 or 0
             )
             qty = int(float(row.get("quantity") or 1))
-            items.append(CartItem(product_id=product_id, title=name, price=price, quantity=qty))
+            image_url = self._products_cache.get(product_id, None)
+            image_url = image_url.image_url if image_url else None
+            items.append(CartItem(product_id=product_id, title=name, price=price, quantity=qty, image_url=image_url))
             if product_id and cart_item_id:
                 item_ids[product_id] = cart_item_id
         currency = data.get("currencyIsoCode", "USD")
@@ -1103,7 +1105,9 @@ class SalesforceOMSBackend(MerchantBackend):
                 or 0
             )
             qty = int(float(row.get("quantity") or 1))
-            items.append(CartItem(product_id=product_id, title=name, price=price, quantity=qty))
+            image_url = self._products_cache.get(product_id, None)
+            image_url = image_url.image_url if image_url else None
+            items.append(CartItem(product_id=product_id, title=name, price=price, quantity=qty, image_url=image_url))
             if product_id and cart_item_id:
                 item_ids[product_id] = cart_item_id
         return Cart(items=items, currency=currency), item_ids

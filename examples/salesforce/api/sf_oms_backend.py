@@ -412,6 +412,38 @@ class SalesforceOMSBackend(MerchantBackend):
         log.info("B2B Products API loaded %d products", len(cache))
         return cache, code_to_id
 
+    async def _get_entitled_product_ids(self) -> set[str]:
+        """Return Product2 IDs visible in B2B Commerce (in a catalog category and entitled).
+
+        ProductCategoryProduct is the gating record — without it the B2B Commerce cart
+        API returns PROCESSING_HALTED / You can't view, even if entitlement and pricebook
+        are correct.  We filter the agent's product catalog to only these IDs so the
+        agent never recommends a product that can't be added to cart.
+        """
+        try:
+            cat_rows = await self._soql(
+                "SELECT ProductId FROM ProductCategoryProduct LIMIT 500"
+            )
+            cat_ids = {r.get("ProductId", "") for r in cat_rows if r.get("ProductId")}
+            ent_rows = await self._soql(
+                "SELECT ProductId FROM CommerceEntitlementProduct LIMIT 500"
+            )
+            ent_ids = {r.get("ProductId", "") for r in ent_rows if r.get("ProductId")}
+            # Use the intersection when both sets are non-empty so only products that
+            # are both in a catalog category AND entitled appear in agent search.
+            if cat_ids and ent_ids:
+                ids = cat_ids & ent_ids
+            else:
+                ids = cat_ids or ent_ids
+            log.info(
+                "_get_entitled_product_ids: %d catalog, %d entitled → %d visible",
+                len(cat_ids), len(ent_ids), len(ids),
+            )
+            return ids
+        except Exception as exc:
+            log.warning("_get_entitled_product_ids failed: %s", exc)
+            return set()
+
     async def _ensure_products_loaded(self) -> None:
         if self._products_loaded:
             return
@@ -425,6 +457,14 @@ class SalesforceOMSBackend(MerchantBackend):
         if not cache:
             log.info("Falling back to PricebookEntry for product catalog")
             records = await self._soql(_PRODUCTS_QUERY)
+
+            # Filter to only entitlement-visible products so the agent never
+            # surfaces a product the buyer cannot add to cart (PROCESSING_HALTED).
+            entitled_ids = await self._get_entitled_product_ids()
+            if entitled_ids:
+                records = [r for r in records if r.get("Product2Id") in entitled_ids]
+                log.info("After entitlement filter: %d products", len(records))
+
             cache = {}
             code_to_id = {}
             for r in records:

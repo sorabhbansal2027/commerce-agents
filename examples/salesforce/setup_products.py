@@ -2,7 +2,7 @@
 Salesforce B2B Commerce — IT Hardware product data setup.
 
 Creates Product2 + PricebookEntry records, then attempts to wire them into the
-B2B Commerce catalog (ProductCategory → CategoryProduct → entitlement policy).
+B2B Commerce catalog (ProductCategory → ProductCategoryProduct → entitlement policy).
 
 Usage:
     cd commerce-agents-main
@@ -303,6 +303,12 @@ async def get_standard_pricebook(client: httpx.AsyncClient) -> str:
     return rows[0]["Id"]
 
 
+async def get_all_active_pricebooks(client: httpx.AsyncClient) -> list[dict]:
+    """Return all active pricebooks (standard + B2B Commerce + any others)."""
+    rows = await soql(client, "SELECT Id, Name, IsStandard FROM Pricebook2 WHERE IsActive = true")
+    return rows or []
+
+
 async def get_webstore_id(client: httpx.AsyncClient) -> str:
     rows = await soql(client, "SELECT Id, Name FROM WebStore LIMIT 1")
     if not rows:
@@ -352,7 +358,7 @@ async def get_or_create_catalog(client: httpx.AsyncClient, webstore_id: str) -> 
             {"WebStoreId": webstore_id, "ProductCatalogId": cat_id},
         )
     else:
-        print("  [warn] Could not find or create a ProductCatalog — CategoryProduct wiring skipped")
+        print("  [warn] Could not find or create a ProductCatalog — ProductCategoryProduct wiring skipped")
     return cat_id
 
 
@@ -405,8 +411,14 @@ async def setup_products() -> None:
             sys.exit(1)
 
         # Resolve shared objects
-        std_pricebook_id = await get_standard_pricebook(client)
+        all_pricebooks = await get_all_active_pricebooks(client)
+        std_pricebook_id = next((pb["Id"] for pb in all_pricebooks if pb.get("IsStandard")), "")
+        if not std_pricebook_id:
+            std_pricebook_id = await get_standard_pricebook(client)
+        b2b_pricebooks = [pb for pb in all_pricebooks if not pb.get("IsStandard")]
         print(f"  Standard Pricebook: {std_pricebook_id}")
+        for pb in b2b_pricebooks:
+            print(f"  B2B Pricebook: {pb['Name']} ({pb['Id']})")
 
         webstore_id = await get_webstore_id(client)
         catalog_id = await get_or_create_catalog(client, webstore_id)
@@ -424,7 +436,17 @@ async def setup_products() -> None:
             existing_id = await product_exists(client, code)
             if existing_id:
                 pid = existing_id
-                print(f"  [exists] {code} ({pid}) — wiring catalog/entitlement...")
+                print(f"  [exists] {code} ({pid}) — wiring catalog/entitlement/pricebooks...")
+                # Ensure B2B pricebook entries exist for already-created products
+                for pb in b2b_pricebooks:
+                    pb_entry_id = await create_record(client, "PricebookEntry", {
+                        "Product2Id": pid,
+                        "Pricebook2Id": pb["Id"],
+                        "UnitPrice": p["Price"],
+                        "IsActive": True,
+                    })
+                    if pb_entry_id:
+                        print(f"    PricebookEntry ({pb['Name']}): ${p['Price']:.2f}")
                 skipped += 1
             else:
                 # Create Product2
@@ -439,7 +461,7 @@ async def setup_products() -> None:
                     continue
                 print(f"  [create] {code} — {p['Name']} ({pid})")
 
-                # Standard PricebookEntry
+                # Standard PricebookEntry (required before any other pricebook)
                 pbe_std_id = await create_record(client, "PricebookEntry", {
                     "Product2Id": pid,
                     "Pricebook2Id": std_pricebook_id,
@@ -448,22 +470,33 @@ async def setup_products() -> None:
                 })
                 if pbe_std_id:
                     print(f"    PricebookEntry (Standard): ${p['Price']:.2f}")
+
+                # B2B Commerce and any other active pricebooks — required for add-to-cart
+                for pb in b2b_pricebooks:
+                    pb_entry_id = await create_record(client, "PricebookEntry", {
+                        "Product2Id": pid,
+                        "Pricebook2Id": pb["Id"],
+                        "UnitPrice": p["Price"],
+                        "IsActive": True,
+                    })
+                    if pb_entry_id:
+                        print(f"    PricebookEntry ({pb['Name']}): ${p['Price']:.2f}")
                 created += 1
 
             product_ids.append(pid)
 
-            # CategoryProduct — always attempt (idempotent via [warn] on duplicate)
+            # ProductCategoryProduct — always attempt (idempotent via [warn] on duplicate)
             if catalog_id:
                 cat_id = await get_or_create_category(
                     client, catalog_id, p["Family"], category_ids
                 )
                 if cat_id:
-                    cp_id = await create_record(client, "CategoryProduct", {
+                    cp_id = await create_record(client, "ProductCategoryProduct", {
                         "ProductId": pid,
                         "ProductCategoryId": cat_id,
                     })
                     if cp_id:
-                        print(f"    CategoryProduct: → '{p['Family']}'")
+                        print(f"    ProductCategoryProduct: → '{p['Family']}'")
 
             # CommerceEntitlementProduct — always attempt
             if entitlement_id:

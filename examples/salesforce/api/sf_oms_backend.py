@@ -916,14 +916,18 @@ class SalesforceOMSBackend(MerchantBackend):
         params: dict = {}
         if account_id:
             params["effectiveAccountId"] = account_id
-        data = await self._b2b_request(
-            "GET",
-            f"/commerce/webstores/{webstore_id}/carts/{cart_id}/cart-items",
-            params=params,
-        )
-        cart, item_ids = self._parse_b2b_cart_items(data, currency)
-        self._cart_item_ids = item_ids
-        log.debug("get_cart: %d items from B2B cart-items API", len(cart.items))
+        try:
+            data = await self._b2b_request(
+                "GET",
+                f"/commerce/webstores/{webstore_id}/carts/{cart_id}/cart-items",
+                params=params,
+            )
+            cart, item_ids = self._parse_b2b_cart_items(data, currency)
+            self._cart_item_ids = item_ids
+            log.debug("get_cart: %d items from B2B cart-items API", len(cart.items))
+        except Exception as exc:
+            log.warning("get_cart: cart-items API failed, returning header-only cart: %s", exc)
+            cart = Cart(currency=currency)
         return cart
 
     async def add_to_cart(

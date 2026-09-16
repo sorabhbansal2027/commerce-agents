@@ -312,10 +312,14 @@ async def get_webstore_id(client: httpx.AsyncClient) -> str:
 
 
 async def get_or_create_catalog(client: httpx.AsyncClient, webstore_id: str) -> str:
-    """Return existing ProductCatalog Id for this WebStore, or create one.
+    """Return a ProductCatalog Id for this WebStore.
 
-    Returns "" if the org doesn't support B2B Commerce catalog objects.
+    Tries three approaches in order:
+    1. WebStoreCatalog SOQL (may fail on restricted orgs)
+    2. Any existing ProductCatalog in the org
+    3. Create a new ProductCatalog and link it
     """
+    # Approach 1: WebStoreCatalog SOQL
     try:
         rows = await soql(
             client,
@@ -324,22 +328,31 @@ async def get_or_create_catalog(client: httpx.AsyncClient, webstore_id: str) -> 
         if rows:
             cat_id = rows[0].get("ProductCatalogId", "")
             if cat_id:
-                print(f"  Existing ProductCatalog: {cat_id}")
+                print(f"  Existing ProductCatalog (via WebStoreCatalog): {cat_id}")
                 return cat_id
     except Exception:
-        print("  [info] WebStoreCatalog not queryable — skipping catalog wiring")
-        return ""
+        pass
 
-    # Create a new catalog
+    # Approach 2: query ProductCatalog directly
+    try:
+        rows = await soql(client, "SELECT Id, Name FROM ProductCatalog LIMIT 1")
+        if rows:
+            cat_id = rows[0]["Id"]
+            print(f"  Existing ProductCatalog: {rows[0]['Name']} ({cat_id})")
+            return cat_id
+    except Exception:
+        pass
+
+    # Approach 3: create one and try to link it
     cat_id = await create_record(client, "ProductCatalog", {"Name": "IT Hardware Catalog"})
     if cat_id:
         print(f"  Created ProductCatalog: {cat_id}")
-        link_id = await create_record(
+        await create_record(
             client, "WebStoreCatalog",
             {"WebStoreId": webstore_id, "ProductCatalogId": cat_id},
         )
-        if link_id:
-            print(f"  Linked catalog to WebStore: {link_id}")
+    else:
+        print("  [warn] Could not find or create a ProductCatalog — CategoryProduct wiring skipped")
     return cat_id
 
 
@@ -410,35 +423,36 @@ async def setup_products() -> None:
             code = p["ProductCode"]
             existing_id = await product_exists(client, code)
             if existing_id:
-                print(f"  [skip] {code} — already exists ({existing_id})")
-                product_ids.append(existing_id)
+                pid = existing_id
+                print(f"  [exists] {code} ({pid}) — wiring catalog/entitlement...")
                 skipped += 1
-                continue
+            else:
+                # Create Product2
+                pid = await create_record(client, "Product2", {
+                    "Name": p["Name"],
+                    "ProductCode": code,
+                    "Description": p["Description"],
+                    "Family": p["Family"],
+                    "IsActive": p["IsActive"],
+                })
+                if not pid:
+                    continue
+                print(f"  [create] {code} — {p['Name']} ({pid})")
 
-            # Create Product2
-            pid = await create_record(client, "Product2", {
-                "Name": p["Name"],
-                "ProductCode": code,
-                "Description": p["Description"],
-                "Family": p["Family"],
-                "IsActive": p["IsActive"],
-            })
-            if not pid:
-                continue
+                # Standard PricebookEntry
+                pbe_std_id = await create_record(client, "PricebookEntry", {
+                    "Product2Id": pid,
+                    "Pricebook2Id": std_pricebook_id,
+                    "UnitPrice": p["Price"],
+                    "IsActive": True,
+                })
+                if pbe_std_id:
+                    print(f"    PricebookEntry (Standard): ${p['Price']:.2f}")
+                created += 1
+
             product_ids.append(pid)
-            print(f"  [create] {code} — {p['Name']} ({pid})")
 
-            # Standard PricebookEntry (required before custom pricebook entries)
-            pbe_std_id = await create_record(client, "PricebookEntry", {
-                "Product2Id": pid,
-                "Pricebook2Id": std_pricebook_id,
-                "UnitPrice": p["Price"],
-                "IsActive": True,
-            })
-            if pbe_std_id:
-                print(f"    PricebookEntry (Standard): ${p['Price']:.2f}")
-
-            # ProductCategory assignment
+            # CategoryProduct — always attempt (idempotent via [warn] on duplicate)
             if catalog_id:
                 cat_id = await get_or_create_category(
                     client, catalog_id, p["Family"], category_ids
@@ -451,7 +465,7 @@ async def setup_products() -> None:
                     if cp_id:
                         print(f"    CategoryProduct: → '{p['Family']}'")
 
-            # Entitlement policy assignment
+            # CommerceEntitlementProduct — always attempt
             if entitlement_id:
                 ep_id = await create_record(client, "CommerceEntitlementProduct", {
                     "ProductId": pid,
@@ -459,8 +473,6 @@ async def setup_products() -> None:
                 })
                 if ep_id:
                     print(f"    EntitlementProduct: added to policy")
-
-            created += 1
 
         print(f"\nDone. Created: {created}  Skipped (already existed): {skipped}")
         print(f"Total products in catalog: {len(product_ids)}")

@@ -87,6 +87,53 @@ LIMIT 500
 # Default "since" date — the date from the original requirement
 _DEFAULT_SINCE = "2026-08-18T02:36:42.000Z"
 
+# Synonym expansion for product search — maps buyer terms to catalog terms.
+# Handles plurals, common abbreviations, and category synonyms.
+_SEARCH_SYNONYMS: dict[str, list[str]] = {
+    "computer": ["laptop", "workstation", "desktop"],
+    "computers": ["laptop", "workstation", "desktop"],
+    "pc": ["laptop", "workstation"],
+    "pcs": ["laptop", "workstation"],
+    "notebook": ["laptop", "probook"],
+    "notebooks": ["laptop", "probook"],
+    "monitors": ["monitor", "display"],
+    "monitor": ["monitor", "display"],
+    "displays": ["display", "monitor"],
+    "screen": ["monitor", "display"],
+    "screens": ["monitor", "display"],
+    "keyboard": ["keyboard"],
+    "keyboards": ["keyboard"],
+    "mouse": ["mouse", "ergonomic"],
+    "mice": ["mouse", "ergonomic"],
+    "dock": ["docking"],
+    "docks": ["docking"],
+    "docking station": ["docking"],
+    "hub": ["docking", "hub"],
+    "server": ["server", "poweredge"],
+    "servers": ["server", "poweredge"],
+    "switch": ["switch"],
+    "switches": ["switch"],
+    "router": ["firewall", "switch"],
+    "routers": ["firewall", "switch"],
+    "firewall": ["firewall"],
+    "wifi": ["wifi", "access point", "wireless"],
+    "wireless": ["wifi", "wireless", "access point"],
+    "access point": ["access point", "wifi"],
+    "ups": ["ups"],
+    "battery backup": ["ups"],
+    "storage": ["ssd", "nvme", "storage"],
+    "ssd": ["ssd", "nvme"],
+    "drive": ["ssd", "nvme"],
+    "drives": ["ssd", "nvme"],
+    "webcam": ["webcam", "camera"],
+    "camera": ["webcam", "camera"],
+    "kvm": ["kvm"],
+    "laptop": ["laptop", "probook"],
+    "laptops": ["laptop", "probook"],
+    "workstation": ["workstation", "probook"],
+    "workstations": ["workstation", "probook"],
+}
+
 # Active products with their standard pricebook price, ordered by name.
 # Fetched once and cached; call _ensure_products_loaded() before use.
 _PRODUCTS_QUERY = """
@@ -439,13 +486,18 @@ class SalesforceOMSBackend(MerchantBackend):
         await self._ensure_products_loaded()
         results = list(self.products.values())
         if query:
-            q = query.lower()
-            results = [
-                p for p in results
-                if q in p.title.lower()
-                or (p.category and q in p.category.lower())
-                or (p.short_description and q in p.short_description.lower())
-            ]
+            q = query.lower().strip()
+            # Expand query through synonym map; fall back to the original term.
+            terms = _SEARCH_SYNONYMS.get(q, [q])
+
+            def _matches(p: ProductDetails) -> bool:
+                text = " ".join(filter(None, [
+                    p.title, p.category,
+                    p.short_description, p.long_description,
+                ])).lower()
+                return any(t in text for t in terms)
+
+            results = [p for p in results if _matches(p)]
         if filters:
             if filters.category:
                 cat = filters.category.lower()

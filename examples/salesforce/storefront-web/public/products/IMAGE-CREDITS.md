@@ -17,16 +17,16 @@ Products without an image here intentionally fall back to the storefront's built
 | `AR-1508.webp` | ACME Paws 10-Gallon Aquarium Starter Kit | [flickr](https://www.flickr.com/photos/43296902@N00/103922316) | Dennis S. Hurd | CC0 1.0 |
 | `AR-2104.webp` | ACME Makers 300-Piece Meadow Puzzle | [rawpixel](https://www.rawpixel.com/image/5924996/photo-image-public-domain-free-game) | — | CC0 1.0 |
 | `AR-2108.webp` | ACME Playroom Solar System Poster Set (4 pc) | [rawpixel](https://www.rawpixel.com/image/7689067/map-the-solar-system) | libraryofcongress | Public domain (1880s print, Library of Congress) |
-| `ITH-laptop.svg` | ProBook laptops (category illustration) | Generated SVG — no source image | — | CC0 1.0 |
-| `ITH-workstation.svg` | ProBook Mobile Workstation (category illustration) | Generated SVG — no source image | — | CC0 1.0 |
-| `ITH-server.svg` | PowerEdge servers (category illustration) | Generated SVG — no source image | — | CC0 1.0 |
-| `ITH-monitor.svg` | ViewClear monitors (category illustration) | Generated SVG — no source image | — | CC0 1.0 |
-| `ITH-switch.svg` | ProSwitch network switches (category illustration) | Generated SVG — no source image | — | CC0 1.0 |
-| `ITH-firewall.svg` | SecureGuard Firewall (category illustration) | Generated SVG — no source image | — | CC0 1.0 |
-| `ITH-wifi.svg` | WiFi6 Access Point (category illustration) | Generated SVG — no source image | — | CC0 1.0 |
-| `ITH-keyboard.svg` | MechPro Keyboard (category illustration) | Generated SVG — no source image | — | CC0 1.0 |
-| `ITH-mouse.svg` | Precision Mouse (category illustration) | Generated SVG — no source image | — | CC0 1.0 |
-| `ITH-dock.svg` | USB-C Dock Pro (category illustration) | Generated SVG — no source image | — | CC0 1.0 |
-| `ITH-webcam.svg` | HD Webcam (category illustration) | Generated SVG — no source image | — | CC0 1.0 |
-| `ITH-ups.svg` | UPS Battery 1500VA (category illustration) | Generated SVG — no source image | — | CC0 1.0 |
-| `ITH-kvm.svg` | KVM Switch (category illustration) | Generated SVG — no source image | — | CC0 1.0 |
+| `ITH-laptop.jpg` | ProBook laptops (category) | [unsplash](https://unsplash.com/photos/1496181133206-80ce9b88a853) | Unsplash contributors | Unsplash License |
+| `ITH-workstation.jpg` | ProBook Mobile Workstation (category) | [unsplash](https://unsplash.com/photos/1525547719571-a2d4ac8945e2) | Unsplash contributors | Unsplash License |
+| `ITH-server.jpg` | PowerEdge servers (category) | [unsplash](https://unsplash.com/photos/1558494949-ef010cbdcc31) | Unsplash contributors | Unsplash License |
+| `ITH-monitor.jpg` | ViewClear monitors (category) | [unsplash](https://unsplash.com/photos/1585771724684-38269d6639fd) | Unsplash contributors | Unsplash License |
+| `ITH-switch.jpg` | ProSwitch network switches (category) | [unsplash](https://unsplash.com/photos/1573164713988-8665fc963095) | Unsplash contributors | Unsplash License |
+| `ITH-firewall.jpg` | SecureGuard Firewall (category) | [unsplash](https://unsplash.com/photos/1544197150-b99a580bb7a8) | Unsplash contributors | Unsplash License |
+| `ITH-wifi.jpg` | WiFi6 Access Point (category) | [unsplash](https://unsplash.com/photos/1614854262318-831574f15f1f) | Unsplash contributors | Unsplash License |
+| `ITH-keyboard.jpg` | MechPro Keyboard (category) | [unsplash](https://unsplash.com/photos/1587829741301-dc798b83add3) | Unsplash contributors | Unsplash License |
+| `ITH-mouse.jpg` | Precision Mouse (category) | [unsplash](https://unsplash.com/photos/1527864550417-7fd91fc51a46) | Unsplash contributors | Unsplash License |
+| `ITH-dock.jpg` | USB-C Dock Pro (category) | [unsplash](https://unsplash.com/photos/1547658719-da2b51169166) | Unsplash contributors | Unsplash License |
+| `ITH-webcam.jpg` | HD Webcam (category) | [unsplash](https://unsplash.com/photos/1593642632559-0c6d3fc62b89) | Unsplash contributors | Unsplash License |
+| `ITH-ups.jpg` | UPS Battery 1500VA (category) | [unsplash](https://unsplash.com/photos/1558618666-fcd25c85cd64) | Unsplash contributors | Unsplash License |
+| `ITH-kvm.jpg` | KVM Switch (category) | [unsplash](https://unsplash.com/photos/1518770660439-4636190af475) | Unsplash contributors | Unsplash License |

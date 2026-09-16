@@ -26,7 +26,7 @@ from shopping_agent_runtime import ShoppingAgent
 
 from .agent_config import build_shopping_config
 from .merchant import create_merchant_router
-from .sf_oms_backend import DATA_DIR, PRODUCT_IMAGES_DIR, SalesforceOMSBackend
+from .sf_oms_backend import DATA_DIR, PRODUCT_IMAGES_DIR, _IMAGE_BASE, SalesforceOMSBackend
 
 log = logging.getLogger(__name__)
 
@@ -72,3 +72,12 @@ async def reload_products() -> Response:
     count = len(backend._products_cache)
     log.info("Product catalog reloaded: %d products", count)
     return Response(content=f'{{"products": {count}}}', media_type="application/json")
+
+
+@app.get("/api/debug-images")
+async def debug_images() -> Response:
+    """Show resolved image base URL and sample image URLs (remove after confirming images work)."""
+    import json
+    sample = {p.listing_id: p.image_url for p in list(backend._products_cache.values())[:3]}
+    payload = {"image_base": _IMAGE_BASE, "sample_urls": sample}
+    return Response(content=json.dumps(payload), media_type="application/json")

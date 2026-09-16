@@ -487,8 +487,19 @@ class SalesforceOMSBackend(MerchantBackend):
         results = list(self.products.values())
         if query:
             q = query.lower().strip()
-            # Expand query through synonym map; fall back to the original term.
-            terms = _SEARCH_SYNONYMS.get(q, [q])
+            # Expand: try the whole phrase first, then word-by-word.
+            # Word-level expansion handles "mid-range laptop" → laptop → ProBook products.
+            if q in _SEARCH_SYNONYMS:
+                terms: list[str] = _SEARCH_SYNONYMS[q]
+            else:
+                expanded: set[str] = set()
+                for word in q.split():
+                    syns = _SEARCH_SYNONYMS.get(word)
+                    if syns:
+                        expanded.update(syns)
+                    else:
+                        expanded.add(word)
+                terms = list(expanded)
 
             def _matches(p: ProductDetails) -> bool:
                 text = " ".join(filter(None, [

@@ -6,9 +6,9 @@ import userId from '@salesforce/user/Id';
 // ─────────────────────────────────────────────────────────────────────────────
 
 const STARTER_PROMPTS = [
-    { id: 's1', label: "What's new in the catalog?" },
-    { id: 's2', label: 'Help me find a product for my project.' },
-    { id: 's3', label: 'Show me bestsellers under $100.' },
+    { id: 's1', label: 'Equip 10 new engineers — laptops, monitors, keyboards, mice.' },
+    { id: 's2', label: 'Show me laptops under $1,500.' },
+    { id: 's3', label: 'Compare workstations for heavy data workloads.' },
     { id: 's4', label: "What's the status of my recent order?" },
 ];
 
@@ -85,10 +85,10 @@ function productInitial(title) {
 export default class SalesforceStorefront extends LightningElement {
     @api apiUrl        = '';
     @api apiPrefix     = '/api';
-    @api assistantName = 'Shopping Assistant';
-    @api brandName     = 'ACME Store';
-    @api placeholder   = 'Ask about a product, an order, or anything in the store…';
-    @api introText     = 'Your AI shopping assistant. Ask about products, orders, returns, or recommendations.';
+    @api assistantName = 'Procurement Assistant';
+    @api brandName     = 'IT Hardware Store';
+    @api placeholder   = 'Ask about products, place orders, or check order status…';
+    @api introText     = 'Your AI procurement assistant. Describe what your team needs and I\'ll find, compare, and order the right IT hardware.';
 
     @track _open         = false;
     @track _busy         = false;
@@ -222,13 +222,19 @@ export default class SalesforceStorefront extends LightningElement {
     // ── Getters: home — featured products ─────────────────────────────────────
     get featuredProducts() {
         const base = (this.apiUrl ?? '').replace(/\/$/, '');
-        return this._catalog
-            .filter(p => p.labels?.some(l => l === 'bestseller' || l === 'new') && p.in_stock !== false)
+        // Prefer labeled products; fall back to any in-stock products with images
+        const labeled = this._catalog.filter(
+            p => p.labels?.some(l => l === 'bestseller' || l === 'new') && p.in_stock !== false
+        );
+        const pool = labeled.length >= 4
+            ? labeled
+            : this._catalog.filter(p => p.in_stock !== false && p.image_url);
+        return pool
             .sort((a, b) => Number(Boolean(b.image_url)) - Number(Boolean(a.image_url)))
             .slice(0, 4)
             .map((p, i) => {
                 const imageUrl = resolveImageUrl(p.image_url, base);
-                const badge    = p.labels?.includes('new') ? 'New' : p.labels?.includes('bestseller') ? 'Bestseller' : '';
+                const badge    = p.labels?.includes('new') ? 'New' : p.labels?.includes('bestseller') ? 'Bestseller' : p.category || '';
                 return {
                     uid:       `fp-${i}`,
                     title:     p.title,
@@ -240,7 +246,7 @@ export default class SalesforceStorefront extends LightningElement {
                     initial:   productInitial(p.title),
                     badge,
                     hasBadge:  !!badge,
-                    badgeClass: 'sfs-tile-badge sfs-badge-' + (badge === 'New' ? 'new' : 'bestseller'),
+                    badgeClass: 'sfs-tile-badge sfs-badge-' + (p.labels?.includes('new') ? 'new' : 'bestseller'),
                 };
             });
     }

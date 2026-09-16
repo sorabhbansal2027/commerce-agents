@@ -56,28 +56,36 @@ STORE_NAME = "Salesforce"
 
 PRODUCT_IMAGES_DIR = DATA_DIR / "storefront-web" / "public" / "products"
 
+# Absolute base for image URLs. Railway sets RAILWAY_PUBLIC_DOMAIN automatically;
+# IMAGE_BASE_URL can override. Empty string = relative paths (local dev only).
+_railway_domain = os.environ.get("RAILWAY_PUBLIC_DOMAIN", "")
+_IMAGE_BASE = (
+    os.environ.get("IMAGE_BASE_URL")
+    or (f"https://{_railway_domain}" if _railway_domain else "")
+)
+
 # Maps ProductCode → image path served from /products/
 _PRODUCT_IMAGES: dict[str, str] = {
-    "ITH-LPT-001": "/products/ITH-laptop.jpg",
-    "ITH-LPT-002": "/products/ITH-laptop.jpg",
-    "ITH-LPT-003": "/products/ITH-workstation.jpg",
-    "ITH-LPT-004": "/products/ITH-laptop.jpg",
-    "ITH-SRV-001": "/products/ITH-server.jpg",
-    "ITH-SRV-002": "/products/ITH-server.jpg",
-    "ITH-SRV-003": "/products/ITH-server.jpg",
-    "ITH-MON-001": "/products/ITH-monitor.jpg",
-    "ITH-MON-002": "/products/ITH-monitor.jpg",
-    "ITH-MON-003": "/products/ITH-monitor.jpg",
-    "ITH-NET-001": "/products/ITH-switch.jpg",
-    "ITH-NET-002": "/products/ITH-switch.jpg",
-    "ITH-NET-003": "/products/ITH-firewall.jpg",
-    "ITH-NET-004": "/products/ITH-wifi.jpg",
-    "ITH-ACC-001": "/products/ITH-keyboard.jpg",
-    "ITH-ACC-002": "/products/ITH-mouse.jpg",
-    "ITH-ACC-003": "/products/ITH-dock.jpg",
-    "ITH-ACC-004": "/products/ITH-webcam.jpg",
-    "ITH-ACC-005": "/products/ITH-ups.jpg",
-    "ITH-ACC-006": "/products/ITH-kvm.jpg",
+    "ITH-LPT-001": f"{_IMAGE_BASE}/products/ITH-laptop.jpg",
+    "ITH-LPT-002": f"{_IMAGE_BASE}/products/ITH-laptop.jpg",
+    "ITH-LPT-003": f"{_IMAGE_BASE}/products/ITH-workstation.jpg",
+    "ITH-LPT-004": f"{_IMAGE_BASE}/products/ITH-laptop.jpg",
+    "ITH-SRV-001": f"{_IMAGE_BASE}/products/ITH-server.jpg",
+    "ITH-SRV-002": f"{_IMAGE_BASE}/products/ITH-server.jpg",
+    "ITH-SRV-003": f"{_IMAGE_BASE}/products/ITH-server.jpg",
+    "ITH-MON-001": f"{_IMAGE_BASE}/products/ITH-monitor.jpg",
+    "ITH-MON-002": f"{_IMAGE_BASE}/products/ITH-monitor.jpg",
+    "ITH-MON-003": f"{_IMAGE_BASE}/products/ITH-monitor.jpg",
+    "ITH-NET-001": f"{_IMAGE_BASE}/products/ITH-switch.jpg",
+    "ITH-NET-002": f"{_IMAGE_BASE}/products/ITH-switch.jpg",
+    "ITH-NET-003": f"{_IMAGE_BASE}/products/ITH-firewall.jpg",
+    "ITH-NET-004": f"{_IMAGE_BASE}/products/ITH-wifi.jpg",
+    "ITH-ACC-001": f"{_IMAGE_BASE}/products/ITH-keyboard.jpg",
+    "ITH-ACC-002": f"{_IMAGE_BASE}/products/ITH-mouse.jpg",
+    "ITH-ACC-003": f"{_IMAGE_BASE}/products/ITH-dock.jpg",
+    "ITH-ACC-004": f"{_IMAGE_BASE}/products/ITH-webcam.jpg",
+    "ITH-ACC-005": f"{_IMAGE_BASE}/products/ITH-ups.jpg",
+    "ITH-ACC-006": f"{_IMAGE_BASE}/products/ITH-kvm.jpg",
 }
 
 # ---------------------------------------------------------------------------

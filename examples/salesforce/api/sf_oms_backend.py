@@ -1456,6 +1456,28 @@ class SalesforceOMSBackend(MerchantBackend):
         ]
         return quote
 
+    async def _standard_pricebook_id(self) -> str | None:
+        """Return the Standard Pricebook2 Id (cached after first lookup)."""
+        if hasattr(self, "_std_pb_id"):
+            return self._std_pb_id  # type: ignore[attr-defined]
+        rows = await self._soql(
+            "SELECT Id FROM Pricebook2 WHERE IsStandard = true AND IsActive = true LIMIT 1"
+        )
+        pb_id = rows[0]["Id"] if rows else None
+        self._std_pb_id = pb_id  # type: ignore[attr-defined]
+        return pb_id
+
+    async def _pricebook_entry_id(self, product2_id: str, pricebook_id: str) -> str | None:
+        """Return the PricebookEntry Id for a product in the given pricebook."""
+        safe_prod = product2_id.replace("'", "\\'")
+        safe_pb   = pricebook_id.replace("'", "\\'")
+        rows = await self._soql(
+            f"SELECT Id FROM PricebookEntry "
+            f"WHERE Product2Id = '{safe_prod}' AND Pricebook2Id = '{safe_pb}' "
+            f"AND IsActive = true LIMIT 1"
+        )
+        return rows[0]["Id"] if rows else None
+
     async def create_quote(
         self, session: ShoppingSessionContext, name: str | None = None, notes: str | None = None
     ) -> Quote:
@@ -1465,13 +1487,16 @@ class SalesforceOMSBackend(MerchantBackend):
         cart = await self.get_cart(session)
         if not cart.items:
             raise NotOffered
+        pb_id = await self._standard_pricebook_id()
         headers = await self._token_headers()
+        # Subtotal is a read-only formula on Quote; do not send it.
         payload: dict[str, Any] = {
             "AccountId": account_id,
             "Name": name or f"Quote {datetime.now(UTC).strftime('%Y-%m-%d')}",
             "Status": "Draft",
-            "Subtotal": cart.subtotal,
         }
+        if pb_id:
+            payload["Pricebook2Id"] = pb_id
         if notes:
             payload["Description"] = notes
         async with httpx.AsyncClient(timeout=30) as client:
@@ -1482,18 +1507,26 @@ class SalesforceOMSBackend(MerchantBackend):
             )
             resp.raise_for_status()
             quote_id = resp.json()["id"]
-            # Create QuoteLineItems
             for item in cart.items:
-                await client.post(
+                pbe_id = (
+                    await self._pricebook_entry_id(item.product_id, pb_id) if pb_id else None
+                )
+                line: dict[str, Any] = {
+                    "QuoteId": quote_id,
+                    "Quantity": item.quantity,
+                    "UnitPrice": item.price,
+                }
+                if pbe_id:
+                    line["PricebookEntryId"] = pbe_id
+                else:
+                    line["Product2Id"] = item.product_id
+                resp2 = await client.post(
                     f"{self._base}/services/data/v62.0/sobjects/QuoteLineItem",
                     headers={**headers, "Content-Type": "application/json"},
-                    json={
-                        "QuoteId": quote_id,
-                        "Product2Id": item.product_id,
-                        "Quantity": item.quantity,
-                        "UnitPrice": item.price,
-                    },
+                    json=line,
                 )
+                if not resp2.is_success:
+                    log.warning("QuoteLineItem create failed: %s", resp2.text)
         quote = await self.get_quote(session, quote_id)
         return quote or Quote(
             quote_id=quote_id,

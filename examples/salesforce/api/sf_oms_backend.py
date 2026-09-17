@@ -695,10 +695,11 @@ class SalesforceOMSBackend(MerchantBackend):
                 f"SELECT Product2Id, Product2.Name, Product2.Description, "
                 f"Product2.Family, Product2.ProductCode, UnitPrice "
                 f"FROM PricebookEntry "
-                f"WHERE IsActive = true AND Product2.IsActive = true "
+                f"WHERE IsActive = true AND UnitPrice > 0 AND Product2.IsActive = true "
                 f"AND Product2Id IN (SELECT ProductId FROM ProductCategoryProduct) "
                 f"AND Product2Id IN (SELECT ProductId FROM CommerceEntitlementProduct) "
                 f"AND Product2.CreatedDate > LAST_N_DAYS:{window_days} "
+                f"ORDER BY UnitPrice DESC "
                 f"LIMIT 200"
             )
         except Exception as exc:
@@ -1397,28 +1398,30 @@ class SalesforceOMSBackend(MerchantBackend):
         NOT_FOUND for recently created products. Direct CartItem SObject insert
         bypasses that check while still setting correct pricing from PricebookEntry.
         """
-        # Get CartDeliveryGroup and the cart's Pricebook2Id in one query
+        # Get CartDeliveryGroup (required field on CartItem)
         cdg_rows = await self._soql(
-            f"SELECT Id, Cart.Pricebook2Id FROM CartDeliveryGroup "
-            f"WHERE CartId = '{cart_id}' LIMIT 1"
+            f"SELECT Id FROM CartDeliveryGroup WHERE CartId = '{cart_id}' LIMIT 1"
         )
         if not cdg_rows:
             raise ValueError("No CartDeliveryGroup found for cart — cannot add item directly")
         cdg_id = cdg_rows[0]["Id"]
-        cart_pb_id: str | None = (cdg_rows[0].get("Cart") or {}).get("Pricebook2Id")
 
-        # Fetch price and name from the cart's pricebook; fall back to any active entry if
-        # the cart has no pricebook set (e.g., Standard Pricebook entries at $0 are skipped).
-        pb_filter = f"AND Pricebook2Id = '{cart_pb_id}' " if cart_pb_id else "AND UnitPrice > 0 "
-        pbe_rows = await self._soql(
-            f"SELECT Product2.Name, UnitPrice FROM PricebookEntry "
-            f"WHERE Product2Id = '{product_id}' AND IsActive = true "
-            f"{pb_filter}ORDER BY UnitPrice DESC LIMIT 1"
-        )
-        if not pbe_rows:
-            raise ValueError(f"No active PricebookEntry for product {product_id}")
-        price = float(pbe_rows[0].get("UnitPrice") or 0)
-        name = (pbe_rows[0].get("Product2") or {}).get("Name") or product_id
+        # Use cached product price if already loaded; otherwise query the highest non-zero
+        # PricebookEntry price to avoid picking up the Standard Price Book's $0 entry.
+        cached = self.products.get(product_id)
+        if cached and cached.price > 0:
+            price = cached.price
+            name = cached.title
+        else:
+            pbe_rows = await self._soql(
+                f"SELECT Product2.Name, UnitPrice FROM PricebookEntry "
+                f"WHERE Product2Id = '{product_id}' AND IsActive = true AND UnitPrice > 0 "
+                f"ORDER BY UnitPrice DESC LIMIT 1"
+            )
+            if not pbe_rows:
+                raise ValueError(f"No active PricebookEntry for product {product_id}")
+            price = float(pbe_rows[0].get("UnitPrice") or 0)
+            name = (pbe_rows[0].get("Product2") or {}).get("Name") or product_id
 
         await self._b2b_request(
             "POST",
@@ -1472,6 +1475,11 @@ class SalesforceOMSBackend(MerchantBackend):
                     product_id,
                 )
                 await self._add_to_cart_direct(cart_id, product_id, quantity)
+            elif exc.response.status_code == 404 and not cart_id:
+                raise Unavailable(
+                    "This product is not yet available in the store catalog. "
+                    "Please try again shortly or contact your sales representative."
+                )
             else:
                 raise
         return await self.get_cart(session)
@@ -1492,12 +1500,14 @@ class SalesforceOMSBackend(MerchantBackend):
             product_id = row.get("productId", "")
             cart_item_id = row.get("cartItemId", "")
             name = row.get("name", product_id)
-            price = float(
-                row.get("unitAdjustedPrice")
-                or row.get("salesPrice")
-                or row.get("listPrice")
-                or 0
-            )
+            price = float(next(
+                (v for v in [
+                    row.get("unitAdjustedPrice"),
+                    row.get("salesPrice"),
+                    row.get("listPrice"),
+                ] if v is not None),
+                0,
+            ))
             qty = int(float(row.get("quantity") or 1))
             image_url = self._products_cache.get(product_id, None)
             image_url = image_url.image_url if image_url else None
@@ -1520,12 +1530,14 @@ class SalesforceOMSBackend(MerchantBackend):
             product_id = row.get("productId", "")
             cart_item_id = row.get("cartItemId", "")
             name = row.get("name", product_id)
-            price = float(
-                row.get("unitAdjustedPrice")
-                or row.get("salesPrice")
-                or row.get("listPrice")
-                or 0
-            )
+            price = float(next(
+                (v for v in [
+                    row.get("unitAdjustedPrice"),
+                    row.get("salesPrice"),
+                    row.get("listPrice"),
+                ] if v is not None),
+                0,
+            ))
             qty = int(float(row.get("quantity") or 1))
             image_url = self._products_cache.get(product_id, None)
             image_url = image_url.image_url if image_url else None
@@ -1806,13 +1818,17 @@ class SalesforceOMSBackend(MerchantBackend):
                 pbe_id = (
                     await self._pricebook_entry_id(item.product_id, pb_id) if pb_id else None
                 )
+                if not pbe_id:
+                    raise Unavailable(
+                        f"Product '{item.title}' is not in the active pricebook and cannot be "
+                        "quoted. Remove it from the cart before creating a quote."
+                    )
                 line: dict[str, Any] = {
                     "QuoteId": quote_id,
+                    "PricebookEntryId": pbe_id,
                     "Quantity": item.quantity,
                     "UnitPrice": item.price,
                 }
-                if pbe_id:
-                    line["PricebookEntryId"] = pbe_id
                 log.debug(
                     "create_quote: QuoteLineItem payload product=%s pbe=%s", item.product_id, pbe_id
                 )
@@ -1822,7 +1838,7 @@ class SalesforceOMSBackend(MerchantBackend):
                     json=line,
                 )
                 if not resp2.is_success:
-                    log.warning("QuoteLineItem create failed: %s", resp2.text)
+                    raise Unavailable(f"Failed to add '{item.title}' to quote: {resp2.text[:200]}")
         quote = await self.get_quote(session, quote_id)
         return quote or Quote(
             quote_id=quote_id,

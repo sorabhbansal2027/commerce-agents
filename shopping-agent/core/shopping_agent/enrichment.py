@@ -23,12 +23,17 @@ from .gates import PROVENANCE_GATE
 from .serialization import cart_payload
 from .tools.presentation import (
     CheckoutPayload,
+    PresentApprovalStatusPayload,
+    PresentAssetsPayload,
     PresentComparisonPayload,
     PresentDisclosurePayload,
     PresentGuidePayload,
     PresentOrderStatusPayload,
     PresentPlanPayload,
     PresentProductsPayload,
+    PresentPromotionsPayload,
+    PresentQuotePayload,
+    PresentSubscriptionsPayload,
 )
 from .types import Product, ShoppingSessionState
 
@@ -190,6 +195,87 @@ async def enrich_disclosure(
     return disclosure.model_dump(exclude_none=True)
 
 
+async def enrich_quote(
+    payload: PresentQuotePayload, context: EnrichmentContext
+) -> dict[str, Any]:
+    quote = await context.backend.get_quote(context.session, payload.quote_id)
+    if quote is None:
+        raise PresentationRefused(f"No quote with id {payload.quote_id} — look it up first.")
+    line_items = []
+    for item in quote.items:
+        product = context.state.seen_products.get(item.product_id)
+        if product is None:
+            try:
+                product = await context.backend.get_product_details(context.session, item.product_id)
+                if product:
+                    context.state.remember_products([product])
+            except Exception:
+                pass
+        line: dict[str, Any] = {
+            "product_id": item.product_id,
+            "title": item.title,
+            "quantity": item.quantity,
+            "unit_price": item.unit_price,
+            "line_total": round(item.quantity * (item.negotiated_price or item.unit_price), 2),
+        }
+        if product and getattr(product, "image_url", None):
+            line["image_url"] = product.image_url
+        line_items.append(line)
+    enriched = payload.model_dump(exclude_none=True)
+    enriched["quote"] = quote.model_dump(mode="json", exclude_none=True)
+    enriched["quote"]["items"] = line_items
+    return enriched
+
+
+async def enrich_assets(
+    payload: PresentAssetsPayload, context: EnrichmentContext
+) -> dict[str, Any]:
+    enriched = payload.model_dump(exclude_none=True)
+    entries = []
+    for entry in payload.entries:
+        asset = await context.backend.get_asset_details(context.session, entry.asset_id)
+        row: dict[str, Any] = {"asset_id": entry.asset_id, "highlight": entry.highlight}
+        if asset:
+            row["asset"] = asset.model_dump(mode="json", exclude_none=True)
+            product = context.state.seen_products.get(asset.product_id or "")
+            if product and getattr(product, "image_url", None):
+                row["image_url"] = product.image_url
+        entries.append(row)
+    enriched["entries"] = entries
+    return enriched
+
+
+async def enrich_subscriptions(
+    payload: PresentSubscriptionsPayload, context: EnrichmentContext
+) -> dict[str, Any]:
+    enriched = payload.model_dump(exclude_none=True)
+    entries = []
+    for entry in payload.entries:
+        sub = await context.backend.get_subscription_details(context.session, entry.subscription_id)
+        row: dict[str, Any] = {"subscription_id": entry.subscription_id, "highlight": entry.highlight}
+        if sub:
+            row["subscription"] = sub.model_dump(mode="json", exclude_none=True)
+        entries.append(row)
+    enriched["entries"] = entries
+    return enriched
+
+
+async def enrich_promotions(
+    payload: PresentPromotionsPayload, context: EnrichmentContext
+) -> dict[str, Any]:
+    return payload.model_dump(exclude_none=True)
+
+
+async def enrich_approval_status(
+    payload: PresentApprovalStatusPayload, context: EnrichmentContext
+) -> dict[str, Any]:
+    request = await context.backend.get_approval_status(context.session, payload.request_id)
+    enriched = payload.model_dump(exclude_none=True)
+    if request:
+        enriched["approval"] = request.model_dump(mode="json", exclude_none=True)
+    return enriched
+
+
 # -- Partial payloads while a call is still streaming ---------------------------------
 
 
@@ -298,5 +384,10 @@ PRESENTATION_COMPONENTS: dict[str, PresentationComponent] = {
         _component("checkout", "checkout", CheckoutPayload, enrich_checkout),
         _component(CHIPS_TOOL, CHIPS_COMPONENT, PresentSuggestionsPayload),
         _component("present_disclosure", "disclosure", PresentDisclosurePayload, enrich_disclosure),
+        _component("present_quote", "quote", PresentQuotePayload, enrich_quote),
+        _component("present_assets", "assets", PresentAssetsPayload, enrich_assets),
+        _component("present_subscriptions", "subscriptions", PresentSubscriptionsPayload, enrich_subscriptions),
+        _component("present_promotions", "promotions", PresentPromotionsPayload, enrich_promotions),
+        _component("present_approval_status", "approval_status", PresentApprovalStatusPayload, enrich_approval_status),
     )
 }

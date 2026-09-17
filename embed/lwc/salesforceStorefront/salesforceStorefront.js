@@ -17,6 +17,7 @@ const KIND = {
     SKELETON: 'skeleton', ERROR: 'error', CHIPS: 'chips',
     PRODUCTS: 'products', COMPARISON: 'comparison', PLAN: 'plan',
     GUIDE: 'guide', ORDER_STATUS: 'order_status', CHECKOUT: 'checkout',
+    QUOTE: 'quote', ASSETS: 'assets', SUBSCRIPTIONS: 'subscriptions',
 };
 
 const OPEN_STATUSES = new Set(['pending', 'shipped', 'in_transit', 'processing', 'confirmed']);
@@ -337,8 +338,11 @@ export default class SalesforceStorefront extends LightningElement {
                 isComparison:  it.kind === KIND.COMPARISON,
                 isPlan:        it.kind === KIND.PLAN,
                 isGuide:       it.kind === KIND.GUIDE,
-                isOrderStatus: it.kind === KIND.ORDER_STATUS,
-                isCheckout:    it.kind === KIND.CHECKOUT,
+                isOrderStatus:   it.kind === KIND.ORDER_STATUS,
+                isCheckout:      it.kind === KIND.CHECKOUT,
+                isQuote:         it.kind === KIND.QUOTE,
+                isAssets:        it.kind === KIND.ASSETS,
+                isSubscriptions: it.kind === KIND.SUBSCRIPTIONS,
             };
 
             if (base.isText) {
@@ -453,12 +457,18 @@ export default class SalesforceStorefront extends LightningElement {
             if (base.isCheckout) {
                 const cartData      = it.cart || {};
                 const currency      = cartData.currency;
-                base.checkoutItems  = (cartData.items || []).slice(0, 5).map((item, chi) => ({
-                    uid:   `${it.id}-ch${chi}`,
-                    title: item.title,
-                    qty:   item.quantity,
-                    total: fmtMoney(item.line_total, currency),
-                }));
+                base.checkoutItems  = (cartData.items || []).slice(0, 5).map((item, chi) => {
+                    const imgUrl = resolveImageUrl(item.image_url, apiBase);
+                    return {
+                        uid:      `${it.id}-ch${chi}`,
+                        title:    item.title,
+                        qty:      item.quantity,
+                        total:    fmtMoney(item.line_total, currency),
+                        image_url: imgUrl || '',
+                        hasImage: !!imgUrl,
+                        initial:  productInitial(item.title),
+                    };
+                });
                 base.checkoutTotal   = fmtMoney(cartData.subtotal, currency);
                 base.checkoutCount   = cartData.item_count ?? (cartData.items || []).length;
                 base.checkoutNote    = it.note || '';
@@ -469,6 +479,93 @@ export default class SalesforceStorefront extends LightningElement {
                     url:   h.url  || '#',
                 }));
                 base.hasHandoffs     = (it.handoffs || []).length > 0;
+            }
+
+            if (base.isQuote) {
+                const q        = it.quote || {};
+                const currency = q.currency || 'USD';
+                const st       = (q.status || '').toLowerCase().replace(/_/g, ' ');
+                const stMap    = { draft: 'sfs-badge-gray', 'needs review': 'sfs-badge-blue',
+                                   submitted: 'sfs-badge-blue', approved: 'sfs-badge-green',
+                                   rejected: 'sfs-badge-red', expired: 'sfs-badge-red' };
+                base.quoteName      = q.name || it.quote_id || 'Quote';
+                base.quoteStatus    = titleCase(st);
+                base.quoteStatusCls = 'sfs-badge ' + (stMap[st] || 'sfs-badge-gray');
+                base.quoteExpiry    = q.expiry_date ? fmtDate(q.expiry_date) : '';
+                base.hasExpiry      = !!q.expiry_date;
+                base.quoteSubtotal  = fmtMoney(q.subtotal, currency);
+                base.quoteSummary   = it.summary || '';
+                base.quoteNextStep  = it.next_step || '';
+                base.hasQuoteNext   = !!it.next_step;
+                base.quoteLineItems = (q.items || []).map((item, qi) => {
+                    const imgUrl = resolveImageUrl(item.image_url, apiBase);
+                    return {
+                        uid:      `${it.id}-ql${qi}`,
+                        title:    item.title || 'Product',
+                        qty:      item.quantity || 1,
+                        price:    fmtMoney(item.unit_price, currency),
+                        total:    fmtMoney(item.line_total ?? (item.quantity * item.unit_price), currency),
+                        image_url: imgUrl || '',
+                        hasImage: !!imgUrl,
+                        initial:  productInitial(item.title),
+                    };
+                });
+                base.hasQuoteItems = base.quoteLineItems.length > 0;
+            }
+
+            if (base.isAssets) {
+                base.assetsTitle   = it.title || 'Installed Assets';
+                base.warrantyAlert = it.warranty_alert || '';
+                base.hasWarning    = !!it.warranty_alert;
+                const today = new Date();
+                base.assetCards = (it.entries || []).map((entry, ai) => {
+                    const a      = entry.asset || {};
+                    const expiry = a.warranty_expiry ? new Date(a.warranty_expiry) : null;
+                    const daysLeft = expiry ? Math.ceil((expiry - today) / 86400000) : null;
+                    const warnCls  = daysLeft === null ? '' : daysLeft < 0 ? 'sfs-asset-expired'
+                                   : daysLeft < 90 ? 'sfs-asset-expiring' : 'sfs-asset-ok';
+                    return {
+                        uid:        `${it.id}-as${ai}`,
+                        name:       a.name || entry.asset_id,
+                        serial:     a.serial_number || '',
+                        hasSerial:  !!a.serial_number,
+                        category:   a.category || '',
+                        highlight:  entry.highlight || '',
+                        hasHighlight: !!entry.highlight,
+                        warnCls,
+                        warranty:   expiry ? fmtDate(a.warranty_expiry) : 'Unknown',
+                        expired:    daysLeft !== null && daysLeft < 0,
+                        expiringSoon: daysLeft !== null && daysLeft >= 0 && daysLeft < 90,
+                    };
+                });
+                base.hasAssets = base.assetCards.length > 0;
+            }
+
+            if (base.isSubscriptions) {
+                base.subsTitle    = it.title || 'Service Contracts';
+                base.renewalAlert = it.renewal_alert || '';
+                base.hasRenewal   = !!it.renewal_alert;
+                const today2 = new Date();
+                base.subCards = (it.entries || []).map((entry, si) => {
+                    const s       = entry.subscription || {};
+                    const end     = s.end_date ? new Date(s.end_date) : null;
+                    const daysLeft2 = end ? Math.ceil((end - today2) / 86400000) : null;
+                    const stSub   = (s.status || '').toLowerCase().replace(/_/g, ' ');
+                    const stMap2  = { active: 'sfs-badge-green', 'expiring soon': 'sfs-badge-orange',
+                                      expired: 'sfs-badge-red', cancelled: 'sfs-badge-gray' };
+                    return {
+                        uid:       `${it.id}-sc${si}`,
+                        name:      s.name || entry.subscription_id,
+                        status:    titleCase(stSub),
+                        statusCls: 'sfs-badge ' + (stMap2[stSub] || 'sfs-badge-gray'),
+                        endDate:   end ? fmtDate(s.end_date) : 'Unknown',
+                        highlight: entry.highlight || '',
+                        hasHighlight: !!entry.highlight,
+                        expiringSoon2: daysLeft2 !== null && daysLeft2 >= 0 && daysLeft2 < 90,
+                        expired2:  daysLeft2 !== null && daysLeft2 < 0,
+                    };
+                });
+                base.hasSubs = base.subCards.length > 0;
             }
 
             return base;
@@ -744,6 +841,18 @@ export default class SalesforceStorefront extends LightningElement {
         } else if (comp === 'checkout') {
             if (!partial) {
                 this._pushItem({ kind: KIND.CHECKOUT, id: this._id(), cart: block.cart ?? {}, note: block.note ?? null, handoffs: block.handoffs ?? [] });
+            }
+        } else if (comp === 'quote') {
+            if (!partial) {
+                this._pushItem({ kind: KIND.QUOTE, id: this._id(), quote_id: block.quote_id ?? null, summary: block.summary ?? '', next_step: block.next_step ?? null, quote: block.quote ?? {} });
+            }
+        } else if (comp === 'assets') {
+            if (!partial) {
+                this._pushItem({ kind: KIND.ASSETS, id: this._id(), title: block.title ?? null, entries: block.entries ?? [], warranty_alert: block.warranty_alert ?? null });
+            }
+        } else if (comp === 'subscriptions') {
+            if (!partial) {
+                this._pushItem({ kind: KIND.SUBSCRIPTIONS, id: this._id(), title: block.title ?? null, entries: block.entries ?? [], renewal_alert: block.renewal_alert ?? null });
             }
         } else if (comp === 'suggestions') {
             const chips = (block.suggestions ?? []).map(s => ({ id: this._id(), label: s }));

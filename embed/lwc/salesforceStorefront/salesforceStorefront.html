@@ -437,6 +437,14 @@
                                         <ul class="sfs-co-items">
                                             <template for:each={item.checkoutItems} for:item="ci">
                                                 <li key={ci.uid} class="sfs-co-line">
+                                                    <div class="sfs-co-img-wrap">
+                                                        <template lwc:if={ci.hasImage}>
+                                                            <img class="sfs-co-img" src={ci.image_url} alt={ci.title} loading="lazy"/>
+                                                        </template>
+                                                        <template lwc:else>
+                                                            <div class="sfs-co-initial" aria-hidden="true">{ci.initial}</div>
+                                                        </template>
+                                                    </div>
                                                     <span class="sfs-co-line-title">{ci.title}</span>
                                                     <span class="sfs-co-line-qty">× {ci.qty}</span>
                                                     <span class="sfs-co-line-total">{ci.total}</span>
@@ -460,6 +468,115 @@
                                                        rel="noopener">{ho.label} →</a>
                                                 </template>
                                             </div>
+                                        </template>
+                                    </div>
+                                </template>
+
+                                <!-- Quote block -->
+                                <template lwc:if={item.isQuote}>
+                                    <div class="sfs-block sfs-quote-block">
+                                        <div class="sfs-quote-hdr">
+                                            <span class="sfs-quote-name">{item.quoteName}</span>
+                                            <span class={item.quoteStatusCls}>{item.quoteStatus}</span>
+                                        </div>
+                                        <template lwc:if={item.hasExpiry}>
+                                            <div class="sfs-quote-meta">Expires {item.quoteExpiry}</div>
+                                        </template>
+                                        <template lwc:if={item.hasQuoteItems}>
+                                            <ul class="sfs-quote-lines">
+                                                <template for:each={item.quoteLineItems} for:item="ql">
+                                                    <li key={ql.uid} class="sfs-quote-line">
+                                                        <div class="sfs-cart-img-wrap">
+                                                            <template lwc:if={ql.hasImage}>
+                                                                <img class="sfs-cart-img" src={ql.image_url} alt={ql.title} loading="lazy"/>
+                                                            </template>
+                                                            <template lwc:else>
+                                                                <div class="sfs-cart-initial" aria-hidden="true">{ql.initial}</div>
+                                                            </template>
+                                                        </div>
+                                                        <div class="sfs-cart-info">
+                                                            <div class="sfs-cart-title">{ql.title}</div>
+                                                            <div class="sfs-cart-price">{ql.price} × {ql.qty}</div>
+                                                        </div>
+                                                        <div class="sfs-cart-total">{ql.total}</div>
+                                                    </li>
+                                                </template>
+                                            </ul>
+                                        </template>
+                                        <div class="sfs-quote-subtotal">
+                                            <span>Subtotal</span>
+                                            <span class="sfs-quote-subtotal-value">{item.quoteSubtotal}</span>
+                                        </div>
+                                        <template lwc:if={item.hasQuoteNext}>
+                                            <p class="sfs-co-note">{item.quoteNextStep}</p>
+                                        </template>
+                                    </div>
+                                </template>
+
+                                <!-- Assets block -->
+                                <template lwc:if={item.isAssets}>
+                                    <div class="sfs-block sfs-assets-block">
+                                        <div class="sfs-assets-title">{item.assetsTitle}</div>
+                                        <template lwc:if={item.hasWarning}>
+                                            <div class="sfs-assets-alert">⚠ {item.warrantyAlert}</div>
+                                        </template>
+                                        <template lwc:if={item.hasAssets}>
+                                            <ul class="sfs-asset-list">
+                                                <template for:each={item.assetCards} for:item="a">
+                                                    <li key={a.uid} class="sfs-asset-row">
+                                                        <div class="sfs-asset-info">
+                                                            <div class="sfs-asset-name">{a.name}</div>
+                                                            <template lwc:if={a.hasSerial}>
+                                                                <div class="sfs-asset-serial">S/N: {a.serial}</div>
+                                                            </template>
+                                                            <template lwc:if={a.hasHighlight}>
+                                                                <div class="sfs-asset-highlight">{a.highlight}</div>
+                                                            </template>
+                                                        </div>
+                                                        <div class={a.warnCls}>
+                                                            <template lwc:if={a.expired}>
+                                                                <span class="sfs-badge sfs-badge-red">Expired</span>
+                                                            </template>
+                                                            <template lwc:elseif={a.expiringSoon}>
+                                                                <span class="sfs-badge sfs-badge-orange">Expires {a.warranty}</span>
+                                                            </template>
+                                                            <template lwc:else>
+                                                                <span class="sfs-asset-warranty">Until {a.warranty}</span>
+                                                            </template>
+                                                        </div>
+                                                    </li>
+                                                </template>
+                                            </ul>
+                                        </template>
+                                    </div>
+                                </template>
+
+                                <!-- Subscriptions block -->
+                                <template lwc:if={item.isSubscriptions}>
+                                    <div class="sfs-block sfs-subs-block">
+                                        <div class="sfs-assets-title">{item.subsTitle}</div>
+                                        <template lwc:if={item.hasRenewal}>
+                                            <div class="sfs-assets-alert">⚠ {item.renewalAlert}</div>
+                                        </template>
+                                        <template lwc:if={item.hasSubs}>
+                                            <ul class="sfs-asset-list">
+                                                <template for:each={item.subCards} for:item="sc">
+                                                    <li key={sc.uid} class="sfs-asset-row">
+                                                        <div class="sfs-asset-info">
+                                                            <div class="sfs-asset-name">{sc.name}</div>
+                                                            <template lwc:if={sc.hasHighlight}>
+                                                                <div class="sfs-asset-highlight">{sc.highlight}</div>
+                                                            </template>
+                                                        </div>
+                                                        <div>
+                                                            <span class={sc.statusCls}>{sc.status}</span>
+                                                            <template lwc:if={sc.expiringSoon2}>
+                                                                <div class="sfs-asset-serial">Ends {sc.endDate}</div>
+                                                            </template>
+                                                        </div>
+                                                    </li>
+                                                </template>
+                                            </ul>
                                         </template>
                                     </div>
                                 </template>

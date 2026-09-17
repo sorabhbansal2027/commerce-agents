@@ -351,8 +351,10 @@ def build_tools(
         {
             "name": "create_quote",
             "description": (
-                "Convert the current cart into a draft quote. Confirm once before calling — "
-                "this is a write. Optionally name the quote and add notes."
+                "Convert the current cart into a draft quote. Before calling: (1) call "
+                "get_cart to retrieve and show the buyer the current cart items, (2) ask "
+                "the buyer to confirm they want to create a quote from those specific items. "
+                "Only call create_quote after the buyer confirms. This is a write."
             ),
             "input_schema": {
                 "type": "object",

@@ -1556,6 +1556,82 @@ class SalesforceOMSBackend(MerchantBackend):
     # Approvals — Salesforce Process Approvals API
     # ------------------------------------------------------------------
 
+    async def convert_quote_to_order(
+        self, session: ShoppingSessionContext, quote_id: str
+    ) -> Order:
+        rows = await self._soql(
+            f"SELECT Id, AccountId, Pricebook2Id, "
+            f"(SELECT Id, PricebookEntryId, Product2Id, Product2.Name, Quantity, UnitPrice "
+            f"FROM QuoteLineItems) "
+            f"FROM Quote WHERE Id = '{quote_id}' LIMIT 1"
+        )
+        if not rows:
+            raise NotOffered
+        q = rows[0]
+        account_id = q.get("AccountId")
+        pricebook_id = q.get("Pricebook2Id") or await self._standard_pricebook_id()
+        lines = (q.get("QuoteLineItems") or {}).get("records", [])
+        headers = await self._token_headers()
+        today = datetime.now(UTC).date().isoformat()
+        async with httpx.AsyncClient(timeout=30) as client:
+            order_payload: dict[str, Any] = {
+                "AccountId": account_id,
+                "Status": "Draft",
+                "EffectiveDate": today,
+            }
+            if pricebook_id:
+                order_payload["Pricebook2Id"] = pricebook_id
+            resp = await client.post(
+                f"{self._base}/services/data/v62.0/sobjects/Order",
+                headers={**headers, "Content-Type": "application/json"},
+                json=order_payload,
+            )
+            resp.raise_for_status()
+            order_id = resp.json()["id"]
+            order_items: list[OrderItem] = []
+            total = 0.0
+            for line in lines:
+                pbe_id = line.get("PricebookEntryId")
+                qty = int(line.get("Quantity") or 1)
+                unit_price = float(line.get("UnitPrice") or 0)
+                product_name = (line.get("Product2") or {}).get("Name", "Product")
+                product_id = line.get("Product2Id") or ""
+                line_payload: dict[str, Any] = {
+                    "OrderId": order_id,
+                    "Quantity": qty,
+                    "UnitPrice": unit_price,
+                }
+                if pbe_id:
+                    line_payload["PricebookEntryId"] = pbe_id
+                resp2 = await client.post(
+                    f"{self._base}/services/data/v62.0/sobjects/OrderItem",
+                    headers={**headers, "Content-Type": "application/json"},
+                    json=line_payload,
+                )
+                if resp2.is_success:
+                    order_items.append(OrderItem(
+                        product_id=product_id,
+                        title=product_name,
+                        quantity=qty,
+                        price=unit_price,
+                    ))
+                    total += qty * unit_price
+                else:
+                    log.warning("OrderItem create failed: %s", resp2.text)
+            # Mark the quote as Accepted
+            await client.patch(
+                f"{self._base}/services/data/v62.0/sobjects/Quote/{quote_id}",
+                headers={**headers, "Content-Type": "application/json"},
+                json={"Status": "Accepted"},
+            )
+        return Order(
+            order_id=order_id,
+            status=OrderStatus.PROCESSING,
+            placed_at=datetime.now(UTC),
+            items=order_items,
+            total=total,
+        )
+
     async def submit_for_approval(
         self,
         session: ShoppingSessionContext,
@@ -1577,6 +1653,9 @@ class SalesforceOMSBackend(MerchantBackend):
             )
             resp.raise_for_status()
             result = resp.json()
+        if result and not result[0].get("success", True):
+            errors = result[0].get("errors", [])
+            raise RuntimeError(f"Approval submission failed: {errors}")
         instance_id = result[0].get("instanceId", subject_id) if result else subject_id
         return ApprovalRequest(
             request_id=instance_id,
@@ -1670,6 +1749,9 @@ class SalesforceOMSBackend(MerchantBackend):
         if status:
             sf_status = _asset_status_to_sf(status)
             where += f" AND Status = '{sf_status}'"
+        if category:
+            safe_cat = category.replace("'", "\\'")
+            where += f" AND Product2.Family LIKE '%{safe_cat}%'"
         if query:
             safe = query.replace("'", "\\'")
             where += (
@@ -1701,13 +1783,13 @@ class SalesforceOMSBackend(MerchantBackend):
     async def get_promotions(
         self, session: ShoppingSessionContext, category: str | None = None
     ) -> list[Promotion]:
-        where = "IsActive = true"
+        where = "IsActive = true AND (EndDate = null OR EndDate >= TODAY)"
         if category:
             safe = category.replace("'", "\\'")
             where += f" AND Description LIKE '%{safe}%'"
         rows = await self._soql(
             f"SELECT Id, Name, Description, StartDate, EndDate "
-            f"FROM Promotion WHERE {where} ORDER BY EndDate ASC LIMIT 20"
+            f"FROM Promotion WHERE {where} ORDER BY EndDate ASC NULLS LAST LIMIT 20"
         )
         return [_row_to_promotion(r) for r in rows]
 
@@ -1784,20 +1866,24 @@ class SalesforceOMSBackend(MerchantBackend):
         account_id = await self._account_id_for_user(session.user_id)
         if not account_id:
             raise NotOffered
+        pb_id = await self._standard_pricebook_id()
         headers = await self._token_headers()
         new_start = sub.end_date.date().isoformat()
         new_end = (sub.end_date + timedelta(days=365)).date().isoformat()
+        renewal_payload: dict[str, Any] = {
+            "AccountId": account_id,
+            "Name": f"Renewal — {sub.name}",
+            "Status": "Draft",
+            "Description": f"Renewal of ServiceContract {subscription_id}",
+            "ExpirationDate": new_end,
+        }
+        if pb_id:
+            renewal_payload["Pricebook2Id"] = pb_id
         async with httpx.AsyncClient(timeout=30) as client:
             resp = await client.post(
                 f"{self._base}/services/data/v62.0/sobjects/Quote",
                 headers={**headers, "Content-Type": "application/json"},
-                json={
-                    "AccountId": account_id,
-                    "Name": f"Renewal — {sub.name}",
-                    "Status": "Draft",
-                    "Description": f"Renewal of ServiceContract {subscription_id}",
-                    "ValidUntil": new_start,
-                },
+                json=renewal_payload,
             )
             resp.raise_for_status()
             quote_id = resp.json()["id"]

@@ -202,6 +202,15 @@ _SEARCH_SYNONYMS: dict[str, list[str]] = {
     "i7": ["i7", "core i7"],
     "i9": ["i9", "core i9"],
     "xeon": ["xeon"],
+    "configurable": ["prostation", "workstation", "laptop", "probook"],
+    "configurable laptop": ["prostation", "workstation", "laptop", "probook"],
+    "configurable laptops": ["prostation", "workstation", "laptop", "probook"],
+    "configurable computer": ["prostation", "workstation", "laptop"],
+    "configurable computers": ["prostation", "workstation", "laptop"],
+    "customizable": ["prostation", "workstation", "laptop", "probook"],
+    "variants": ["prostation", "workstation", "laptop"],
+    "options": ["prostation", "workstation"],
+    "configure": ["prostation", "workstation", "laptop"],
 }
 
 # Active products with their standard pricebook price, ordered by name.
@@ -381,6 +390,73 @@ def _row_to_subscription(row: dict[str, Any], today: Any) -> Subscription:
         start_date=start or datetime.now(UTC),
         end_date=end or datetime.now(UTC),
     )
+
+
+# ---------------------------------------------------------------------------
+# Variant grouping — turns " - Suffix" siblings into a family + variants
+# ---------------------------------------------------------------------------
+
+def _group_variants(flat: dict[str, ProductDetails]) -> dict[str, ProductDetails]:
+    """Group products that share a common name prefix (before ' - ') and the same
+    category into a family product with ``options`` + individual variants.
+    The family gets a synthetic id ``FAMILY-{prefix}`` and appears in searches;
+    each variant gets ``variant_of`` and ``option_values`` set."""
+    from collections import defaultdict
+
+    groups: dict[str, list[ProductDetails]] = defaultdict(list)
+    for p in flat.values():
+        if " - " in p.title:
+            prefix, _suffix = p.title.split(" - ", 1)
+            groups[prefix].append(p)
+
+    result: dict[str, ProductDetails] = {}
+    grouped_ids: set[str] = set()
+
+    for prefix, members in groups.items():
+        if len(members) < 2:
+            continue
+        grouped_ids.update(m.product_id for m in members)
+        members_sorted = sorted(members, key=lambda m: m.price)
+        option_values = [m.title.split(" - ", 1)[1] for m in members_sorted]
+        family_id = f"FAMILY-{prefix.replace(' ', '-')}"
+        family = ProductDetails(
+            product_id=family_id,
+            title=prefix,
+            price=members_sorted[0].price,
+            currency=members_sorted[0].currency,
+            category=members_sorted[0].category,
+            short_description=members_sorted[0].short_description,
+            long_description=members_sorted[0].long_description,
+            in_stock=any(m.in_stock for m in members_sorted),
+            image_url=members_sorted[0].image_url,
+            options={"Configuration": option_values},
+            variants=[
+                Product(
+                    product_id=m.product_id,
+                    title=m.title,
+                    price=m.price,
+                    currency=m.currency,
+                    category=m.category,
+                    short_description=m.short_description,
+                    image_url=m.image_url,
+                    in_stock=m.in_stock,
+                    option_values={"Configuration": m.title.split(" - ", 1)[1]},
+                    variant_of=family_id,
+                )
+                for m in members_sorted
+            ],
+        )
+        result[family_id] = family
+        for m in members_sorted:
+            result[m.product_id] = ProductDetails(
+                **{**m.model_dump(), "variant_of": family_id,
+                   "option_values": {"Configuration": m.title.split(" - ", 1)[1]}}
+            )
+
+    for pid, p in flat.items():
+        if pid not in grouped_ids:
+            result[pid] = p
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -683,12 +759,9 @@ class SalesforceOMSBackend(MerchantBackend):
                     code_to_id[code] = pid
         self._products_cache = cache
         self._code_to_id = code_to_id
-        # Also populate the DemoStorefront.products dict so the /api/products
-        # endpoint and the health check's product count reflect the real catalog.
-        self.products = {
-            pid: self._listing_to_product_details(listing)
-            for pid, listing in cache.items()
-        }
+        # Build ProductDetails, grouping variant products into families.
+        flat = {pid: self._listing_to_product_details(listing) for pid, listing in cache.items()}
+        self.products = _group_variants(flat)
         self._products_loaded = True
 
     def _listing_to_product_details(self, listing: Listing) -> ProductDetails:

@@ -1489,13 +1489,22 @@ class SalesforceOMSBackend(MerchantBackend):
         if not cart.items:
             raise NotOffered
         pb_id = await self._standard_pricebook_id()
+        # Salesforce FLS often prevents writing AccountId directly on Quote.
+        # Link via OpportunityId instead — SF auto-populates AccountId from it.
+        opp_rows = await self._soql(
+            f"SELECT Id FROM Opportunity WHERE AccountId = '{account_id}' "
+            f"AND IsClosed = false ORDER BY CreatedDate DESC LIMIT 1"
+        )
+        opp_id = opp_rows[0]["Id"] if opp_rows else None
         headers = await self._token_headers()
-        # Subtotal is a read-only formula on Quote; do not send it.
         payload: dict[str, Any] = {
-            "AccountId": account_id,
             "Name": name or f"Quote {datetime.now(UTC).strftime('%Y-%m-%d')}",
             "Status": "Draft",
         }
+        if opp_id:
+            payload["OpportunityId"] = opp_id
+        else:
+            payload["AccountId"] = account_id
         if pb_id:
             payload["Pricebook2Id"] = pb_id
         if notes:
@@ -1878,16 +1887,24 @@ class SalesforceOMSBackend(MerchantBackend):
         if not account_id:
             raise NotOffered
         pb_id = await self._standard_pricebook_id()
+        opp_rows = await self._soql(
+            f"SELECT Id FROM Opportunity WHERE AccountId = '{account_id}' "
+            f"AND IsClosed = false ORDER BY CreatedDate DESC LIMIT 1"
+        )
+        opp_id = opp_rows[0]["Id"] if opp_rows else None
         headers = await self._token_headers()
         new_start = sub.end_date.date().isoformat()
         new_end = (sub.end_date + timedelta(days=365)).date().isoformat()
         renewal_payload: dict[str, Any] = {
-            "AccountId": account_id,
             "Name": f"Renewal — {sub.name}",
             "Status": "Draft",
             "Description": f"Renewal of ServiceContract {subscription_id}",
             "ExpirationDate": new_end,
         }
+        if opp_id:
+            renewal_payload["OpportunityId"] = opp_id
+        else:
+            renewal_payload["AccountId"] = account_id
         if pb_id:
             renewal_payload["Pricebook2Id"] = pb_id
         async with httpx.AsyncClient(timeout=30) as client:

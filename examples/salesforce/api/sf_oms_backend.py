@@ -1388,6 +1388,48 @@ class SalesforceOMSBackend(MerchantBackend):
             cart = Cart(currency=currency)
         return cart
 
+    async def _add_to_cart_direct(
+        self, cart_id: str, product_id: str, quantity: int
+    ) -> None:
+        """Fallback for products not yet in the B2B search index.
+
+        The Commerce cart-items API validates against the search index and returns
+        NOT_FOUND for recently created products. Direct CartItem SObject insert
+        bypasses that check while still setting correct pricing from PricebookEntry.
+        """
+        # Get CartDeliveryGroup (required field on CartItem)
+        cdg_rows = await self._soql(
+            f"SELECT Id FROM CartDeliveryGroup WHERE CartId = '{cart_id}' LIMIT 1"
+        )
+        if not cdg_rows:
+            raise ValueError("No CartDeliveryGroup found for cart — cannot add item directly")
+        cdg_id = cdg_rows[0]["Id"]
+
+        # Fetch price and name from PricebookEntry
+        pbe_rows = await self._soql(
+            f"SELECT Product2.Name, UnitPrice FROM PricebookEntry "
+            f"WHERE Product2Id = '{product_id}' AND IsActive = true LIMIT 1"
+        )
+        if not pbe_rows:
+            raise ValueError(f"No active PricebookEntry for product {product_id}")
+        price = float(pbe_rows[0].get("UnitPrice") or 0)
+        name = (pbe_rows[0].get("Product2") or {}).get("Name") or product_id
+
+        await self._b2b_request(
+            "POST",
+            "/sobjects/CartItem",
+            json={
+                "CartId": cart_id,
+                "CartDeliveryGroupId": cdg_id,
+                "Product2Id": product_id,
+                "Quantity": quantity,
+                "Type": "Product",
+                "Name": name,
+                "SalesPrice": price,
+                "ListPrice": price,
+            },
+        )
+
     async def add_to_cart(
         self, session: ShoppingSessionContext, product_id: str, quantity: int
     ) -> Cart:
@@ -1404,25 +1446,29 @@ class SalesforceOMSBackend(MerchantBackend):
                 "Please ensure you are logged in as a B2B Commerce community user."
             )
         webstore_id = await self._ensure_webstore_id()
-
-        # Find the buyer's actual cart so we add to the same one the storefront shows
         cart_id, _ = await self._get_buyer_cart_id(sf_user_id, webstore_id)
-        if cart_id:
-            # Add to the buyer's existing cart by its specific ID
+
+        endpoint = (
+            f"/commerce/webstores/{webstore_id}/carts/{cart_id}/cart-items"
+            if cart_id
+            else f"/commerce/webstores/{webstore_id}/carts/active/cart-items"
+        )
+        try:
             await self._b2b_request(
-                "POST",
-                f"/commerce/webstores/{webstore_id}/carts/{cart_id}/cart-items",
+                "POST", endpoint,
                 params={"effectiveAccountId": account_id},
                 json={"productId": product_id, "quantity": str(quantity), "type": "Product"},
             )
-        else:
-            # No cart yet — create one via active-cart endpoint; SF will create it for this account
-            await self._b2b_request(
-                "POST",
-                f"/commerce/webstores/{webstore_id}/carts/active/cart-items",
-                params={"effectiveAccountId": account_id},
-                json={"productId": product_id, "quantity": str(quantity), "type": "Product"},
-            )
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code == 404 and cart_id:
+                # Product not in B2B search index yet — insert CartItem directly.
+                log.info(
+                    "add_to_cart: product %s not in B2B index, using direct CartItem insert",
+                    product_id,
+                )
+                await self._add_to_cart_direct(cart_id, product_id, quantity)
+            else:
+                raise
         return await self.get_cart(session)
 
     def _parse_b2b_cart(self, data: dict[str, Any]) -> tuple[Cart, dict[str, str]]:

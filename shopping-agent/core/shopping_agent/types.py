@@ -168,6 +168,7 @@ class QuoteStatus(StrEnum):
 
 class QuoteItem(BaseModel):
     product_id: str
+    line_item_id: str | None = None
     title: str
     quantity: int = Field(ge=1)
     unit_price: float

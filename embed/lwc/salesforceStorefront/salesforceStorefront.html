@@ -496,7 +496,23 @@
                                                         </div>
                                                         <div class="sfs-cart-info">
                                                             <div class="sfs-cart-title">{ql.title}</div>
-                                                            <div class="sfs-cart-price">{ql.price} × {ql.qty}</div>
+                                                            <div class="sfs-cart-price">{ql.price}</div>
+                                                        </div>
+                                                        <div class="sfs-qty-ctrl">
+                                                            <button class="sfs-qty-btn"
+                                                                data-quote-id={ql.quoteId}
+                                                                data-line-id={ql.lineItemId}
+                                                                data-title={ql.title}
+                                                                data-qty={ql.qtyMinus}
+                                                                onclick={handleQtyMinus}
+                                                                disabled={ql.atMin}>−</button>
+                                                            <span class="sfs-qty-val">{ql.qty}</span>
+                                                            <button class="sfs-qty-btn"
+                                                                data-quote-id={ql.quoteId}
+                                                                data-line-id={ql.lineItemId}
+                                                                data-title={ql.title}
+                                                                data-qty={ql.qtyPlus}
+                                                                onclick={handleQtyPlus}>+</button>
                                                         </div>
                                                         <div class="sfs-cart-total">{ql.total}</div>
                                                     </li>
@@ -509,6 +525,15 @@
                                         </div>
                                         <template lwc:if={item.hasQuoteNext}>
                                             <p class="sfs-co-note">{item.quoteNextStep}</p>
+                                        </template>
+                                        <template lwc:if={item.canAct}>
+                                            <div class="sfs-quote-actions">
+                                                <button class="sfs-quote-action-btn sfs-quote-action-primary"
+                                                    data-quote-id={item.quoteId}
+                                                    data-quote-name={item.quoteName}
+                                                    data-action={item.quoteActionKey}
+                                                    onclick={handleQuoteAction}>{item.quoteActionLabel}</button>
+                                            </div>
                                         </template>
                                     </div>
                                 </template>

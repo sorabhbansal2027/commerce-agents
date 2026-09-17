@@ -1449,6 +1449,7 @@ class SalesforceOMSBackend(MerchantBackend):
         quote.items = [
             QuoteItem(
                 product_id=li.get("Product2Id", ""),
+                line_item_id=li.get("Id"),
                 title=(li.get("Product2") or {}).get("Name", "Unknown"),
                 quantity=int(li.get("Quantity") or 1),
                 unit_price=float(li.get("UnitPrice") or 0),
@@ -1570,6 +1571,24 @@ class SalesforceOMSBackend(MerchantBackend):
             status=QuoteStatus.SUBMITTED,
             subtotal=0,
             created_at=datetime.now(UTC),
+        )
+
+    async def update_quote_item(
+        self, session: ShoppingSessionContext, quote_id: str, line_item_id: str, quantity: int
+    ) -> Quote:
+        headers = await self._token_headers()
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.patch(
+                f"{self._base}/services/data/v62.0/sobjects/QuoteLineItem/{line_item_id}",
+                headers={**headers, "Content-Type": "application/json"},
+                json={"Quantity": quantity},
+            )
+            if not resp.is_success:
+                log.error("update_quote_item: PATCH failed %s: %s", resp.status_code, resp.text)
+                resp.raise_for_status()
+        quote = await self.get_quote(session, quote_id)
+        return quote or Quote(
+            quote_id=quote_id, status=QuoteStatus.DRAFT, subtotal=0, created_at=datetime.now(UTC)
         )
 
     # ------------------------------------------------------------------

@@ -381,6 +381,23 @@ def build_tools(
             },
         },
         {
+            "name": "update_quote_item",
+            "description": (
+                "Change the quantity of a line item in a draft quote. "
+                "Use when the buyer asks to adjust quantities on an existing quote."
+            ),
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "quote_id": {"type": "string", "description": "The quote id."},
+                    "line_item_id": {"type": "string", "description": "The line item id from the quote's items list."},
+                    "quantity": {"type": "integer", "minimum": 1, "description": "New quantity."},
+                },
+                "required": ["quote_id", "line_item_id", "quantity"],
+                "additionalProperties": False,
+            },
+        },
+        {
             "name": "convert_quote_to_order",
             "description": (
                 "Place an order from an approved quote. Confirm once before calling — "

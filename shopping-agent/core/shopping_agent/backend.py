@@ -194,6 +194,12 @@ class StorefrontBackend(ABC):
         """Submit a draft quote for sales-rep review or approval."""
         raise NotOffered
 
+    async def update_quote_item(
+        self, session: ShoppingSessionContext, quote_id: str, line_item_id: str, quantity: int
+    ) -> Quote:
+        """Update the quantity of a line item in a draft quote."""
+        raise NotOffered
+
     async def convert_quote_to_order(self, session: ShoppingSessionContext, quote_id: str) -> Order:
         """Place an order from an approved quote."""
         raise NotOffered

@@ -497,17 +497,29 @@ export default class SalesforceStorefront extends LightningElement {
                 base.quoteSummary   = it.summary || '';
                 base.quoteNextStep  = it.next_step || '';
                 base.hasQuoteNext   = !!it.next_step;
+                base.quoteId       = it.quote_id || '';
+                base.isDraft       = st === 'draft';
+                base.isApproved    = st === 'approved';
+                base.canAct        = base.isDraft || base.isApproved;
+                base.quoteActionLabel = base.isDraft ? 'Submit for Review' : 'Convert to Order';
+                base.quoteActionKey   = base.isDraft ? 'submit' : 'convert';
                 base.quoteLineItems = (q.items || []).map((item, qi) => {
                     const imgUrl = resolveImageUrl(item.image_url, apiBase);
+                    const qty    = item.quantity || 1;
                     return {
-                        uid:      `${it.id}-ql${qi}`,
-                        title:    item.title || 'Product',
-                        qty:      item.quantity || 1,
-                        price:    fmtMoney(item.unit_price, currency),
-                        total:    fmtMoney(item.line_total ?? (item.quantity * item.unit_price), currency),
-                        image_url: imgUrl || '',
-                        hasImage: !!imgUrl,
-                        initial:  productInitial(item.title),
+                        uid:        `${it.id}-ql${qi}`,
+                        title:      item.title || 'Product',
+                        qty,
+                        qtyMinus:   qty - 1,
+                        qtyPlus:    qty + 1,
+                        atMin:      qty <= 1,
+                        price:      fmtMoney(item.unit_price, currency),
+                        total:      fmtMoney(item.line_total ?? (item.quantity * item.unit_price), currency),
+                        image_url:  imgUrl || '',
+                        hasImage:   !!imgUrl,
+                        initial:    productInitial(item.title),
+                        quoteId:    it.quote_id || '',
+                        lineItemId: item.line_item_id || '',
                     };
                 });
                 base.hasQuoteItems = base.quoteLineItems.length > 0;
@@ -635,6 +647,32 @@ export default class SalesforceStorefront extends LightningElement {
     handleCartAsk() {
         this._activeView = 'assistant';
         this._submit('Look over my cart — anything missing or worth swapping?');
+    }
+
+    // ── Handlers: quote card ──────────────────────────────────────────────────
+    handleQtyMinus(evt) {
+        const { quoteId, lineId, title, qty } = evt.currentTarget.dataset;
+        const newQty = parseInt(qty, 10);
+        if (newQty < 1) return;
+        this._activeView = 'assistant';
+        this._submit(`Change the quantity of ${title} to ${newQty} in my quote. [quote_id: ${quoteId}, line_item_id: ${lineId}]`);
+    }
+
+    handleQtyPlus(evt) {
+        const { quoteId, lineId, title, qty } = evt.currentTarget.dataset;
+        const newQty = parseInt(qty, 10);
+        this._activeView = 'assistant';
+        this._submit(`Change the quantity of ${title} to ${newQty} in my quote. [quote_id: ${quoteId}, line_item_id: ${lineId}]`);
+    }
+
+    handleQuoteAction(evt) {
+        const { quoteId, quoteName, action } = evt.currentTarget.dataset;
+        this._activeView = 'assistant';
+        if (action === 'submit') {
+            this._submit(`Submit quote ${quoteName} for review. [quote_id: ${quoteId}]`);
+        } else {
+            this._submit(`Convert quote ${quoteName} to an order. [quote_id: ${quoteId}]`);
+        }
     }
 
     // ── Handlers: composer ─────────────────────────────────────────────────────

@@ -14,7 +14,20 @@ from typing import Any
 from commerce_common.fencing import MAX_FENCED_CHARS
 
 from .fencing import STOREFRONT_FENCE
-from .types import Cart, CartItem, FulfillmentOption, Order, Policy, Product, ProductDetails
+from .types import (
+    ApprovalRequest,
+    Asset,
+    Cart,
+    CartItem,
+    FulfillmentOption,
+    Order,
+    Policy,
+    Product,
+    ProductDetails,
+    Promotion,
+    Quote,
+    Subscription,
+)
 
 
 def compact_product(product: Product) -> dict[str, Any]:
@@ -145,4 +158,34 @@ def policies_payload(policies: Sequence[Policy]) -> Any:
 def fulfillment_payload(options: Sequence[FulfillmentOption]) -> Any:
     return [o.model_dump(exclude_none=True) for o in options] or {
         "note": "No fulfillment options available."
+    }
+
+
+def quote_payload(quote: Quote) -> dict[str, Any]:
+    return quote.model_dump(mode="json", exclude_none=True)
+
+
+def quotes_payload(quotes: Sequence[Quote]) -> Any:
+    return [quote_payload(q) for q in quotes] or {"note": "No quotes found."}
+
+
+def approval_payload(request: ApprovalRequest) -> dict[str, Any]:
+    return request.model_dump(mode="json", exclude_none=True)
+
+
+def assets_payload(assets: Sequence[Asset]) -> Any:
+    return [a.model_dump(mode="json", exclude_none=True) for a in assets] or {
+        "note": "No assets found."
+    }
+
+
+def promotions_payload(promotions: Sequence[Promotion]) -> Any:
+    return [p.model_dump(mode="json", exclude_none=True) for p in promotions] or {
+        "note": "No promotions available."
+    }
+
+
+def subscriptions_payload(subscriptions: Sequence[Subscription]) -> Any:
+    return [s.model_dump(mode="json", exclude_none=True) for s in subscriptions] or {
+        "note": "No subscriptions found."
     }

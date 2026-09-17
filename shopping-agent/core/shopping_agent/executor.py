@@ -29,13 +29,19 @@ from .gates import (
 )
 from .memory import SHOPPING_MEMORY_EXTRACTION_PROMPT
 from .serialization import (
+    approval_payload,
+    assets_payload,
     cart_payload,
     fulfillment_payload,
     order_payload,
     orders_payload,
     policies_payload,
     product_details_payload,
+    promotions_payload,
+    quote_payload,
+    quotes_payload,
     search_result_text,
+    subscriptions_payload,
 )
 from .types import SearchFilters, ShoppingSessionContext, ShoppingSessionState
 
@@ -125,6 +131,26 @@ class ShoppingToolExecutor(BaseToolExecutor):
             "get_order_status": self._get_order_status,
             "search_policies": self._search_policies,
             "get_fulfillment_options": self._get_fulfillment_options,
+            # Quotes
+            "get_quotes": self._get_quotes,
+            "get_quote": self._get_quote,
+            "create_quote": self._create_quote,
+            "submit_quote": self._submit_quote,
+            "convert_quote_to_order": self._convert_quote_to_order,
+            # Approvals
+            "submit_for_approval": self._submit_for_approval,
+            "get_approval_status": self._get_approval_status,
+            "recall_approval_request": self._recall_approval_request,
+            # Assets
+            "get_assets": self._get_assets,
+            "get_asset_details": self._get_asset_details,
+            # Promotions
+            "get_promotions": self._get_promotions,
+            "apply_promotion": self._apply_promotion,
+            # Subscriptions
+            "get_subscriptions": self._get_subscriptions,
+            "get_subscription_details": self._get_subscription_details,
+            "renew_subscription": self._renew_subscription,
         }
 
     # -- catalog ---------------------------------------------------------------------
@@ -221,3 +247,109 @@ class ShoppingToolExecutor(BaseToolExecutor):
         ]
         options = await self._backend.get_fulfillment_options(self._session, product_ids)
         return self._fenced(fulfillment_payload(options))
+
+    # -- quotes -----------------------------------------------------------------------
+
+    async def _get_quotes(self, _: dict[str, Any]) -> ToolOutcome:
+        quotes = await self._backend.get_quotes(self._session)
+        return self._fenced(quotes_payload(quotes))
+
+    async def _get_quote(self, tool_input: dict[str, Any]) -> ToolOutcome:
+        quote_id = str(tool_input.get("quote_id", ""))
+        quote = await self._backend.get_quote(self._session, quote_id)
+        if quote is None:
+            return ToolOutcome.error(f"No quote with id {quote_id}.")
+        return self._fenced(quote_payload(quote))
+
+    async def _create_quote(self, tool_input: dict[str, Any]) -> ToolOutcome:
+        name = tool_input.get("name")
+        notes = tool_input.get("notes")
+        quote = await self._backend.create_quote(self._session, name=name, notes=notes)
+        return self._fenced(quote_payload(quote))
+
+    async def _submit_quote(self, tool_input: dict[str, Any]) -> ToolOutcome:
+        quote_id = str(tool_input.get("quote_id", ""))
+        quote = await self._backend.submit_quote(self._session, quote_id)
+        return self._fenced(quote_payload(quote))
+
+    async def _convert_quote_to_order(self, tool_input: dict[str, Any]) -> ToolOutcome:
+        quote_id = str(tool_input.get("quote_id", ""))
+        order = await self._backend.convert_quote_to_order(self._session, quote_id)
+        remember_order_items(self._state, [order])
+        return self._fenced(order_payload(order))
+
+    # -- approvals --------------------------------------------------------------------
+
+    async def _submit_for_approval(self, tool_input: dict[str, Any]) -> ToolOutcome:
+        subject_type = str(tool_input.get("subject_type", ""))
+        subject_id = str(tool_input.get("subject_id", ""))
+        request = await self._backend.submit_for_approval(
+            self._session, subject_type, subject_id
+        )
+        return self._fenced(approval_payload(request))
+
+    async def _get_approval_status(self, tool_input: dict[str, Any]) -> ToolOutcome:
+        request_id = str(tool_input.get("request_id", ""))
+        request = await self._backend.get_approval_status(self._session, request_id)
+        if request is None:
+            return ToolOutcome.error(f"No approval request with id {request_id}.")
+        return self._fenced(approval_payload(request))
+
+    async def _recall_approval_request(self, tool_input: dict[str, Any]) -> ToolOutcome:
+        request_id = str(tool_input.get("request_id", ""))
+        request = await self._backend.recall_approval_request(self._session, request_id)
+        return self._fenced(approval_payload(request))
+
+    # -- assets -----------------------------------------------------------------------
+
+    async def _get_assets(self, tool_input: dict[str, Any]) -> ToolOutcome:
+        assets = await self._backend.get_assets(
+            self._session,
+            category=tool_input.get("category"),
+            status=tool_input.get("status"),
+            query=tool_input.get("query"),
+        )
+        return self._fenced(assets_payload(assets))
+
+    async def _get_asset_details(self, tool_input: dict[str, Any]) -> ToolOutcome:
+        asset_id = str(tool_input.get("asset_id", ""))
+        asset = await self._backend.get_asset_details(self._session, asset_id)
+        if asset is None:
+            return ToolOutcome.error(f"No asset with id {asset_id}.")
+        return self._fenced(asset.model_dump(mode="json", exclude_none=True))
+
+    # -- promotions -------------------------------------------------------------------
+
+    async def _get_promotions(self, tool_input: dict[str, Any]) -> ToolOutcome:
+        promotions = await self._backend.get_promotions(
+            self._session, category=tool_input.get("category")
+        )
+        return self._fenced(promotions_payload(promotions))
+
+    async def _apply_promotion(self, tool_input: dict[str, Any]) -> ToolOutcome:
+        cart = await self._backend.apply_promotion(
+            self._session,
+            promotion_id=tool_input.get("promotion_id"),
+            code=tool_input.get("code"),
+        )
+        return self._fenced(cart_payload(cart))
+
+    # -- subscriptions ----------------------------------------------------------------
+
+    async def _get_subscriptions(self, tool_input: dict[str, Any]) -> ToolOutcome:
+        subscriptions = await self._backend.get_subscriptions(
+            self._session, status=tool_input.get("status")
+        )
+        return self._fenced(subscriptions_payload(subscriptions))
+
+    async def _get_subscription_details(self, tool_input: dict[str, Any]) -> ToolOutcome:
+        subscription_id = str(tool_input.get("subscription_id", ""))
+        sub = await self._backend.get_subscription_details(self._session, subscription_id)
+        if sub is None:
+            return ToolOutcome.error(f"No subscription with id {subscription_id}.")
+        return self._fenced(sub.model_dump(mode="json", exclude_none=True))
+
+    async def _renew_subscription(self, tool_input: dict[str, Any]) -> ToolOutcome:
+        subscription_id = str(tool_input.get("subscription_id", ""))
+        result = await self._backend.renew_subscription(self._session, subscription_id)
+        return self._fenced(quote_payload(result))

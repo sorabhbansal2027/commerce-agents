@@ -681,58 +681,39 @@ class SalesforceOMSBackend(MerchantBackend):
         log.info("B2B Products API loaded %d products", len(cache))
         return cache, code_to_id
 
-    async def _get_entitled_product_ids(self) -> set[str]:
-        """Return Product2 IDs visible in B2B Commerce (in a catalog category and entitled).
+    async def _gap_fill_recent_products(
+        self, cache: dict, code_to_id: dict, window_days: int = 30
+    ) -> None:
+        """Add entitled products created recently that the B2B index may not have indexed yet.
 
-        ProductCategoryProduct is the gating record — without it the B2B Commerce cart
-        API returns PROCESSING_HALTED / You can't view, even if entitlement and pricebook
-        are correct.  We filter the agent's product catalog to only these IDs so the
-        agent never recommends a product that can't be added to cart.
+        Uses SOQL subqueries so no product IDs are loaded into application memory and
+        there is no IN-list whose size grows with catalog size. Only products created
+        within ``window_days`` are checked — older ones will already be in the B2B index.
         """
         try:
-            cat_rows = await self._soql(
-                "SELECT ProductId FROM ProductCategoryProduct LIMIT 500"
+            records = await self._soql(
+                f"SELECT Product2Id, Product2.Name, Product2.Description, "
+                f"Product2.Family, Product2.ProductCode, UnitPrice "
+                f"FROM PricebookEntry "
+                f"WHERE IsActive = true AND Product2.IsActive = true "
+                f"AND Product2Id IN (SELECT ProductId FROM ProductCategoryProduct) "
+                f"AND Product2Id IN (SELECT ProductId FROM CommerceEntitlementProduct) "
+                f"AND Product2.CreatedDate > LAST_N_DAYS:{window_days} "
+                f"LIMIT 200"
             )
-            cat_ids = {r.get("ProductId", "") for r in cat_rows if r.get("ProductId")}
-            ent_rows = await self._soql(
-                "SELECT ProductId FROM CommerceEntitlementProduct LIMIT 500"
-            )
-            ent_ids = {r.get("ProductId", "") for r in ent_rows if r.get("ProductId")}
-            # Use the intersection when both sets are non-empty so only products that
-            # are both in a catalog category AND entitled appear in agent search.
-            ids = cat_ids & ent_ids if cat_ids and ent_ids else cat_ids or ent_ids
-            log.info(
-                "_get_entitled_product_ids: %d catalog, %d entitled → %d visible",
-                len(cat_ids), len(ent_ids), len(ids),
-            )
-            return ids
         except Exception as exc:
-            log.warning("_get_entitled_product_ids failed: %s", exc)
-            return set()
-
-    async def _load_missing_from_pricebook(
-        self, cache: dict, code_to_id: dict, missing_ids: set[str]
-    ) -> None:
-        """Gap-fill: fetch products by ID from PricebookEntry and add to cache in place."""
-        if not missing_ids:
+            log.warning("Gap-fill query failed: %s", exc)
             return
-        id_list = ",".join(f"'{pid}'" for pid in missing_ids)
-        records = await self._soql(
-            f"SELECT Product2Id, Product2.Name, Product2.Description, Product2.Family, "
-            f"Product2.ProductCode, UnitPrice FROM PricebookEntry "
-            f"WHERE IsActive = true AND Product2.IsActive = true "
-            f"AND Product2Id IN ({id_list}) LIMIT 200"
-        )
+        added = 0
         for r in records:
             pid = r.get("Product2Id", "")
             if not pid or pid in cache:
                 continue
             p2 = r.get("Product2") or {}
-            name = p2.get("Name") or pid
             code = p2.get("ProductCode") or ""
             cache[pid] = Listing(
                 listing_id=pid,
-                title=name,
+                title=p2.get("Name") or pid,
                 price=float(r.get("UnitPrice") or 0),
                 currency="USD",
                 stock=0,
@@ -744,15 +725,17 @@ class SalesforceOMSBackend(MerchantBackend):
             )
             if code:
                 code_to_id[code] = pid
-        log.info("Gap-filled %d products not in B2B index", len(missing_ids))
+            added += 1
+        if added:
+            log.info("Gap-fill: added %d recently created products not yet in B2B index", added)
 
     async def _ensure_products_loaded(self) -> None:
         if self._products_loaded:
             return
-        # Primary: B2B Products API (carries Commerce-native pricing and entitlement).
-        # Gap-fill: any entitled product not in the index yet (e.g. just created via
-        # REST API before the next search-index rebuild) is fetched from PricebookEntry.
-        entitled_ids = await self._get_entitled_product_ids()
+        # Primary: B2B Products API (Commerce-native pricing, stock, entitlement).
+        # Gap-fill: products created recently may not be in the search index yet — a
+        # targeted SOQL subquery finds them without loading any IDs into app memory.
+        # Full PricebookEntry fallback when the B2B API is unavailable.
         try:
             webstore_id = await self._ensure_webstore_id()
             cache, code_to_id = await self._load_products_from_b2b(webstore_id)
@@ -760,17 +743,22 @@ class SalesforceOMSBackend(MerchantBackend):
             cache, code_to_id = {}, {}
 
         if cache:
-            # Find entitled products missing from the B2B index and add them.
-            missing = entitled_ids - cache.keys()
-            if missing:
-                log.info("%d entitled products not in B2B index — gap-filling from PricebookEntry", len(missing))
-                await self._load_missing_from_pricebook(cache, code_to_id, missing)
+            await self._gap_fill_recent_products(cache, code_to_id)
         else:
-            # B2B API unavailable — load everything from PricebookEntry.
             log.info("B2B Products API unavailable — loading from PricebookEntry")
-            records = await self._soql(_PRODUCTS_QUERY)
-            if entitled_ids:
-                records = [r for r in records if r.get("Product2Id") in entitled_ids]
+            try:
+                records = await self._soql(
+                    "SELECT Product2Id, Product2.Name, Product2.Description, "
+                    "Product2.Family, Product2.ProductCode, UnitPrice "
+                    "FROM PricebookEntry "
+                    "WHERE IsActive = true AND Product2.IsActive = true "
+                    "AND Product2Id IN (SELECT ProductId FROM ProductCategoryProduct) "
+                    "AND Product2Id IN (SELECT ProductId FROM CommerceEntitlementProduct) "
+                    "ORDER BY Product2.Name LIMIT 2000"
+                )
+            except Exception as exc:
+                log.error("PricebookEntry fallback failed: %s", exc)
+                records = []
             cache, code_to_id = {}, {}
             for r in records:
                 pid = r.get("Product2Id", "")

@@ -92,6 +92,7 @@ export default class SalesforceStorefront extends LightningElement {
 
     @track _open         = false;
     @track _busy         = false;
+    @track _listening    = false;
     @track _items        = [];
     @track _draft        = '';
     @track _starters     = STARTER_PROMPTS.map(s => ({ ...s, disabled: false }));
@@ -108,11 +109,15 @@ export default class SalesforceStorefront extends LightningElement {
     _activityId    = null;
     _skeletonId    = null;
     _abortCtrl     = null;
+    _recognition   = null;
     _nextId        = 0;
 
     // ── Lifecycle ──────────────────────────────────────────────────────────────
     connectedCallback()    { this._bootstrap(); }
-    disconnectedCallback() { if (this._abortCtrl) this._abortCtrl.abort(); }
+    disconnectedCallback() {
+        if (this._abortCtrl)    this._abortCtrl.abort();
+        if (this._recognition)  { this._recognition.abort(); this._recognition = null; }
+    }
 
     async _bootstrap() {
         if (!(this.apiUrl ?? '').trim()) {
@@ -186,6 +191,11 @@ export default class SalesforceStorefront extends LightningElement {
     get toggleClass()  { return this._busy ? 'sfs-toggle busy' : 'sfs-toggle'; }
     get actDotClass()  { return this._busy ? 'sfs-act-dot pulsing' : 'sfs-act-dot'; }
     get actLabel()     { return this._busy ? 'Active' : 'Ready'; }
+
+    // ── Getters: voice ─────────────────────────────────────────────────────────
+    get isListening()   { return this._listening; }
+    get micClass()      { return 'sfs-mic-btn' + (this._listening ? ' listening' : ''); }
+    get micAriaLabel()  { return this._listening ? 'Stop listening' : 'Speak your message'; }
 
     // ── Getters: view switching ────────────────────────────────────────────────
     // Home: no messages yet; Chat: after first message or while busy
@@ -548,6 +558,54 @@ export default class SalesforceStorefront extends LightningElement {
     handleFormSubmit(evt) { evt.preventDefault(); this._submit(this._draft.trim()); }
     handleStarter(evt)    { this._submit(evt.currentTarget.dataset.label); }
     handleChip(evt)       { this._submit(evt.currentTarget.dataset.label); }
+
+    // ── Handlers: voice ────────────────────────────────────────────────────────
+    handleMic() {
+        if (this._listening) { this._stopListening(); } else { this._startListening(); }
+    }
+
+    _startListening() {
+        try {
+            // Locker Service wraps window — try the bare global names first
+            /* eslint-disable no-undef */
+            const SR = (typeof SpeechRecognition !== 'undefined' ? SpeechRecognition : null)
+                    || (typeof webkitSpeechRecognition !== 'undefined' ? webkitSpeechRecognition : null)
+                    || (window.SpeechRecognition)
+                    || (window.webkitSpeechRecognition);
+            /* eslint-enable no-undef */
+            if (!SR) { this._pushError('Voice input is not supported in this browser.'); return; }
+            this._recognition = new SR();
+            this._recognition.continuous    = false;
+            this._recognition.interimResults = true;
+            this._recognition.lang          = 'en-US';
+
+            this._recognition.onresult = (evt) => {
+                const transcript = Array.from(evt.results)
+                    .map(r => r[0].transcript).join('');
+                this._draft = transcript;
+                const ta = this.template.querySelector('textarea');
+                if (ta) {
+                    ta.value = transcript;
+                    ta.style.height = 'auto';
+                    ta.style.height = Math.min(ta.scrollHeight, 120) + 'px';
+                }
+                if (evt.results[evt.results.length - 1].isFinal && transcript.trim()) {
+                    this._stopListening();
+                    this._submit(transcript.trim());
+                }
+            };
+            this._recognition.onerror = () => { this._listening = false; this._recognition = null; };
+            this._recognition.onend   = () => { this._listening = false; this._recognition = null; };
+
+            this._recognition.start();
+            this._listening = true;
+        } catch (_) { this._listening = false; }
+    }
+
+    _stopListening() {
+        this._listening = false;
+        if (this._recognition) { try { this._recognition.stop(); } catch (_) {} this._recognition = null; }
+    }
 
     // ── Submit ─────────────────────────────────────────────────────────────────
     _submit(text) {

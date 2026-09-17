@@ -16,7 +16,7 @@
     display: block;
     position: fixed;
     bottom: 24px;
-    right: 24px;
+    right: 60px;
     z-index: 99999;
 }
 
@@ -73,8 +73,8 @@
     flex-direction: column;
     position: fixed;
     bottom: 80px;
-    right: 24px;
-    width: 420px;
+    right: 60px;
+    width: 460px;
     height: min(680px, calc(100vh - 100px));
     background: var(--sfs-bg);
     border: 1px solid var(--sfs-line);
@@ -93,10 +93,11 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 12px 14px 10px;
+    padding: 12px 44px 10px 14px;
     border-bottom: 1px solid var(--sfs-line);
     background: var(--sfs-bg);
     flex-shrink: 0;
+    position: relative;
 }
 
 /* Brand */
@@ -210,6 +211,10 @@
     border-radius: 6px;
     color: var(--sfs-ink-soft);
     cursor: pointer;
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
 }
 .sfs-icon-btn:hover { background: var(--sfs-bg-soft); color: var(--sfs-ink); }
 
@@ -1192,3 +1197,28 @@
 .sfs-send-btn:hover   { background: #2a3d6e; }
 .sfs-send-btn:active  { transform: scale(.93); }
 .sfs-send-btn:disabled { background: var(--sfs-line); color: var(--sfs-ink-soft); cursor: not-allowed; transform: none; }
+
+.sfs-mic-btn {
+    width: 30px; height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    color: var(--sfs-ink-soft);
+    border: 1px solid var(--sfs-line);
+    border-radius: 7px;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: background .12s, color .12s, border-color .12s, box-shadow .12s;
+}
+.sfs-mic-btn:hover { background: var(--sfs-bg-soft); color: var(--sfs-ink); }
+.sfs-mic-btn.listening {
+    background: #fee2e2;
+    border-color: #dc2626;
+    color: #dc2626;
+    animation: sfs-mic-pulse 1.2s ease infinite;
+}
+@keyframes sfs-mic-pulse {
+    0%,100% { box-shadow: 0 0 0 0 rgba(220,38,38,.25); }
+    50%      { box-shadow: 0 0 0 5px rgba(220,38,38,0); }
+}

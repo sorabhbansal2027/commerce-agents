@@ -326,6 +326,231 @@ def build_tools(
                 "additionalProperties": False,
             },
         },
+        # ── Quotes ───────────────────────────────────────────────────────────────
+        {
+            "name": "get_quotes",
+            "description": (
+                "List the buyer's recent quotes with id, name, status, subtotal, and expiry. "
+                "Use when they ask to see their quotes or check a quote status by name."
+            ),
+            "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
+        },
+        {
+            "name": "get_quote",
+            "description": "Full detail for one quote: line items, negotiated prices, status, and expiry.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "quote_id": {"type": "string", "description": "Quote id to retrieve."},
+                },
+                "required": ["quote_id"],
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "create_quote",
+            "description": (
+                "Convert the current cart into a draft quote. Confirm once before calling — "
+                "this is a write. Optionally name the quote and add notes."
+            ),
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "maxLength": 120, "description": "Quote name."},
+                    "notes": {"type": "string", "maxLength": 500, "description": "Optional notes for the sales rep."},
+                },
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "submit_quote",
+            "description": (
+                "Submit a draft quote for sales-rep review or internal approval. "
+                "Confirm once before calling."
+            ),
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "quote_id": {"type": "string", "description": "Draft quote id to submit."},
+                },
+                "required": ["quote_id"],
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "convert_quote_to_order",
+            "description": (
+                "Place an order from an approved quote. Confirm once before calling — "
+                "this places the order and cannot be undone here."
+            ),
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "quote_id": {"type": "string", "description": "Approved quote id to convert."},
+                },
+                "required": ["quote_id"],
+                "additionalProperties": False,
+            },
+        },
+        # ── Approvals ─────────────────────────────────────────────────────────────
+        {
+            "name": "submit_for_approval",
+            "description": (
+                "Submit a cart, quote, or order into the configured approval chain. "
+                "State what is being submitted and the total amount, then confirm once before calling."
+            ),
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "subject_type": {
+                        "type": "string",
+                        "enum": ["cart", "quote", "order"],
+                        "description": "What is being submitted for approval.",
+                    },
+                    "subject_id": {
+                        "type": "string",
+                        "description": "Id of the cart session, quote, or order.",
+                    },
+                },
+                "required": ["subject_type", "subject_id"],
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "get_approval_status",
+            "description": "Current state of an approval request: each step, approver, and any comments.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "request_id": {"type": "string", "description": "Approval request id."},
+                },
+                "required": ["request_id"],
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "recall_approval_request",
+            "description": (
+                "Withdraw a pending approval request. Confirm once before calling. "
+                "Only valid on requests with status 'pending'."
+            ),
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "request_id": {"type": "string", "description": "Pending approval request id."},
+                },
+                "required": ["request_id"],
+                "additionalProperties": False,
+            },
+        },
+        # ── Assets ────────────────────────────────────────────────────────────────
+        {
+            "name": "get_assets",
+            "description": (
+                "Installed-base assets the account owns — laptops, servers, network gear — "
+                "with serial numbers, service tags, and warranty status. Filter by category, "
+                "status, or a search query."
+            ),
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "category": {"type": "string", "description": "Product category to filter by."},
+                    "status": {
+                        "type": "string",
+                        "enum": ["active", "inactive", "retired", "in_service"],
+                        "description": "Asset status to filter by.",
+                    },
+                    "query": {"type": "string", "description": "Free-text search across name, serial, service tag."},
+                },
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "get_asset_details",
+            "description": "Full detail for one asset: purchase date, warranty expiry, location, and assigned user.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "asset_id": {"type": "string", "description": "Asset id, serial number, or service tag."},
+                },
+                "required": ["asset_id"],
+                "additionalProperties": False,
+            },
+        },
+        # ── Promotions ────────────────────────────────────────────────────────────
+        {
+            "name": "get_promotions",
+            "description": (
+                "Available promotions, volume discounts, and rebates for this account. "
+                "Filter by product category. Use before presenting a large cart or when the "
+                "buyer asks about deals or discounts."
+            ),
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "category": {"type": "string", "description": "Category to filter promotions by."},
+                },
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "apply_promotion",
+            "description": "Apply a promotion by id or promo code to the current cart; returns the updated cart.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "promotion_id": {"type": "string", "description": "Promotion id to apply."},
+                    "code": {"type": "string", "description": "Promo code to apply."},
+                },
+                "additionalProperties": False,
+            },
+        },
+        # ── Subscriptions ─────────────────────────────────────────────────────────
+        {
+            "name": "get_subscriptions",
+            "description": (
+                "Active service contracts, extended warranties, and managed services for the account. "
+                "Filter by status — use 'expiring_soon' to proactively surface renewals."
+            ),
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "status": {
+                        "type": "string",
+                        "enum": ["active", "expiring_soon", "expired", "cancelled", "pending_renewal"],
+                        "description": "Filter by subscription status.",
+                    },
+                },
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "get_subscription_details",
+            "description": "Full detail for one subscription: dates, value, auto-renew status, and linked asset.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "subscription_id": {"type": "string", "description": "Subscription id."},
+                },
+                "required": ["subscription_id"],
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "renew_subscription",
+            "description": (
+                "Initiate a renewal for a subscription. Confirm once before calling — "
+                "state the subscription name and amount. Returns the resulting quote or order."
+            ),
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "subscription_id": {"type": "string", "description": "Subscription id to renew."},
+                },
+                "required": ["subscription_id"],
+                "additionalProperties": False,
+            },
+        },
     ]
     presentation: list[dict[str, Any]] = [
         {
@@ -575,6 +800,127 @@ def build_tools(
                         "description": "Method the customer chose, when they chose one.",
                     },
                 },
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "present_quote",
+            "description": (
+                "Show a quote card: line items, subtotal, status, expiry, and next step. "
+                "Use after get_quote or create_quote."
+            ),
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "quote_id": {"type": "string", "description": "Quote id from this session."},
+                    "summary": {"type": "string", "maxLength": 300, "description": "One-sentence status summary."},
+                    "next_step": {"type": "string", "maxLength": 200, "description": "What the buyer should do next."},
+                },
+                "required": ["quote_id", "summary"],
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "present_approval_status",
+            "description": (
+                "Show the approval request with each step's approver, status, and any comments."
+            ),
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "request_id": {"type": "string", "description": "Approval request id."},
+                    "summary": {"type": "string", "maxLength": 300, "description": "One-sentence status summary."},
+                    "next_step": {"type": "string", "maxLength": 200, "description": "What happens next."},
+                },
+                "required": ["request_id", "summary"],
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "present_assets",
+            "description": (
+                "Show installed-base assets as a list with warranty status. "
+                "Use after get_assets."
+            ),
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string", "maxLength": 80, "description": "Card title."},
+                    "entries": {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 20,
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "asset_id": {"type": "string"},
+                                "highlight": {"type": "string", "maxLength": 120, "description": "One key fact about this asset."},
+                            },
+                            "required": ["asset_id"],
+                            "additionalProperties": False,
+                        },
+                    },
+                    "warranty_alert": {"type": "string", "maxLength": 200, "description": "Summary of assets with expiring warranties."},
+                },
+                "required": ["entries"],
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "present_promotions",
+            "description": (
+                "Show available promotions and discounts. Use after get_promotions."
+            ),
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string", "maxLength": 80},
+                    "picks": {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 8,
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "promotion_id": {"type": "string"},
+                                "callout": {"type": "string", "maxLength": 120, "description": "Why this promotion matters now."},
+                            },
+                            "required": ["promotion_id"],
+                            "additionalProperties": False,
+                        },
+                    },
+                },
+                "required": ["picks"],
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "present_subscriptions",
+            "description": (
+                "Show active service contracts and subscriptions with renewal alerts. "
+                "Use after get_subscriptions."
+            ),
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string", "maxLength": 80},
+                    "entries": {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 20,
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "subscription_id": {"type": "string"},
+                                "highlight": {"type": "string", "maxLength": 120, "description": "Key status fact, e.g. 'expires in 45 days'."},
+                            },
+                            "required": ["subscription_id"],
+                            "additionalProperties": False,
+                        },
+                    },
+                    "renewal_alert": {"type": "string", "maxLength": 200, "description": "Summary of subscriptions needing renewal action."},
+                },
+                "required": ["entries"],
                 "additionalProperties": False,
             },
         },

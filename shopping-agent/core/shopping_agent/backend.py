@@ -13,6 +13,8 @@ from abc import ABC, abstractmethod
 from typing import Any
 
 from .types import (
+    ApprovalRequest,
+    Asset,
     Cart,
     CheckoutHandoff,
     Disclosure,
@@ -21,8 +23,11 @@ from .types import (
     Policy,
     Product,
     ProductDetails,
+    Promotion,
+    Quote,
     SearchFilters,
     ShoppingSessionContext,
+    Subscription,
     UserPreferences,
 )
 
@@ -168,3 +173,102 @@ class StorefrontBackend(ABC):
     ) -> list[FulfillmentOption]:
         """The delivery, pickup, and shipping options for up to twenty ids as the model
         wrote them; ids the catalog does not know are skipped."""
+
+    # -- Quotes -------------------------------------------------------------------
+
+    async def get_quotes(self, session: ShoppingSessionContext) -> list[Quote]:
+        """Recent quotes for the account; raise NotOffered when quoting is not enabled."""
+        raise NotOffered
+
+    async def get_quote(self, session: ShoppingSessionContext, quote_id: str) -> Quote | None:
+        """Full detail for one quote by id, or None when not found."""
+        raise NotOffered
+
+    async def create_quote(
+        self, session: ShoppingSessionContext, name: str | None = None, notes: str | None = None
+    ) -> Quote:
+        """Convert the current cart into a draft quote; raise NotOffered when not enabled."""
+        raise NotOffered
+
+    async def submit_quote(self, session: ShoppingSessionContext, quote_id: str) -> Quote:
+        """Submit a draft quote for sales-rep review or approval."""
+        raise NotOffered
+
+    async def convert_quote_to_order(self, session: ShoppingSessionContext, quote_id: str) -> Order:
+        """Place an order from an approved quote."""
+        raise NotOffered
+
+    # -- Approvals ----------------------------------------------------------------
+
+    async def submit_for_approval(
+        self,
+        session: ShoppingSessionContext,
+        subject_type: str,
+        subject_id: str,
+    ) -> ApprovalRequest:
+        """Submit a cart, quote, or order into the configured approval chain."""
+        raise NotOffered
+
+    async def get_approval_status(
+        self, session: ShoppingSessionContext, request_id: str
+    ) -> ApprovalRequest | None:
+        """Current state of an approval request including each step's status."""
+        raise NotOffered
+
+    async def recall_approval_request(
+        self, session: ShoppingSessionContext, request_id: str
+    ) -> ApprovalRequest:
+        """Withdraw a pending approval request."""
+        raise NotOffered
+
+    # -- Assets -------------------------------------------------------------------
+
+    async def get_assets(
+        self,
+        session: ShoppingSessionContext,
+        category: str | None = None,
+        status: str | None = None,
+        query: str | None = None,
+    ) -> list[Asset]:
+        """Installed-base assets for the account, filtered by category or status."""
+        raise NotOffered
+
+    async def get_asset_details(
+        self, session: ShoppingSessionContext, asset_id: str
+    ) -> Asset | None:
+        """Full detail for one asset by id, serial number, or service tag."""
+        raise NotOffered
+
+    # -- Promotions ---------------------------------------------------------------
+
+    async def get_promotions(
+        self, session: ShoppingSessionContext, category: str | None = None
+    ) -> list[Promotion]:
+        """Available promotions and volume discounts for this account and category."""
+        raise NotOffered
+
+    async def apply_promotion(
+        self, session: ShoppingSessionContext, promotion_id: str | None = None, code: str | None = None
+    ) -> Cart:
+        """Apply a promotion by id or code to the current cart; returns the updated cart."""
+        raise NotOffered
+
+    # -- Subscriptions ------------------------------------------------------------
+
+    async def get_subscriptions(
+        self, session: ShoppingSessionContext, status: str | None = None
+    ) -> list[Subscription]:
+        """Active service contracts and subscriptions for the account."""
+        raise NotOffered
+
+    async def get_subscription_details(
+        self, session: ShoppingSessionContext, subscription_id: str
+    ) -> Subscription | None:
+        """Full detail for one subscription."""
+        raise NotOffered
+
+    async def renew_subscription(
+        self, session: ShoppingSessionContext, subscription_id: str
+    ) -> Quote | Order:
+        """Initiate a renewal for a subscription; returns the resulting quote or order."""
+        raise NotOffered

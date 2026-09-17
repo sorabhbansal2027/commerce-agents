@@ -155,6 +155,134 @@ class Policy(BaseModel):
     content: str
 
 
+# ── Quote ────────────────────────────────────────────────────────────────────
+
+class QuoteStatus(StrEnum):
+    DRAFT = "draft"
+    SUBMITTED = "submitted"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    EXPIRED = "expired"
+    ORDERED = "ordered"
+
+
+class QuoteItem(BaseModel):
+    product_id: str
+    title: str
+    quantity: int = Field(ge=1)
+    unit_price: float
+    negotiated_price: float | None = None
+
+    @property
+    def line_total(self) -> float:
+        return round((self.negotiated_price or self.unit_price) * self.quantity, 2)
+
+
+class Quote(BaseModel):
+    quote_id: str
+    name: str | None = None
+    status: QuoteStatus
+    items: list[QuoteItem] = Field(default_factory=list)
+    currency: str = "USD"
+    subtotal: float
+    expiry_date: datetime | None = None
+    created_at: datetime
+    notes: str | None = None
+    order_id: str | None = None  # set when status == ordered
+
+
+# ── Approval ─────────────────────────────────────────────────────────────────
+
+class ApprovalStatus(StrEnum):
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    RECALLED = "recalled"
+
+
+class ApprovalStep(BaseModel):
+    step_number: int
+    approver_name: str
+    approver_role: str | None = None
+    status: ApprovalStatus
+    comments: str | None = None
+    acted_at: datetime | None = None
+
+
+class ApprovalRequest(BaseModel):
+    request_id: str
+    subject_type: Literal["cart", "quote", "order"]
+    subject_id: str
+    status: ApprovalStatus
+    steps: list[ApprovalStep] = Field(default_factory=list)
+    submitted_at: datetime
+    total_amount: float
+    currency: str = "USD"
+
+
+# ── Asset ─────────────────────────────────────────────────────────────────────
+
+class AssetStatus(StrEnum):
+    ACTIVE = "active"
+    INACTIVE = "inactive"
+    RETIRED = "retired"
+    IN_SERVICE = "in_service"
+
+
+class Asset(BaseModel):
+    asset_id: str
+    name: str
+    product_id: str | None = None
+    serial_number: str | None = None
+    service_tag: str | None = None
+    status: AssetStatus = AssetStatus.ACTIVE
+    category: str | None = None
+    purchase_date: datetime | None = None
+    warranty_expiry: datetime | None = None
+    location: str | None = None
+    assigned_to: str | None = None
+
+
+# ── Promotion ─────────────────────────────────────────────────────────────────
+
+class Promotion(BaseModel):
+    promotion_id: str
+    name: str
+    description: str
+    discount_type: Literal["percentage", "fixed", "free_item"]
+    discount_value: float
+    min_order_amount: float | None = None
+    applicable_categories: list[str] = Field(default_factory=list)
+    code: str | None = None
+    expiry_date: datetime | None = None
+    auto_applied: bool = False
+
+
+# ── Subscription ─────────────────────────────────────────────────────────────
+
+class SubscriptionStatus(StrEnum):
+    ACTIVE = "active"
+    EXPIRING_SOON = "expiring_soon"
+    EXPIRED = "expired"
+    CANCELLED = "cancelled"
+    PENDING_RENEWAL = "pending_renewal"
+
+
+class Subscription(BaseModel):
+    subscription_id: str
+    name: str
+    product_id: str | None = None
+    asset_id: str | None = None
+    status: SubscriptionStatus
+    start_date: datetime
+    end_date: datetime
+    renewal_date: datetime | None = None
+    quantity: int = 1
+    annual_value: float | None = None
+    currency: str = "USD"
+    auto_renew: bool = False
+
+
 class DisclosureRow(BaseModel):
     label: str
     value: str

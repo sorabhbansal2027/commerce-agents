@@ -49,7 +49,30 @@ from merchant_agent import (
     PromotionDraft,
     StagedChange,
 )
-from shopping_agent import Cart, Order, OrderItem, OrderStatus, Policy, Product, ProductDetails, SearchFilters, ShoppingSessionContext, UserPreferences
+from shopping_agent import (
+    ApprovalRequest,
+    ApprovalStatus,
+    ApprovalStep,
+    Asset,
+    AssetStatus,
+    Cart,
+    NotOffered,
+    Order,
+    OrderItem,
+    OrderStatus,
+    Policy,
+    Product,
+    ProductDetails,
+    Promotion,
+    Quote,
+    QuoteItem,
+    QuoteStatus,
+    SearchFilters,
+    ShoppingSessionContext,
+    Subscription,
+    SubscriptionStatus,
+    UserPreferences,
+)
 
 DATA_DIR = Path(__file__).parent.parent  # examples/salesforce/
 STORE_NAME = "Salesforce"
@@ -236,6 +259,115 @@ def _since_ts(period: str | None) -> str:
         return f"{period}T00:00:00.000Z"
     # Already a full ISO timestamp
     return period
+
+
+# ---------------------------------------------------------------------------
+# Type-mapping helpers for new capabilities
+# ---------------------------------------------------------------------------
+
+def _parse_dt(val: str | None) -> datetime | None:
+    if not val:
+        return None
+    try:
+        return datetime.fromisoformat(val.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def _row_to_quote(row: dict[str, Any]) -> Quote:
+    status_map = {
+        "Draft": QuoteStatus.DRAFT,
+        "Needs Review": QuoteStatus.SUBMITTED,
+        "In Review": QuoteStatus.SUBMITTED,
+        "Approved": QuoteStatus.APPROVED,
+        "Rejected": QuoteStatus.REJECTED,
+        "Presented": QuoteStatus.SUBMITTED,
+        "Accepted": QuoteStatus.APPROVED,
+        "Denied": QuoteStatus.REJECTED,
+        "Ordered": QuoteStatus.ORDERED,
+    }
+    return Quote(
+        quote_id=row["Id"],
+        name=row.get("Name"),
+        status=status_map.get(row.get("Status", ""), QuoteStatus.DRAFT),
+        subtotal=float(row.get("Subtotal") or 0),
+        expiry_date=_parse_dt(row.get("ExpirationDate")),
+        created_at=_parse_dt(row.get("CreatedDate")) or datetime.now(UTC),
+        notes=row.get("Description"),
+    )
+
+
+def _map_approval_status(sf_status: str) -> ApprovalStatus:
+    return {
+        "Pending": ApprovalStatus.PENDING,
+        "Approved": ApprovalStatus.APPROVED,
+        "Rejected": ApprovalStatus.REJECTED,
+        "Recalled": ApprovalStatus.RECALLED,
+        "Removed": ApprovalStatus.RECALLED,
+    }.get(sf_status, ApprovalStatus.PENDING)
+
+
+def _row_to_asset(row: dict[str, Any]) -> Asset:
+    status_map = {
+        "Purchased": AssetStatus.ACTIVE,
+        "Shipped": AssetStatus.ACTIVE,
+        "Installed": AssetStatus.ACTIVE,
+        "Registered": AssetStatus.ACTIVE,
+        "Obsolete": AssetStatus.RETIRED,
+    }
+    return Asset(
+        asset_id=row["Id"],
+        name=row.get("Name", "Unknown"),
+        product_id=row.get("Product2Id"),
+        serial_number=row.get("SerialNumber"),
+        status=status_map.get(row.get("Status", ""), AssetStatus.ACTIVE),
+        purchase_date=_parse_dt(row.get("InstallDate")),
+        warranty_expiry=_parse_dt(row.get("UsageEndDate")),
+        assigned_to=(row.get("Contact") or {}).get("Name"),
+    )
+
+
+def _asset_status_to_sf(status: str) -> str:
+    return {
+        "active": "Installed",
+        "inactive": "Purchased",
+        "retired": "Obsolete",
+        "in_service": "Registered",
+    }.get(status, "Installed")
+
+
+def _row_to_promotion(row: dict[str, Any]) -> Promotion:
+    return Promotion(
+        promotion_id=row["Id"],
+        name=row.get("Name", "Promotion"),
+        description=row.get("Description") or row.get("Name", ""),
+        discount_type="percentage",
+        discount_value=0,
+        expiry_date=_parse_dt(row.get("EndDate")),
+        auto_applied=True,
+    )
+
+
+def _row_to_subscription(row: dict[str, Any], today: Any) -> Subscription:
+    end = _parse_dt(row.get("EndDate"))
+    start = _parse_dt(row.get("StartDate"))
+    status = SubscriptionStatus.ACTIVE
+    if end:
+        delta = (end.date() - today).days
+        if delta < 0:
+            status = SubscriptionStatus.EXPIRED
+        elif delta <= 90:
+            status = SubscriptionStatus.EXPIRING_SOON
+    sf_status = row.get("Status", "")
+    if sf_status == "Cancelled":
+        status = SubscriptionStatus.CANCELLED
+    return Subscription(
+        subscription_id=row["Id"],
+        name=row.get("Name", row.get("ContractNumber", "Service Contract")),
+        status=status,
+        start_date=start or datetime.now(UTC),
+        end_date=end or datetime.now(UTC),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1270,3 +1402,363 @@ class SalesforceOMSBackend(MerchantBackend):
                 "or order revenue since Aug 18 2026."
             ),
         }
+
+    # ------------------------------------------------------------------
+    # Quotes — Salesforce Quote object
+    # ------------------------------------------------------------------
+
+    async def get_quotes(self, session: ShoppingSessionContext) -> list[Quote]:
+        account_id = await self._account_id_for_user(session.user_id)
+        if not account_id:
+            raise NotOffered
+        rows = await self._soql(
+            f"SELECT Id, Name, Status, Subtotal, ExpirationDate, CreatedDate, Description "
+            f"FROM Quote WHERE AccountId = '{account_id}' "
+            f"ORDER BY CreatedDate DESC LIMIT 10"
+        )
+        return [_row_to_quote(r) for r in rows]
+
+    async def get_quote(self, session: ShoppingSessionContext, quote_id: str) -> Quote | None:
+        rows = await self._soql(
+            f"SELECT Id, Name, Status, Subtotal, ExpirationDate, CreatedDate, Description "
+            f"FROM Quote WHERE Id = '{quote_id}' LIMIT 1"
+        )
+        if not rows:
+            return None
+        quote = _row_to_quote(rows[0])
+        # fetch line items
+        lines = await self._soql(
+            f"SELECT Id, Product2Id, Product2.Name, Quantity, UnitPrice, TotalPrice "
+            f"FROM QuoteLineItem WHERE QuoteId = '{quote_id}'"
+        )
+        quote.items = [
+            QuoteItem(
+                product_id=li.get("Product2Id", ""),
+                title=(li.get("Product2") or {}).get("Name", "Unknown"),
+                quantity=int(li.get("Quantity") or 1),
+                unit_price=float(li.get("UnitPrice") or 0),
+            )
+            for li in lines
+        ]
+        return quote
+
+    async def create_quote(
+        self, session: ShoppingSessionContext, name: str | None = None, notes: str | None = None
+    ) -> Quote:
+        account_id = await self._account_id_for_user(session.user_id)
+        if not account_id:
+            raise NotOffered
+        cart = await self.get_cart(session)
+        if not cart.items:
+            raise NotOffered
+        headers = await self._token_headers()
+        payload: dict[str, Any] = {
+            "AccountId": account_id,
+            "Name": name or f"Quote {datetime.now(UTC).strftime('%Y-%m-%d')}",
+            "Status": "Draft",
+            "Subtotal": cart.subtotal,
+        }
+        if notes:
+            payload["Description"] = notes
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.post(
+                f"{self._base}/services/data/v62.0/sobjects/Quote",
+                headers={**headers, "Content-Type": "application/json"},
+                json=payload,
+            )
+            resp.raise_for_status()
+            quote_id = resp.json()["id"]
+            # Create QuoteLineItems
+            for item in cart.items:
+                await client.post(
+                    f"{self._base}/services/data/v62.0/sobjects/QuoteLineItem",
+                    headers={**headers, "Content-Type": "application/json"},
+                    json={
+                        "QuoteId": quote_id,
+                        "Product2Id": item.product_id,
+                        "Quantity": item.quantity,
+                        "UnitPrice": item.price,
+                    },
+                )
+        quote = await self.get_quote(session, quote_id)
+        return quote or Quote(
+            quote_id=quote_id,
+            status=QuoteStatus.DRAFT,
+            subtotal=cart.subtotal,
+            created_at=datetime.now(UTC),
+        )
+
+    async def submit_quote(self, session: ShoppingSessionContext, quote_id: str) -> Quote:
+        headers = await self._token_headers()
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.patch(
+                f"{self._base}/services/data/v62.0/sobjects/Quote/{quote_id}",
+                headers={**headers, "Content-Type": "application/json"},
+                json={"Status": "Needs Review"},
+            )
+            resp.raise_for_status()
+        quote = await self.get_quote(session, quote_id)
+        return quote or Quote(
+            quote_id=quote_id,
+            status=QuoteStatus.SUBMITTED,
+            subtotal=0,
+            created_at=datetime.now(UTC),
+        )
+
+    # ------------------------------------------------------------------
+    # Approvals — Salesforce Process Approvals API
+    # ------------------------------------------------------------------
+
+    async def submit_for_approval(
+        self,
+        session: ShoppingSessionContext,
+        subject_type: str,
+        subject_id: str,
+    ) -> ApprovalRequest:
+        headers = await self._token_headers()
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.post(
+                f"{self._base}/services/data/v62.0/process/approvals/",
+                headers={**headers, "Content-Type": "application/json"},
+                json={
+                    "requests": [{
+                        "actionType": "Submit",
+                        "contextId": subject_id,
+                        "comments": f"Submitted via shopping agent ({subject_type})",
+                    }]
+                },
+            )
+            resp.raise_for_status()
+            result = resp.json()
+        instance_id = result[0].get("instanceId", subject_id) if result else subject_id
+        return ApprovalRequest(
+            request_id=instance_id,
+            subject_type=subject_type,  # type: ignore[arg-type]
+            subject_id=subject_id,
+            status=ApprovalStatus.PENDING,
+            steps=[],
+            submitted_at=datetime.now(UTC),
+            total_amount=0,
+        )
+
+    async def get_approval_status(
+        self, session: ShoppingSessionContext, request_id: str
+    ) -> ApprovalRequest | None:
+        rows = await self._soql(
+            f"SELECT Id, Status, TargetObjectId, CreatedDate, "
+            f"(SELECT Id, StepStatus, ActorId, Actor.Name, Comments, CreatedDate "
+            f"FROM StepsAndWorkitems) "
+            f"FROM ProcessInstance WHERE Id = '{request_id}' LIMIT 1"
+        )
+        if not rows:
+            return None
+        row = rows[0]
+        steps = [
+            ApprovalStep(
+                step_number=i + 1,
+                approver_name=(s.get("Actor") or {}).get("Name", "Unknown"),
+                status=_map_approval_status(s.get("StepStatus", "")),
+                comments=s.get("Comments"),
+                acted_at=_parse_dt(s.get("CreatedDate")),
+            )
+            for i, s in enumerate(row.get("StepsAndWorkitems", {}).get("records", []))
+        ]
+        return ApprovalRequest(
+            request_id=row["Id"],
+            subject_type="order",
+            subject_id=row.get("TargetObjectId", ""),
+            status=_map_approval_status(row.get("Status", "")),
+            steps=steps,
+            submitted_at=_parse_dt(row.get("CreatedDate")) or datetime.now(UTC),
+            total_amount=0,
+        )
+
+    async def recall_approval_request(
+        self, session: ShoppingSessionContext, request_id: str
+    ) -> ApprovalRequest:
+        # Get the target object id first
+        rows = await self._soql(
+            f"SELECT TargetObjectId FROM ProcessInstance WHERE Id = '{request_id}' LIMIT 1"
+        )
+        target_id = rows[0]["TargetObjectId"] if rows else request_id
+        headers = await self._token_headers()
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.post(
+                f"{self._base}/services/data/v62.0/process/approvals/",
+                headers={**headers, "Content-Type": "application/json"},
+                json={
+                    "requests": [{
+                        "actionType": "Removed",
+                        "contextId": target_id,
+                        "comments": "Recalled via shopping agent",
+                    }]
+                },
+            )
+            resp.raise_for_status()
+        return ApprovalRequest(
+            request_id=request_id,
+            subject_type="order",
+            subject_id=target_id,
+            status=ApprovalStatus.RECALLED,
+            steps=[],
+            submitted_at=datetime.now(UTC),
+            total_amount=0,
+        )
+
+    # ------------------------------------------------------------------
+    # Assets — Salesforce Asset object (installed base)
+    # ------------------------------------------------------------------
+
+    async def get_assets(
+        self,
+        session: ShoppingSessionContext,
+        category: str | None = None,
+        status: str | None = None,
+        query: str | None = None,
+    ) -> list[Asset]:
+        account_id = await self._account_id_for_user(session.user_id)
+        if not account_id:
+            raise NotOffered
+        where = f"AccountId = '{account_id}'"
+        if status:
+            sf_status = _asset_status_to_sf(status)
+            where += f" AND Status = '{sf_status}'"
+        if query:
+            safe = query.replace("'", "\\'")
+            where += (
+                f" AND (Name LIKE '%{safe}%' OR SerialNumber LIKE '%{safe}%'"
+                f" OR Product2.Name LIKE '%{safe}%')"
+            )
+        rows = await self._soql(
+            f"SELECT Id, Name, Product2Id, Product2.Name, SerialNumber, Status, "
+            f"InstallDate, UsageEndDate, Quantity, ContactId, Contact.Name "
+            f"FROM Asset WHERE {where} ORDER BY Name ASC LIMIT 50"
+        )
+        return [_row_to_asset(r) for r in rows]
+
+    async def get_asset_details(
+        self, session: ShoppingSessionContext, asset_id: str
+    ) -> Asset | None:
+        safe = asset_id.replace("'", "\\'")
+        rows = await self._soql(
+            f"SELECT Id, Name, Product2Id, Product2.Name, SerialNumber, Status, "
+            f"InstallDate, UsageEndDate, Quantity, ContactId, Contact.Name "
+            f"FROM Asset WHERE Id = '{safe}' OR SerialNumber = '{safe}' LIMIT 1"
+        )
+        return _row_to_asset(rows[0]) if rows else None
+
+    # ------------------------------------------------------------------
+    # Promotions — Salesforce Promotion object (B2B Commerce)
+    # ------------------------------------------------------------------
+
+    async def get_promotions(
+        self, session: ShoppingSessionContext, category: str | None = None
+    ) -> list[Promotion]:
+        where = "IsActive = true"
+        if category:
+            safe = category.replace("'", "\\'")
+            where += f" AND Description LIKE '%{safe}%'"
+        rows = await self._soql(
+            f"SELECT Id, Name, Description, StartDate, EndDate "
+            f"FROM Promotion WHERE {where} ORDER BY EndDate ASC LIMIT 20"
+        )
+        return [_row_to_promotion(r) for r in rows]
+
+    async def apply_promotion(
+        self,
+        session: ShoppingSessionContext,
+        promotion_id: str | None = None,
+        code: str | None = None,
+    ) -> Cart:
+        if not promotion_id and not code:
+            raise NotOffered
+        account_id = await self._account_id_for_user(session.user_id)
+        webstore_id = await self._ensure_webstore_id()
+        _buyer_cart_id, _ = await self._get_buyer_cart_id(session.user_id, webstore_id)
+        params: dict[str, str] = {}
+        if account_id:
+            params["effectiveAccountId"] = account_id
+        body = {"couponCode": code} if code else {"promotionId": promotion_id}
+        try:
+            await self._b2b_request(
+                "POST",
+                f"/commerce/webstores/{webstore_id}/carts/{_buyer_cart_id}/coupons",
+                params=params or None,
+                json=body,
+            )
+        except httpx.HTTPStatusError:
+            raise NotOffered
+        return await self.get_cart(session)
+
+    # ------------------------------------------------------------------
+    # Subscriptions — Salesforce ServiceContract object
+    # ------------------------------------------------------------------
+
+    async def get_subscriptions(
+        self, session: ShoppingSessionContext, status: str | None = None
+    ) -> list[Subscription]:
+        account_id = await self._account_id_for_user(session.user_id)
+        if not account_id:
+            raise NotOffered
+        where = f"AccountId = '{account_id}'"
+        today = datetime.now(UTC).date().isoformat()
+        if status == "expiring_soon":
+            ninety = (datetime.now(UTC) + timedelta(days=90)).date().isoformat()
+            where += f" AND EndDate >= {today} AND EndDate <= {ninety}"
+        elif status == "expired":
+            where += f" AND EndDate < {today}"
+        elif status == "active":
+            where += f" AND StartDate <= {today} AND EndDate >= {today}"
+        rows = await self._soql(
+            f"SELECT Id, Name, Status, StartDate, EndDate, ContractNumber "
+            f"FROM ServiceContract WHERE {where} ORDER BY EndDate ASC LIMIT 20"
+        )
+        today_dt = datetime.now(UTC).date()
+        return [_row_to_subscription(r, today_dt) for r in rows]
+
+    async def get_subscription_details(
+        self, session: ShoppingSessionContext, subscription_id: str
+    ) -> Subscription | None:
+        rows = await self._soql(
+            f"SELECT Id, Name, Status, StartDate, EndDate, ContractNumber "
+            f"FROM ServiceContract WHERE Id = '{subscription_id}' LIMIT 1"
+        )
+        if not rows:
+            return None
+        today_dt = datetime.now(UTC).date()
+        return _row_to_subscription(rows[0], today_dt)
+
+    async def renew_subscription(
+        self, session: ShoppingSessionContext, subscription_id: str
+    ) -> Quote:
+        sub = await self.get_subscription_details(session, subscription_id)
+        if not sub:
+            raise NotOffered
+        account_id = await self._account_id_for_user(session.user_id)
+        if not account_id:
+            raise NotOffered
+        headers = await self._token_headers()
+        new_start = sub.end_date.date().isoformat()
+        new_end = (sub.end_date + timedelta(days=365)).date().isoformat()
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.post(
+                f"{self._base}/services/data/v62.0/sobjects/Quote",
+                headers={**headers, "Content-Type": "application/json"},
+                json={
+                    "AccountId": account_id,
+                    "Name": f"Renewal — {sub.name}",
+                    "Status": "Draft",
+                    "Description": f"Renewal of ServiceContract {subscription_id}",
+                    "ValidUntil": new_start,
+                },
+            )
+            resp.raise_for_status()
+            quote_id = resp.json()["id"]
+        return Quote(
+            quote_id=quote_id,
+            name=f"Renewal — {sub.name}",
+            status=QuoteStatus.DRAFT,
+            subtotal=sub.annual_value or 0,
+            created_at=datetime.now(UTC),
+            notes=f"Covers {new_start} to {new_end}",
+        )

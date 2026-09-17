@@ -86,3 +86,57 @@ class PresentDisclosurePayload(PresentationPayload):
 
     product_id: str
     title: str | None = Field(default=None, max_length=80)
+
+
+class PresentQuotePayload(PresentationPayload):
+    """Show a quote summary card with line items, subtotal, status, and expiry."""
+
+    quote_id: str
+    summary: str = Field(max_length=300)
+    next_step: str | None = Field(default=None, max_length=200)
+
+
+class PresentApprovalStatusPayload(PresentationPayload):
+    """Show the approval request with each step's approver, status, and comments."""
+
+    request_id: str
+    summary: str = Field(max_length=300)
+    next_step: str | None = Field(default=None, max_length=200)
+
+
+class AssetEntry(BaseModel):
+    asset_id: str
+    highlight: str | None = Field(default=None, max_length=120)
+
+
+class PresentAssetsPayload(PresentationPayload):
+    """Show installed-base assets as a list with warranty status highlighted."""
+
+    title: str | None = Field(default=None, max_length=80)
+    entries: list[AssetEntry] = Field(min_length=1, max_length=20)
+    warranty_alert: str | None = Field(default=None, max_length=200)
+
+
+class PromotionPick(BaseModel):
+    promotion_id: str
+    callout: str | None = Field(default=None, max_length=120)
+
+
+class PresentPromotionsPayload(PresentationPayload):
+    """Show available promotions and discounts for the account."""
+
+    title: str | None = Field(default=None, max_length=80)
+    picks: list[PromotionPick] = Field(min_length=1, max_length=8)
+
+
+class SubscriptionEntry(BaseModel):
+    subscription_id: str
+    highlight: str | None = Field(default=None, max_length=120)
+
+
+class PresentSubscriptionsPayload(PresentationPayload):
+    """Show active subscriptions and service contracts with renewal alerts."""
+
+    title: str | None = Field(default=None, max_length=80)
+    entries: list[SubscriptionEntry] = Field(min_length=1, max_length=20)
+    renewal_alert: str | None = Field(default=None, max_length=200)

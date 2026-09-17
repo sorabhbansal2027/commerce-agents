@@ -710,45 +710,89 @@ class SalesforceOMSBackend(MerchantBackend):
             log.warning("_get_entitled_product_ids failed: %s", exc)
             return set()
 
-    async def _ensure_products_loaded(self) -> None:
-        if self._products_loaded:
+    async def _load_missing_from_pricebook(
+        self, cache: dict, code_to_id: dict, missing_ids: set[str]
+    ) -> None:
+        """Gap-fill: fetch products by ID from PricebookEntry and add to cache in place."""
+        if not missing_ids:
             return
-        # Always load from PricebookEntry + entitlement filter as the authoritative
-        # source so newly created products (not yet in B2B search index) are included.
-        # B2B Products API only reflects the search index and lags new product creation.
-        records = await self._soql(_PRODUCTS_QUERY)
-        entitled_ids = await self._get_entitled_product_ids()
-        if entitled_ids:
-            records = [r for r in records if r.get("Product2Id") in entitled_ids]
-            log.info("After entitlement filter: %d products", len(records))
-
-        cache: dict[str, Listing] = {}
-        code_to_id: dict[str, str] = {}
+        id_list = ",".join(f"'{pid}'" for pid in missing_ids)
+        records = await self._soql(
+            f"SELECT Product2Id, Product2.Name, Product2.Description, Product2.Family, "
+            f"Product2.ProductCode, UnitPrice FROM PricebookEntry "
+            f"WHERE IsActive = true AND Product2.IsActive = true "
+            f"AND Product2Id IN ({id_list}) LIMIT 200"
+        )
         for r in records:
             pid = r.get("Product2Id", "")
             if not pid or pid in cache:
                 continue
             p2 = r.get("Product2") or {}
             name = p2.get("Name") or pid
-            family = p2.get("Family") or None
-            desc = p2.get("Description") or None
             code = p2.get("ProductCode") or ""
-            price = float(r.get("UnitPrice") or 0)
             cache[pid] = Listing(
                 listing_id=pid,
                 title=name,
-                price=price,
+                price=float(r.get("UnitPrice") or 0),
                 currency="USD",
                 stock=0,
-                category=family,
+                category=p2.get("Family") or None,
                 status="active",
-                short_description=desc,
-                content_quality="good" if desc else "needs_work",
+                short_description=p2.get("Description") or None,
+                content_quality="good" if p2.get("Description") else "needs_work",
                 image_url=_PRODUCT_IMAGES.get(code),
             )
             if code:
                 code_to_id[code] = pid
-        log.info("Product catalog loaded: %d products from PricebookEntry", len(cache))
+        log.info("Gap-filled %d products not in B2B index", len(missing_ids))
+
+    async def _ensure_products_loaded(self) -> None:
+        if self._products_loaded:
+            return
+        # Primary: B2B Products API (carries Commerce-native pricing and entitlement).
+        # Gap-fill: any entitled product not in the index yet (e.g. just created via
+        # REST API before the next search-index rebuild) is fetched from PricebookEntry.
+        entitled_ids = await self._get_entitled_product_ids()
+        try:
+            webstore_id = await self._ensure_webstore_id()
+            cache, code_to_id = await self._load_products_from_b2b(webstore_id)
+        except Exception:
+            cache, code_to_id = {}, {}
+
+        if cache:
+            # Find entitled products missing from the B2B index and add them.
+            missing = entitled_ids - cache.keys()
+            if missing:
+                log.info("%d entitled products not in B2B index — gap-filling from PricebookEntry", len(missing))
+                await self._load_missing_from_pricebook(cache, code_to_id, missing)
+        else:
+            # B2B API unavailable — load everything from PricebookEntry.
+            log.info("B2B Products API unavailable — loading from PricebookEntry")
+            records = await self._soql(_PRODUCTS_QUERY)
+            if entitled_ids:
+                records = [r for r in records if r.get("Product2Id") in entitled_ids]
+            cache, code_to_id = {}, {}
+            for r in records:
+                pid = r.get("Product2Id", "")
+                if not pid or pid in cache:
+                    continue
+                p2 = r.get("Product2") or {}
+                code = p2.get("ProductCode") or ""
+                cache[pid] = Listing(
+                    listing_id=pid,
+                    title=p2.get("Name") or pid,
+                    price=float(r.get("UnitPrice") or 0),
+                    currency="USD",
+                    stock=0,
+                    category=p2.get("Family") or None,
+                    status="active",
+                    short_description=p2.get("Description") or None,
+                    content_quality="good" if p2.get("Description") else "needs_work",
+                    image_url=_PRODUCT_IMAGES.get(code),
+                )
+                if code:
+                    code_to_id[code] = pid
+        log.info("Product catalog ready: %d products", len(cache))
         self._products_cache = cache
         self._code_to_id = code_to_id
         # Build ProductDetails, grouping variant products into families.

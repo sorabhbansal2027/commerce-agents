@@ -44,6 +44,7 @@ from merchant_agent import (
     MetricPoint,
     MetricSeries,
     OrderIssue,
+    PendingQuoteApproval,
     PriceUpdateItem,
     PricingContext,
     PromotionDraft,
@@ -1090,6 +1091,97 @@ class SalesforceOMSBackend(MerchantBackend):
     ) -> StagedChange:
         return self.ledger.discard(change_id, session.operator, actor_kind)
 
+    # -- Quote approvals -----------------------------------------------------------
+
+    async def get_pending_quote_approvals(
+        self, session: MerchantSessionContext
+    ) -> list[PendingQuoteApproval]:
+        rows = await self._soql(
+            "SELECT Id, ProcessInstance.TargetObjectId, "
+            "ProcessInstance.Status, ProcessInstance.CreatedDate, "
+            "ProcessInstance.CreatedBy.Name, "
+            "ProcessInstance.TargetObject.Name "
+            "FROM ProcessInstanceWorkitem "
+            "WHERE ProcessInstance.Status = 'Pending' "
+            "AND ProcessInstance.TargetObject.Type = 'Quote' "
+            "ORDER BY ProcessInstance.CreatedDate ASC"
+        )
+        if not rows:
+            return []
+
+        quote_ids = list({r.get("ProcessInstance", {}).get("TargetObjectId", "") for r in rows if r.get("ProcessInstance", {}).get("TargetObjectId")})
+        quote_map: dict[str, dict] = {}
+        if quote_ids:
+            in_clause = ", ".join(f"'{qid}'" for qid in quote_ids)
+            q_rows = await self._soql(
+                f"SELECT Id, Name, GrandTotal, Opportunity.Account.Name "
+                f"FROM Quote WHERE Id IN ({in_clause})"
+            )
+            for q in q_rows:
+                quote_map[q["Id"]] = q
+
+        results = []
+        for row in rows:
+            pi = row.get("ProcessInstance") or {}
+            quote_id = pi.get("TargetObjectId", "")
+            quote = quote_map.get(quote_id, {})
+            opp = (quote.get("Opportunity") or {})
+            account_name = (opp.get("Account") or {}).get("Name")
+            results.append(PendingQuoteApproval(
+                workitem_id=row["Id"],
+                quote_id=quote_id,
+                quote_name=quote.get("Name") or pi.get("TargetObject", {}).get("Name", quote_id),
+                account_name=account_name,
+                grand_total=float(quote.get("GrandTotal") or 0),
+                submitted_by=(pi.get("CreatedBy") or {}).get("Name"),
+                submitted_at=_parse_dt(pi.get("CreatedDate")),
+            ))
+        return results
+
+    async def approve_quote(
+        self, session: MerchantSessionContext, workitem_id: str, comments: str = ""
+    ) -> dict:
+        headers = await self._token_headers()
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.post(
+                f"{self._base}/services/data/v62.0/process/approvals/",
+                headers={**headers, "Content-Type": "application/json"},
+                json={"requests": [{
+                    "actionType": "Approve",
+                    "contextId": workitem_id,
+                    "comments": comments or "Approved via merchant agent",
+                }]},
+            )
+            resp.raise_for_status()
+            result = resp.json()
+        if result and not result[0].get("success", True):
+            errors = result[0].get("errors", [])
+            raise RuntimeError(f"Approval failed: {errors}")
+        quote_id = result[0].get("entityId", "") if result else ""
+        return {"success": True, "quote_id": quote_id, "workitem_id": workitem_id}
+
+    async def reject_quote(
+        self, session: MerchantSessionContext, workitem_id: str, comments: str = ""
+    ) -> dict:
+        headers = await self._token_headers()
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.post(
+                f"{self._base}/services/data/v62.0/process/approvals/",
+                headers={**headers, "Content-Type": "application/json"},
+                json={"requests": [{
+                    "actionType": "Reject",
+                    "contextId": workitem_id,
+                    "comments": comments or "Rejected via merchant agent",
+                }]},
+            )
+            resp.raise_for_status()
+            result = resp.json()
+        if result and not result[0].get("success", True):
+            errors = result[0].get("errors", [])
+            raise RuntimeError(f"Rejection failed: {errors}")
+        quote_id = result[0].get("entityId", "") if result else ""
+        return {"success": True, "quote_id": quote_id, "workitem_id": workitem_id}
+
     # ------------------------------------------------------------------
     # DemoStorefront protocol — minimal stubs so build_merchant_router works
     # ------------------------------------------------------------------
@@ -1595,81 +1687,25 @@ class SalesforceOMSBackend(MerchantBackend):
     # Approvals — Salesforce Process Approvals API
     # ------------------------------------------------------------------
 
-    async def convert_quote_to_order(
+    async def load_quote_to_cart(
         self, session: ShoppingSessionContext, quote_id: str
-    ) -> Order:
+    ) -> Cart:
         rows = await self._soql(
-            f"SELECT Id, AccountId, Pricebook2Id, "
-            f"(SELECT Id, PricebookEntryId, Product2Id, Product2.Name, Quantity, UnitPrice "
-            f"FROM QuoteLineItems) "
+            f"SELECT Id, (SELECT Product2Id, Quantity FROM QuoteLineItems) "
             f"FROM Quote WHERE Id = '{quote_id}' LIMIT 1"
         )
         if not rows:
             raise NotOffered
-        q = rows[0]
-        account_id = q.get("AccountId")
-        pricebook_id = q.get("Pricebook2Id") or await self._standard_pricebook_id()
-        lines = (q.get("QuoteLineItems") or {}).get("records", [])
-        headers = await self._token_headers()
-        today = datetime.now(UTC).date().isoformat()
-        async with httpx.AsyncClient(timeout=30) as client:
-            order_payload: dict[str, Any] = {
-                "AccountId": account_id,
-                "Status": "Draft",
-                "EffectiveDate": today,
-            }
-            if pricebook_id:
-                order_payload["Pricebook2Id"] = pricebook_id
-            resp = await client.post(
-                f"{self._base}/services/data/v62.0/sobjects/Order",
-                headers={**headers, "Content-Type": "application/json"},
-                json=order_payload,
-            )
-            resp.raise_for_status()
-            order_id = resp.json()["id"]
-            order_items: list[OrderItem] = []
-            total = 0.0
-            for line in lines:
-                pbe_id = line.get("PricebookEntryId")
-                qty = int(line.get("Quantity") or 1)
-                unit_price = float(line.get("UnitPrice") or 0)
-                product_name = (line.get("Product2") or {}).get("Name", "Product")
-                product_id = line.get("Product2Id") or ""
-                line_payload: dict[str, Any] = {
-                    "OrderId": order_id,
-                    "Quantity": qty,
-                    "UnitPrice": unit_price,
-                }
-                if pbe_id:
-                    line_payload["PricebookEntryId"] = pbe_id
-                resp2 = await client.post(
-                    f"{self._base}/services/data/v62.0/sobjects/OrderItem",
-                    headers={**headers, "Content-Type": "application/json"},
-                    json=line_payload,
-                )
-                if resp2.is_success:
-                    order_items.append(OrderItem(
-                        product_id=product_id,
-                        title=product_name,
-                        quantity=qty,
-                        price=unit_price,
-                    ))
-                    total += qty * unit_price
-                else:
-                    log.warning("OrderItem create failed: %s", resp2.text)
-            # Mark the quote as Accepted
-            await client.patch(
-                f"{self._base}/services/data/v62.0/sobjects/Quote/{quote_id}",
-                headers={**headers, "Content-Type": "application/json"},
-                json={"Status": "Accepted"},
-            )
-        return Order(
-            order_id=order_id,
-            status=OrderStatus.PROCESSING,
-            placed_at=datetime.now(UTC),
-            items=order_items,
-            total=total,
-        )
+        lines = (rows[0].get("QuoteLineItems") or {}).get("records", [])
+        if not lines:
+            raise NotOffered
+        cart: Cart | None = None
+        for line in lines:
+            product_id = line.get("Product2Id", "")
+            qty = int(line.get("Quantity") or 1)
+            if product_id:
+                cart = await self.add_to_cart(session, product_id, qty)
+        return cart or await self.get_cart(session)
 
     async def submit_for_approval(
         self,

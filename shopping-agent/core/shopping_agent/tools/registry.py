@@ -398,15 +398,16 @@ def build_tools(
             },
         },
         {
-            "name": "convert_quote_to_order",
+            "name": "load_quote_to_cart",
             "description": (
-                "Place an order from an approved quote. Confirm once before calling — "
-                "this places the order and cannot be undone here."
+                "Load all line items from an approved quote into the buyer's cart, "
+                "ready for checkout. Use when the buyer wants to proceed to purchase "
+                "after a quote is approved."
             ),
             "input_schema": {
                 "type": "object",
                 "properties": {
-                    "quote_id": {"type": "string", "description": "Approved quote id to convert."},
+                    "quote_id": {"type": "string", "description": "Approved quote id to load into cart."},
                 },
                 "required": ["quote_id"],
                 "additionalProperties": False,

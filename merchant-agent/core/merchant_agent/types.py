@@ -437,6 +437,20 @@ class StagedChange(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Quote approvals
+# ---------------------------------------------------------------------------
+
+
+class PendingQuoteApproval(BaseModel):
+    workitem_id: str
+    quote_id: str
+    quote_name: str
+    account_name: str | None = None
+    grand_total: float = 0.0
+    submitted_by: str | None = None
+    submitted_at: datetime | None = None
+
+
 # Session
 # ---------------------------------------------------------------------------
 

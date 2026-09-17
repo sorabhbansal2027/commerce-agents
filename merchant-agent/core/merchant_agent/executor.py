@@ -152,6 +152,9 @@ class MerchantToolExecutor(BaseToolExecutor):
             "get_inventory_alerts": self._get_inventory_alerts,
             "get_order_issues": self._get_order_issues,
             "get_pricing_context": self._get_pricing_context,
+            "get_pending_quote_approvals": self._get_pending_quote_approvals,
+            "approve_quote": self._approve_quote,
+            "reject_quote": self._reject_quote,
             "get_pending_changes": self._get_pending_changes,
             "stage_listing_update": self._stage_listing_update,
             "stage_price_update": self._stage_price_update,
@@ -224,6 +227,23 @@ class MerchantToolExecutor(BaseToolExecutor):
         if context is None:
             return ToolOutcome.error(f"No pricing context for listing {listing_id}.")
         return self._fenced(pricing_context_payload(context))
+
+    async def _get_pending_quote_approvals(self, _: dict[str, Any]) -> ToolOutcome:
+        items = await self._backend.get_pending_quote_approvals(self._session)
+        payload = [item.model_dump() for item in items]
+        return self._fenced(payload or {"note": "No quotes are pending approval."})
+
+    async def _approve_quote(self, tool_input: dict[str, Any]) -> ToolOutcome:
+        workitem_id = str(tool_input.get("workitem_id", ""))
+        comments = str(tool_input.get("comments", ""))
+        result = await self._backend.approve_quote(self._session, workitem_id, comments)
+        return self._fenced(result)
+
+    async def _reject_quote(self, tool_input: dict[str, Any]) -> ToolOutcome:
+        workitem_id = str(tool_input.get("workitem_id", ""))
+        comments = str(tool_input.get("comments", ""))
+        result = await self._backend.reject_quote(self._session, workitem_id, comments)
+        return self._fenced(result)
 
     async def _get_pending_changes(self, _: dict[str, Any]) -> ToolOutcome:
         pending = await self._backend.get_pending_changes(self._session)

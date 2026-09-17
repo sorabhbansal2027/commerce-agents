@@ -200,8 +200,8 @@ class StorefrontBackend(ABC):
         """Update the quantity of a line item in a draft quote."""
         raise NotOffered
 
-    async def convert_quote_to_order(self, session: ShoppingSessionContext, quote_id: str) -> Order:
-        """Place an order from an approved quote."""
+    async def load_quote_to_cart(self, session: ShoppingSessionContext, quote_id: str) -> Cart:
+        """Load all line items from an approved quote into the buyer's cart."""
         raise NotOffered
 
     # -- Approvals ----------------------------------------------------------------

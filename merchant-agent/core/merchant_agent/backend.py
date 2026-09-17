@@ -27,6 +27,7 @@ from .types import (
     MerchantSessionContext,
     MetricSeries,
     OrderIssue,
+    PendingQuoteApproval,
     PriceUpdateItem,
     PricingContext,
     PromotionDraft,
@@ -223,3 +224,31 @@ class MerchantBackend(ABC):
         entries for what the store's systems cannot supply to this deployment; the
         assistant states the one that bears on an answer instead of reporting a zero."""
         return None
+
+    # -- Quote approvals -----------------------------------------------------------
+
+    async def get_pending_quote_approvals(
+        self, session: MerchantSessionContext
+    ) -> list[PendingQuoteApproval]:
+        """Quotes currently waiting for merchant approval.  Returns an empty list when
+        none are pending; raises :class:`~commerce_common.errors.NotOffered` when the
+        backend does not support quote workflows."""
+        from commerce_common.errors import NotOffered
+        raise NotOffered
+
+    async def approve_quote(
+        self, session: MerchantSessionContext, workitem_id: str, comments: str = ""
+    ) -> dict[str, Any]:
+        """Approve a pending quote approval request identified by *workitem_id* (from
+        :meth:`get_pending_quote_approvals`).  Returns a dict with at least
+        ``{"success": True, "quote_id": ...}``."""
+        from commerce_common.errors import NotOffered
+        raise NotOffered
+
+    async def reject_quote(
+        self, session: MerchantSessionContext, workitem_id: str, comments: str = ""
+    ) -> dict[str, Any]:
+        """Reject a pending quote approval request.  Returns a dict with at least
+        ``{"success": True, "quote_id": ...}``."""
+        from commerce_common.errors import NotOffered
+        raise NotOffered

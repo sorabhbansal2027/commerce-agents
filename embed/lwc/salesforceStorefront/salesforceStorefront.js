@@ -501,8 +501,8 @@ export default class SalesforceStorefront extends LightningElement {
                 base.isDraft       = st === 'draft';
                 base.isApproved    = st === 'approved';
                 base.canAct        = base.isDraft || base.isApproved;
-                base.quoteActionLabel = base.isDraft ? 'Submit for Review' : 'Convert to Order';
-                base.quoteActionKey   = base.isDraft ? 'submit' : 'convert';
+                base.quoteActionLabel = base.isDraft ? 'Submit for Review' : 'Add to Cart';
+                base.quoteActionKey   = base.isDraft ? 'submit' : 'cart';
                 base.quoteLineItems = (q.items || []).map((item, qi) => {
                     const imgUrl = resolveImageUrl(item.image_url, apiBase);
                     const qty    = item.quantity || 1;
@@ -671,7 +671,7 @@ export default class SalesforceStorefront extends LightningElement {
         if (action === 'submit') {
             this._submit(`Submit quote ${quoteName} for review. [quote_id: ${quoteId}]`);
         } else {
-            this._submit(`Convert quote ${quoteName} to an order. [quote_id: ${quoteId}]`);
+            this._submit(`Load all items from approved quote ${quoteName} into my cart. [quote_id: ${quoteId}]`);
         }
     }
 

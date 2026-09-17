@@ -271,7 +271,61 @@ def build_tools(
                 "additionalProperties": False,
             },
         },
-        # -- Approval queue ----------------------------------------------------------
+        # -- Quote approval queue ----------------------------------------------------
+        {
+            "name": "get_pending_quote_approvals",
+            "description": (
+                "Quotes submitted by buyers that are waiting for merchant approval. "
+                "Returns workitem_id, quote details, and submitter for each pending item. "
+                "Use workitem_id to approve or reject."
+            ),
+            "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
+        },
+        {
+            "name": "approve_quote",
+            "description": (
+                "Approve a quote in the approval queue. Requires workitem_id from "
+                "get_pending_quote_approvals. Sets the quote status to Approved."
+            ),
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "workitem_id": {
+                        "type": "string",
+                        "description": "workitem_id from get_pending_quote_approvals.",
+                    },
+                    "comments": {
+                        "type": "string",
+                        "description": "Optional approval comments visible to the buyer.",
+                    },
+                },
+                "required": ["workitem_id"],
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "reject_quote",
+            "description": (
+                "Reject a quote in the approval queue. Requires workitem_id from "
+                "get_pending_quote_approvals. Sets the quote status to Rejected."
+            ),
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "workitem_id": {
+                        "type": "string",
+                        "description": "workitem_id from get_pending_quote_approvals.",
+                    },
+                    "comments": {
+                        "type": "string",
+                        "description": "Reason for rejection, shown to the buyer.",
+                    },
+                },
+                "required": ["workitem_id"],
+                "additionalProperties": False,
+            },
+        },
+        # -- Staged-change approval queue --------------------------------------------
         {
             "name": "get_pending_changes",
             "description": (

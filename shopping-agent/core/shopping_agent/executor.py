@@ -137,7 +137,7 @@ class ShoppingToolExecutor(BaseToolExecutor):
             "create_quote": self._create_quote,
             "submit_quote": self._submit_quote,
             "update_quote_item": self._update_quote_item,
-            "convert_quote_to_order": self._convert_quote_to_order,
+            "load_quote_to_cart": self._load_quote_to_cart,
             # Approvals
             "submit_for_approval": self._submit_for_approval,
             "get_approval_status": self._get_approval_status,
@@ -280,11 +280,10 @@ class ShoppingToolExecutor(BaseToolExecutor):
         quote = await self._backend.update_quote_item(self._session, quote_id, line_item_id, quantity)
         return self._fenced(quote_payload(quote))
 
-    async def _convert_quote_to_order(self, tool_input: dict[str, Any]) -> ToolOutcome:
+    async def _load_quote_to_cart(self, tool_input: dict[str, Any]) -> ToolOutcome:
         quote_id = str(tool_input.get("quote_id", ""))
-        order = await self._backend.convert_quote_to_order(self._session, quote_id)
-        remember_order_items(self._state, [order])
-        return self._fenced(order_payload(order))
+        cart = await self._backend.load_quote_to_cart(self._session, quote_id)
+        return self._fenced(cart_payload(cart))
 
     # -- approvals --------------------------------------------------------------------
 

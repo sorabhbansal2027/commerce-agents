@@ -733,7 +733,13 @@ export default class SalesforceStorefront extends LightningElement {
         if (this._abortCtrl) fetchOpts.signal = this._abortCtrl.signal;
 
         try {
-            const res = await fetch(this._url('chat'), fetchOpts);
+            let res = await fetch(this._url('chat'), fetchOpts);
+            if (res.status === 401) {
+                // Session expired (e.g. server restarted) — reinitialize and retry once
+                await this._createSession();
+                fetchOpts.headers = this._hdrs(this._sessionHdrs());
+                res = await fetch(this._url('chat'), fetchOpts);
+            }
             if (!res.ok) throw new Error(`Chat ${res.status}`);
             this._removeSkeleton();
             await this._readStream(res.body);

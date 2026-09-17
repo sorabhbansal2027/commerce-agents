@@ -111,6 +111,9 @@ _PRODUCT_IMAGES: dict[str, str] = {
     "ITH-ACC-004": f"{_IMAGE_BASE}/products/ITH-webcam.jpg",
     "ITH-ACC-005": f"{_IMAGE_BASE}/products/ITH-ups.jpg",
     "ITH-ACC-006": f"{_IMAGE_BASE}/products/ITH-kvm.jpg",
+    "ITH-WS-DEV-I7": f"{_IMAGE_BASE}/products/ITH-workstation.jpg",
+    "ITH-WS-DEV-I9": f"{_IMAGE_BASE}/products/ITH-workstation.jpg",
+    "ITH-WS-DEV-XEO": f"{_IMAGE_BASE}/products/ITH-workstation.jpg",
 }
 
 # ---------------------------------------------------------------------------
@@ -189,8 +192,16 @@ _SEARCH_SYNONYMS: dict[str, list[str]] = {
     "kvm": ["kvm"],
     "laptop": ["laptop", "probook"],
     "laptops": ["laptop", "probook"],
-    "workstation": ["workstation", "probook"],
-    "workstations": ["workstation", "probook"],
+    "workstation": ["workstation", "probook", "prostation"],
+    "workstations": ["workstation", "probook", "prostation"],
+    "prostation": ["prostation"],
+    "dev workstation": ["prostation", "workstation"],
+    "developer workstation": ["prostation", "workstation"],
+    "ml workstation": ["prostation", "workstation"],
+    "ai workstation": ["prostation", "workstation", "xeon"],
+    "i7": ["i7", "core i7"],
+    "i9": ["i9", "core i9"],
+    "xeon": ["xeon"],
 }
 
 # Active products with their standard pricebook price, ordered by name.

@@ -1397,18 +1397,23 @@ class SalesforceOMSBackend(MerchantBackend):
         NOT_FOUND for recently created products. Direct CartItem SObject insert
         bypasses that check while still setting correct pricing from PricebookEntry.
         """
-        # Get CartDeliveryGroup (required field on CartItem)
+        # Get CartDeliveryGroup and the cart's Pricebook2Id in one query
         cdg_rows = await self._soql(
-            f"SELECT Id FROM CartDeliveryGroup WHERE CartId = '{cart_id}' LIMIT 1"
+            f"SELECT Id, Cart.Pricebook2Id FROM CartDeliveryGroup "
+            f"WHERE CartId = '{cart_id}' LIMIT 1"
         )
         if not cdg_rows:
             raise ValueError("No CartDeliveryGroup found for cart — cannot add item directly")
         cdg_id = cdg_rows[0]["Id"]
+        cart_pb_id: str | None = (cdg_rows[0].get("Cart") or {}).get("Pricebook2Id")
 
-        # Fetch price and name from PricebookEntry
+        # Fetch price and name from the cart's pricebook; fall back to any active entry if
+        # the cart has no pricebook set (e.g., Standard Pricebook entries at $0 are skipped).
+        pb_filter = f"AND Pricebook2Id = '{cart_pb_id}' " if cart_pb_id else "AND UnitPrice > 0 "
         pbe_rows = await self._soql(
             f"SELECT Product2.Name, UnitPrice FROM PricebookEntry "
-            f"WHERE Product2Id = '{product_id}' AND IsActive = true LIMIT 1"
+            f"WHERE Product2Id = '{product_id}' AND IsActive = true "
+            f"{pb_filter}ORDER BY UnitPrice DESC LIMIT 1"
         )
         if not pbe_rows:
             raise ValueError(f"No active PricebookEntry for product {product_id}")

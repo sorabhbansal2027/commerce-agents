@@ -789,7 +789,8 @@ class SalesforceOMSBackend(MerchantBackend):
         limit: int = 8,
     ) -> list[Product]:
         await self._ensure_products_loaded()
-        results = list(self.products.values())
+        # Variants are accessed through their family; exclude them from search results.
+        results = [p for p in self.products.values() if not p.variant_of]
         if query:
             q = query.lower().strip()
             if q in _SEARCH_SYNONYMS:

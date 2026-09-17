@@ -30,12 +30,14 @@ def _filters_schema() -> dict[str, Any]:
         "description": "Constraints the customer stated; leave guesses in the query.",
         "properties": {
             "category": {"type": "string", "description": "Catalog category name."},
+            "brand": {"type": "string", "description": "Brand or manufacturer name."},
             "min_price": {"type": "number", "description": "Lowest acceptable price."},
             "max_price": {"type": "number", "description": "Price ceiling the customer stated."},
             "min_rating": {"type": "number", "description": "Lowest acceptable average rating."},
+            "in_stock_only": {"type": "boolean", "description": "When true, exclude out-of-stock products."},
             "attributes": {
                 "type": "object",
-                "description": 'Attribute or option filters as key/value pairs, e.g. {"material": "wool"}.',
+                "description": 'Attribute or option filters as key/value pairs, e.g. {"ram": "16GB"}.',
                 "additionalProperties": {"type": "string"},
             },
             "sort": {
@@ -141,6 +143,15 @@ def build_tools(
                 "required": ["product_id"],
                 "additionalProperties": False,
             },
+        },
+        {
+            "name": "get_product_categories",
+            "description": (
+                "List all available product categories in the catalog. "
+                "Use when the buyer wants to browse by category, asks what categories exist, "
+                "or before filtering a search by category."
+            ),
+            "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
         },
         {
             "name": "get_cart",
@@ -394,6 +405,57 @@ def build_tools(
                     "quantity": {"type": "integer", "minimum": 1, "description": "New quantity."},
                 },
                 "required": ["quote_id", "line_item_id", "quantity"],
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "add_product_to_quote",
+            "description": (
+                "Add a product directly to an existing draft quote without going through the cart. "
+                "Use when the buyer wants to add items to a quote they are still building."
+            ),
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "quote_id": {"type": "string", "description": "Draft quote id."},
+                    "product_id": _product_id("Product to add."),
+                    "quantity": {"type": "integer", "minimum": 1, "description": "Number of units."},
+                },
+                "required": ["quote_id", "product_id", "quantity"],
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "remove_quote_item",
+            "description": (
+                "Remove a line item from a draft quote. "
+                "Use when the buyer wants to delete a product from an existing quote."
+            ),
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "quote_id": {"type": "string", "description": "Draft quote id."},
+                    "line_item_id": {"type": "string", "description": "Line item id from the quote's items list."},
+                },
+                "required": ["quote_id", "line_item_id"],
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "update_quote",
+            "description": (
+                "Update the name, notes, or expiry date of a draft quote. "
+                "Use when the buyer wants to rename a quote or add/change notes before submitting."
+            ),
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "quote_id": {"type": "string", "description": "Draft quote id."},
+                    "name": {"type": "string", "maxLength": 120, "description": "New quote name."},
+                    "notes": {"type": "string", "maxLength": 500, "description": "Updated notes."},
+                    "expiry_date": {"type": "string", "description": "Expiry date in YYYY-MM-DD format."},
+                },
+                "required": ["quote_id"],
                 "additionalProperties": False,
             },
         },

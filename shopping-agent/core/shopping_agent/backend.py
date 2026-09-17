@@ -87,6 +87,10 @@ class StorefrontBackend(ABC):
         field it inherits), and the record and its variants are what enter the session's
         provenance. A variant's id returns that variant."""
 
+    async def get_product_categories(self, session: ShoppingSessionContext) -> list[str]:
+        """List all distinct product categories available in the catalog."""
+        raise NotOffered
+
     # -- Cart ---------------------------------------------------------------------
 
     @abstractmethod
@@ -198,6 +202,29 @@ class StorefrontBackend(ABC):
         self, session: ShoppingSessionContext, quote_id: str, line_item_id: str, quantity: int
     ) -> Quote:
         """Update the quantity of a line item in a draft quote."""
+        raise NotOffered
+
+    async def add_product_to_quote(
+        self, session: ShoppingSessionContext, quote_id: str, product_id: str, quantity: int
+    ) -> Quote:
+        """Add a product to an existing draft quote."""
+        raise NotOffered
+
+    async def remove_quote_item(
+        self, session: ShoppingSessionContext, quote_id: str, line_item_id: str
+    ) -> Quote:
+        """Remove a line item from a draft quote."""
+        raise NotOffered
+
+    async def update_quote(
+        self,
+        session: ShoppingSessionContext,
+        quote_id: str,
+        name: str | None = None,
+        notes: str | None = None,
+        expiry_date: str | None = None,
+    ) -> Quote:
+        """Update the name, notes, or expiry date of a draft quote."""
         raise NotOffered
 
     async def load_quote_to_cart(self, session: ShoppingSessionContext, quote_id: str) -> Cart:

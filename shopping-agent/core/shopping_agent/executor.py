@@ -122,6 +122,7 @@ class ShoppingToolExecutor(BaseToolExecutor):
         return {
             "search_products": self._search_products,
             "get_product_details": self._get_product_details,
+            "get_product_categories": self._get_product_categories,
             "get_cart": self._get_cart,
             "add_to_cart": self._add_to_cart,
             "update_cart_item": self._update_cart_item,
@@ -137,6 +138,9 @@ class ShoppingToolExecutor(BaseToolExecutor):
             "create_quote": self._create_quote,
             "submit_quote": self._submit_quote,
             "update_quote_item": self._update_quote_item,
+            "add_product_to_quote": self._add_product_to_quote,
+            "remove_quote_item": self._remove_quote_item,
+            "update_quote": self._update_quote,
             "load_quote_to_cart": self._load_quote_to_cart,
             # Approvals
             "submit_for_approval": self._submit_for_approval,
@@ -176,6 +180,10 @@ class ShoppingToolExecutor(BaseToolExecutor):
         # The variants enter provenance with the record, so the cart takes their ids.
         self._state.remember_products([details, *details.variants])
         return self._fenced(product_details_payload(details))
+
+    async def _get_product_categories(self, _: dict[str, Any]) -> ToolOutcome:
+        categories = await self._backend.get_product_categories(self._session)
+        return self._fenced({"categories": categories})
 
     # -- cart --------------------------------------------------------------------------
 
@@ -278,6 +286,27 @@ class ShoppingToolExecutor(BaseToolExecutor):
         line_item_id = str(tool_input.get("line_item_id", ""))
         quantity = int(tool_input.get("quantity", 1))
         quote = await self._backend.update_quote_item(self._session, quote_id, line_item_id, quantity)
+        return self._fenced(quote_payload(quote))
+
+    async def _add_product_to_quote(self, tool_input: dict[str, Any]) -> ToolOutcome:
+        quote_id = str(tool_input.get("quote_id", ""))
+        product_id = str(tool_input.get("product_id", ""))
+        quantity = int(tool_input.get("quantity", 1))
+        quote = await self._backend.add_product_to_quote(self._session, quote_id, product_id, quantity)
+        return self._fenced(quote_payload(quote))
+
+    async def _remove_quote_item(self, tool_input: dict[str, Any]) -> ToolOutcome:
+        quote_id = str(tool_input.get("quote_id", ""))
+        line_item_id = str(tool_input.get("line_item_id", ""))
+        quote = await self._backend.remove_quote_item(self._session, quote_id, line_item_id)
+        return self._fenced(quote_payload(quote))
+
+    async def _update_quote(self, tool_input: dict[str, Any]) -> ToolOutcome:
+        quote_id = str(tool_input.get("quote_id", ""))
+        name = tool_input.get("name") or None
+        notes = tool_input.get("notes") or None
+        expiry_date = tool_input.get("expiry_date") or None
+        quote = await self._backend.update_quote(self._session, quote_id, name=name, notes=notes, expiry_date=expiry_date)
         return self._fenced(quote_payload(quote))
 
     async def _load_quote_to_cart(self, tool_input: dict[str, Any]) -> ToolOutcome:

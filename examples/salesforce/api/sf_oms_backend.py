@@ -58,7 +58,6 @@ from shopping_agent import (
     AssetStatus,
     Cart,
     NotOffered,
-    Unavailable,
     Order,
     OrderItem,
     OrderStatus,
@@ -73,6 +72,7 @@ from shopping_agent import (
     ShoppingSessionContext,
     Subscription,
     SubscriptionStatus,
+    Unavailable,
     UserPreferences,
 )
 
@@ -613,10 +613,7 @@ class SalesforceOMSBackend(MerchantBackend):
             ent_ids = {r.get("ProductId", "") for r in ent_rows if r.get("ProductId")}
             # Use the intersection when both sets are non-empty so only products that
             # are both in a catalog category AND entitled appear in agent search.
-            if cat_ids and ent_ids:
-                ids = cat_ids & ent_ids
-            else:
-                ids = cat_ids or ent_ids
+            ids = cat_ids & ent_ids if cat_ids and ent_ids else cat_ids or ent_ids
             log.info(
                 "_get_entitled_product_ids: %d catalog, %d entitled → %d visible",
                 len(cat_ids), len(ent_ids), len(ids),
@@ -711,8 +708,6 @@ class SalesforceOMSBackend(MerchantBackend):
         results = list(self.products.values())
         if query:
             q = query.lower().strip()
-            # Expand: try the whole phrase first, then word-by-word.
-            # Word-level expansion handles "mid-range laptop" → laptop → ProBook products.
             if q in _SEARCH_SYNONYMS:
                 terms: list[str] = _SEARCH_SYNONYMS[q]
             else:
@@ -727,7 +722,7 @@ class SalesforceOMSBackend(MerchantBackend):
 
             def _matches(p: ProductDetails) -> bool:
                 text = " ".join(filter(None, [
-                    p.title, p.category,
+                    p.title, p.brand, p.category,
                     p.short_description, p.long_description,
                 ])).lower()
                 return any(t in text for t in terms)
@@ -737,11 +732,39 @@ class SalesforceOMSBackend(MerchantBackend):
             if filters.category:
                 cat = filters.category.lower()
                 results = [p for p in results if p.category and cat in p.category.lower()]
+            if filters.brand:
+                brand = filters.brand.lower()
+                results = [p for p in results if p.brand and brand in p.brand.lower()]
             if filters.min_price is not None:
                 results = [p for p in results if p.price >= filters.min_price]
             if filters.max_price is not None:
                 results = [p for p in results if p.price <= filters.max_price]
+            if filters.min_rating is not None:
+                results = [p for p in results if p.rating is not None and p.rating >= filters.min_rating]
+            if filters.in_stock_only:
+                results = [p for p in results if p.in_stock]
+            if filters.attributes:
+                for attr_key, attr_val in filters.attributes.items():
+                    ak, av = attr_key.lower(), attr_val.lower()
+                    results = [
+                        p for p in results
+                        if any(
+                            ak in k.lower() and av in v.lower()
+                            for k, v in p.attributes.items()
+                        ) or av in (p.short_description or "").lower()
+                    ]
+            if filters.sort == "price_asc":
+                results = sorted(results, key=lambda p: p.price)
+            elif filters.sort == "price_desc":
+                results = sorted(results, key=lambda p: p.price, reverse=True)
+            elif filters.sort == "rating":
+                results = sorted(results, key=lambda p: p.rating or 0, reverse=True)
         return results[:limit]
+
+    async def get_product_categories(self, session: ShoppingSessionContext) -> list[str]:
+        await self._ensure_products_loaded()
+        cats = sorted({p.category for p in self.products.values() if p.category})
+        return cats
 
     async def get_product_details(
         self, session: ShoppingSessionContext, product_id: str
@@ -1683,6 +1706,87 @@ class SalesforceOMSBackend(MerchantBackend):
             quote_id=quote_id, status=QuoteStatus.DRAFT, subtotal=0, created_at=datetime.now(UTC)
         )
 
+    async def add_product_to_quote(
+        self, session: ShoppingSessionContext, quote_id: str, product_id: str, quantity: int
+    ) -> Quote:
+        pb_id = await self._standard_pricebook_id()
+        pbe_id = await self._pricebook_entry_id(product_id, pb_id) if pb_id else None
+        if not pbe_id:
+            raise Unavailable("Product is not in the active pricebook.")
+        # Get unit price from PricebookEntry
+        price_rows = await self._soql(
+            f"SELECT UnitPrice FROM PricebookEntry WHERE Id = '{pbe_id}' LIMIT 1"
+        )
+        unit_price = float(price_rows[0].get("UnitPrice", 0)) if price_rows else 0.0
+        headers = await self._token_headers()
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.post(
+                f"{self._base}/services/data/v62.0/sobjects/QuoteLineItem",
+                headers={**headers, "Content-Type": "application/json"},
+                json={
+                    "QuoteId": quote_id,
+                    "PricebookEntryId": pbe_id,
+                    "Product2Id": product_id,
+                    "Quantity": quantity,
+                    "UnitPrice": unit_price,
+                },
+            )
+            if not resp.is_success:
+                log.error("add_product_to_quote: POST failed %s: %s", resp.status_code, resp.text)
+                raise Unavailable(resp.json()[0].get("message", resp.text)[:300] if resp.content else resp.text)
+        quote = await self.get_quote(session, quote_id)
+        return quote or Quote(
+            quote_id=quote_id, status=QuoteStatus.DRAFT, subtotal=0, created_at=datetime.now(UTC)
+        )
+
+    async def remove_quote_item(
+        self, session: ShoppingSessionContext, quote_id: str, line_item_id: str
+    ) -> Quote:
+        headers = await self._token_headers()
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.delete(
+                f"{self._base}/services/data/v62.0/sobjects/QuoteLineItem/{line_item_id}",
+                headers=headers,
+            )
+            if not resp.is_success:
+                log.error("remove_quote_item: DELETE failed %s: %s", resp.status_code, resp.text)
+                resp.raise_for_status()
+        quote = await self.get_quote(session, quote_id)
+        return quote or Quote(
+            quote_id=quote_id, status=QuoteStatus.DRAFT, subtotal=0, created_at=datetime.now(UTC)
+        )
+
+    async def update_quote(
+        self,
+        session: ShoppingSessionContext,
+        quote_id: str,
+        name: str | None = None,
+        notes: str | None = None,
+        expiry_date: str | None = None,
+    ) -> Quote:
+        payload: dict[str, Any] = {}
+        if name:
+            payload["Name"] = name
+        if notes is not None:
+            payload["Description"] = notes
+        if expiry_date:
+            payload["ExpirationDate"] = expiry_date
+        if payload:
+            headers = await self._token_headers()
+            async with httpx.AsyncClient(timeout=30) as client:
+                resp = await client.patch(
+                    f"{self._base}/services/data/v62.0/sobjects/Quote/{quote_id}",
+                    headers={**headers, "Content-Type": "application/json"},
+                    json=payload,
+                )
+                if not resp.is_success:
+                    log.error("update_quote: PATCH failed %s: %s", resp.status_code, resp.text)
+                    resp.raise_for_status()
+        quote = await self.get_quote(session, quote_id)
+        return quote or Quote(
+            quote_id=quote_id, status=QuoteStatus.DRAFT, subtotal=0, created_at=datetime.now(UTC)
+        )
+
     # ------------------------------------------------------------------
     # Approvals — Salesforce Process Approvals API
     # ------------------------------------------------------------------
@@ -1890,8 +1994,8 @@ class SalesforceOMSBackend(MerchantBackend):
                 params=params or None,
                 json=body,
             )
-        except httpx.HTTPStatusError:
-            raise NotOffered
+        except httpx.HTTPStatusError as exc:
+            raise NotOffered from exc
         return await self.get_cart(session)
 
     # ------------------------------------------------------------------

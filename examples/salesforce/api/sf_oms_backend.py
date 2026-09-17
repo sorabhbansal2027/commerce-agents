@@ -508,6 +508,20 @@ class SalesforceOMSBackend(MerchantBackend):
                 )
                 log.info("_account_id_for_user: contact lookup contact_id=%s rows=%s", contact_id, c_rows)
                 account_id = (c_rows[0].get("AccountId") if c_rows else None)
+        # Fallback: look up Contact by User's email (covers internal/admin users
+        # who cannot have ContactId set but have a matching Contact record)
+        if not account_id:
+            email_rows = await self._soql(
+                f"SELECT Email FROM User WHERE Id = '{sf_user_id}' LIMIT 1"
+            )
+            email = email_rows[0].get("Email") if email_rows else None
+            if email:
+                safe_email = email.replace("'", "\\'")
+                c_rows = await self._soql(
+                    f"SELECT AccountId FROM Contact WHERE Email = '{safe_email}' LIMIT 1"
+                )
+                log.info("_account_id_for_user: email fallback email=%s rows=%s", email, c_rows)
+                account_id = (c_rows[0].get("AccountId") if c_rows else None)
         if not account_id:
             log.warning("_account_id_for_user: no AccountId for user_id=%s", sf_user_id)
             return None

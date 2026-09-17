@@ -331,13 +331,14 @@ def build_tools(
             "name": "get_quotes",
             "description": (
                 "List the buyer's recent quotes with id, name, status, subtotal, and expiry. "
-                "Use when they ask to see their quotes or check a quote status by name."
+                "After getting the list, always call present_quote for each quote so the buyer "
+                "sees a visual card with line items and images — do not describe quotes in plain text."
             ),
             "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
         },
         {
             "name": "get_quote",
-            "description": "Full detail for one quote: line items, negotiated prices, status, and expiry.",
+            "description": "Full detail for one quote: line items, negotiated prices, status, and expiry. Use when the buyer asks for a specific quote by id and you do not already have its details.",
             "input_schema": {
                 "type": "object",
                 "properties": {
@@ -449,7 +450,8 @@ def build_tools(
             "description": (
                 "Installed-base assets the account owns — laptops, servers, network gear — "
                 "with serial numbers, service tags, and warranty status. Filter by category, "
-                "status, or a search query."
+                "status, or a search query. After fetching, always call present_assets to show "
+                "the visual card — do not list assets in plain text."
             ),
             "input_schema": {
                 "type": "object",
@@ -510,7 +512,8 @@ def build_tools(
             "name": "get_subscriptions",
             "description": (
                 "Active service contracts, extended warranties, and managed services for the account. "
-                "Filter by status — use 'expiring_soon' to proactively surface renewals."
+                "Filter by status — use 'expiring_soon' to proactively surface renewals. "
+                "After fetching, always call present_subscriptions for the visual card."
             ),
             "input_schema": {
                 "type": "object",
@@ -806,8 +809,9 @@ def build_tools(
         {
             "name": "present_quote",
             "description": (
-                "Show a quote card: line items, subtotal, status, expiry, and next step. "
-                "Use after get_quote or create_quote."
+                "Show a visual quote card with product images, line items, subtotal, status badge, "
+                "and expiry. Call this for every quote after get_quotes or get_quote — "
+                "never describe a quote in plain text when you have its id."
             ),
             "input_schema": {
                 "type": "object",
@@ -839,8 +843,8 @@ def build_tools(
         {
             "name": "present_assets",
             "description": (
-                "Show installed-base assets as a list with warranty status. "
-                "Use after get_assets."
+                "Show installed-base assets as a visual list with warranty badges "
+                "(expired/expiring-soon/ok). Always call after get_assets — never list assets in plain text."
             ),
             "input_schema": {
                 "type": "object",
@@ -897,8 +901,8 @@ def build_tools(
         {
             "name": "present_subscriptions",
             "description": (
-                "Show active service contracts and subscriptions with renewal alerts. "
-                "Use after get_subscriptions."
+                "Show service contracts and subscriptions as a visual card with status badges and "
+                "renewal alerts. Always call after get_subscriptions — never list contracts in plain text."
             ),
             "input_schema": {
                 "type": "object",

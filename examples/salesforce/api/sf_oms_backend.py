@@ -713,50 +713,42 @@ class SalesforceOMSBackend(MerchantBackend):
     async def _ensure_products_loaded(self) -> None:
         if self._products_loaded:
             return
-        # Try B2B Commerce Products API first (returns only catalog-entitlement products).
-        # Fall back to PricebookEntry if B2B API is unavailable.
-        try:
-            webstore_id = await self._ensure_webstore_id()
-            cache, code_to_id = await self._load_products_from_b2b(webstore_id)
-        except Exception:
-            cache, code_to_id = {}, {}
-        if not cache:
-            log.info("Falling back to PricebookEntry for product catalog")
-            records = await self._soql(_PRODUCTS_QUERY)
+        # Always load from PricebookEntry + entitlement filter as the authoritative
+        # source so newly created products (not yet in B2B search index) are included.
+        # B2B Products API only reflects the search index and lags new product creation.
+        records = await self._soql(_PRODUCTS_QUERY)
+        entitled_ids = await self._get_entitled_product_ids()
+        if entitled_ids:
+            records = [r for r in records if r.get("Product2Id") in entitled_ids]
+            log.info("After entitlement filter: %d products", len(records))
 
-            # Filter to only entitlement-visible products so the agent never
-            # surfaces a product the buyer cannot add to cart (PROCESSING_HALTED).
-            entitled_ids = await self._get_entitled_product_ids()
-            if entitled_ids:
-                records = [r for r in records if r.get("Product2Id") in entitled_ids]
-                log.info("After entitlement filter: %d products", len(records))
-
-            cache = {}
-            code_to_id = {}
-            for r in records:
-                pid = r.get("Product2Id", "")
-                if not pid or pid in cache:
-                    continue
-                p2 = r.get("Product2") or {}
-                name = p2.get("Name") or pid
-                family = p2.get("Family") or None
-                desc = p2.get("Description") or None
-                code = p2.get("ProductCode") or ""
-                price = float(r.get("UnitPrice") or 0)
-                cache[pid] = Listing(
-                    listing_id=pid,
-                    title=name,
-                    price=price,
-                    currency="USD",
-                    stock=0,
-                    category=family,
-                    status="active",
-                    short_description=desc,
-                    content_quality="good" if desc else "needs_work",
-                    image_url=_PRODUCT_IMAGES.get(code),
-                )
-                if code:
-                    code_to_id[code] = pid
+        cache: dict[str, Listing] = {}
+        code_to_id: dict[str, str] = {}
+        for r in records:
+            pid = r.get("Product2Id", "")
+            if not pid or pid in cache:
+                continue
+            p2 = r.get("Product2") or {}
+            name = p2.get("Name") or pid
+            family = p2.get("Family") or None
+            desc = p2.get("Description") or None
+            code = p2.get("ProductCode") or ""
+            price = float(r.get("UnitPrice") or 0)
+            cache[pid] = Listing(
+                listing_id=pid,
+                title=name,
+                price=price,
+                currency="USD",
+                stock=0,
+                category=family,
+                status="active",
+                short_description=desc,
+                content_quality="good" if desc else "needs_work",
+                image_url=_PRODUCT_IMAGES.get(code),
+            )
+            if code:
+                code_to_id[code] = pid
+        log.info("Product catalog loaded: %d products from PricebookEntry", len(cache))
         self._products_cache = cache
         self._code_to_id = code_to_id
         # Build ProductDetails, grouping variant products into families.

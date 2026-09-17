@@ -57,6 +57,7 @@ from shopping_agent import (
     AssetStatus,
     Cart,
     NotOffered,
+    Unavailable,
     Order,
     OrderItem,
     OrderStatus,
@@ -1505,7 +1506,16 @@ class SalesforceOMSBackend(MerchantBackend):
                 headers={**headers, "Content-Type": "application/json"},
                 json=payload,
             )
-            resp.raise_for_status()
+            if not resp.is_success:
+                log.error(
+                    "create_quote: Quote POST failed %s — payload=%s — response=%s",
+                    resp.status_code,
+                    payload,
+                    resp.text,
+                )
+                sf_errors = resp.json() if resp.content else []
+                msg = sf_errors[0].get("message", resp.text) if sf_errors else resp.text
+                raise Unavailable(msg[:300])
             quote_id = resp.json()["id"]
             for item in cart.items:
                 pbe_id = (
@@ -1518,8 +1528,9 @@ class SalesforceOMSBackend(MerchantBackend):
                 }
                 if pbe_id:
                     line["PricebookEntryId"] = pbe_id
-                else:
-                    line["Product2Id"] = item.product_id
+                log.debug(
+                    "create_quote: QuoteLineItem payload product=%s pbe=%s", item.product_id, pbe_id
+                )
                 resp2 = await client.post(
                     f"{self._base}/services/data/v62.0/sobjects/QuoteLineItem",
                     headers={**headers, "Content-Type": "application/json"},

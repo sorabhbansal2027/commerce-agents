@@ -20,6 +20,7 @@ from .sessions import (
     session_dependency,
 )
 from .storefront import CartAddRequest, StorefrontHost, build_storefront_host
+from .ucp import build_ucp_router
 
 __all__ = [
     "REPO_ROOT",
@@ -36,6 +37,7 @@ __all__ = [
     "UnknownSessionError",
     "build_merchant_router",
     "build_storefront_host",
+    "build_ucp_router",
     "host_approval_default",
     "load_demo_env",
     "session_dependency",

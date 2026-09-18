@@ -17,6 +17,7 @@ import os
 import sys
 from pathlib import Path
 
+from mcp import types as mcp_types
 from mcp.server.fastmcp import Context, FastMCP
 
 from commerce_common.execution import contracts_by_name
@@ -35,6 +36,9 @@ from shopping_agent.tools.registry import INLINE_CONTEXT_DESCRIPTIONS, build_too
 
 SERVER_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SERVER_DIR.parents[2]
+
+# MCP Apps (SEP-1865) — product grid UI template served at ui://storefront/product-grid
+_PRODUCT_GRID_HTML = (SERVER_DIR / "product_grid_ui.html").read_text()
 
 DEFAULT_HOST = os.environ.get("STOREFRONT_MCP_HOST", "127.0.0.1")
 DEFAULT_PORT = int(os.environ.get("STOREFRONT_MCP_PORT", "8200"))
@@ -166,6 +170,44 @@ def build_server(
     @register("get_fulfillment_options")
     async def get_fulfillment_options(product_ids: list[str], ctx: Context) -> str:
         return await executors.call(ctx, "get_fulfillment_options", {"product_ids": product_ids})
+
+    # ── MCP Apps (SEP-1865) ────────────────────────────────────────────────
+    # Register the product-grid HTML template as a ui:// resource.
+    # Hosts that support MCP Apps render this in a sandboxed iframe alongside
+    # the tool result; older hosts ignore the _meta field safely.
+
+    @server.resource(
+        "ui://storefront/product-grid",
+        name="Product Grid",
+        description="Interactive product card grid. Receives search results and lets the user add items to cart.",
+        mime_type="text/html",
+    )
+    def product_grid_ui() -> str:
+        return _PRODUCT_GRID_HTML
+
+    @server.tool(
+        name="search_products_ui",
+        description=(
+            "Search the catalog and return an interactive product grid UI alongside the results. "
+            "Identical to search_products but attaches a renderable product-card grid for hosts "
+            "that support MCP Apps (SEP-1865). Use this instead of search_products when you want "
+            "to show a visual grid with add-to-cart buttons."
+        ),
+    )
+    async def search_products_ui(
+        query: str,
+        ctx: Context,
+        filters: SearchFilters | None = None,
+        limit: int = 8,
+    ) -> mcp_types.CallToolResult:
+        """Search products and attach the MCP Apps product-grid UI resource."""
+        result_text = await executors.call(
+            ctx, "search_products", {"query": query, "filters": filters, "limit": limit}
+        )
+        return mcp_types.CallToolResult(
+            content=[mcp_types.TextContent(type="text", text=result_text)],
+            meta={"ui": {"resourceUri": "ui://storefront/product-grid"}},
+        )
 
     return server
 

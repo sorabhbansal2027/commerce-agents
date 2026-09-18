@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Product Results</title>
+<style>
+  :root {
+    --ink:      #1a1f2e;
+    --ink-soft: #6b7280;
+    --line:     #e5e7eb;
+    --bg:       #ffffff;
+    --bg-soft:  #f9fafb;
+    --brand:    #1e2c4f;
+    --ok:       #16a34a;
+    --radius:   10px;
+    color-scheme: light dark;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ink:      #f0f2f5;
+      --ink-soft: #9ca3af;
+      --line:     #2d3340;
+      --bg:       #181c26;
+      --bg-soft:  #1f2433;
+      --brand:    #93aae8;
+    }
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    padding: 12px;
+  }
+  #status {
+    font-size: 12px;
+    color: var(--ink-soft);
+    margin-bottom: 12px;
+    min-height: 16px;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 10px;
+  }
+  .card {
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--bg-soft);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    cursor: pointer;
+    transition: box-shadow .15s, transform .1s;
+  }
+  .card:hover { box-shadow: 0 4px 16px rgba(0,0,0,.1); transform: translateY(-1px); }
+  .card-img {
+    width: 100%; aspect-ratio: 1;
+    object-fit: contain;
+    background: #fff;
+    padding: 8px;
+  }
+  .card-img-placeholder {
+    width: 100%; aspect-ratio: 1;
+    background: var(--line);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 32px;
+  }
+  .card-body { padding: 8px; flex: 1; display: flex; flex-direction: column; gap: 4px; }
+  .card-title { font-size: 12.5px; font-weight: 600; line-height: 1.3; }
+  .card-brand { font-size: 11px; color: var(--ink-soft); }
+  .card-price { font-size: 14px; font-weight: 700; margin-top: auto; }
+  .card-stock { font-size: 10.5px; color: var(--ok); }
+  .card-stock.out { color: #ef4444; }
+  .card-actions { padding: 0 8px 8px; }
+  .btn-add {
+    width: 100%; padding: 6px;
+    background: var(--brand); color: #fff;
+    border: none; border-radius: 6px;
+    font-size: 12px; font-weight: 600;
+    cursor: pointer;
+    transition: opacity .12s;
+  }
+  .btn-add:hover { opacity: .88; }
+  .btn-add:disabled { opacity: .45; cursor: not-allowed; }
+  .btn-add.added { background: var(--ok); }
+  .empty {
+    text-align: center; padding: 32px 16px;
+    color: var(--ink-soft); font-size: 13px;
+  }
+</style>
+</head>
+<body>
+<div id="status">Loading results…</div>
+<div class="grid" id="grid"></div>
+
+<script>
+// ── MCP Apps postMessage bridge ────────────────────────────────────────────
+let _pendingId = 1;
+const _pending = new Map();
+
+window.addEventListener("message", (evt) => {
+  const msg = evt.data;
+  if (!msg || msg.jsonrpc !== "2.0") return;
+  if (msg.id !== undefined && _pending.has(msg.id)) {
+    const { resolve, reject } = _pending.get(msg.id);
+    _pending.delete(msg.id);
+    if (msg.error) reject(new Error(msg.error.message || "tool error"));
+    else resolve(msg.result);
+  } else if (msg.method === "mcp/tool_result") {
+    // Push-style result (some hosts use this form)
+    const cb = _pending.get("push");
+    if (cb) { _pending.delete("push"); cb.resolve(msg.params); }
+  }
+});
+
+function callTool(name, args) {
+  return new Promise((resolve, reject) => {
+    const id = _pendingId++;
+    _pending.set(id, { resolve, reject });
+    window.parent.postMessage({
+      jsonrpc: "2.0", id,
+      method: "mcp/call_tool",
+      params: { name, arguments: args }
+    }, "*");
+    setTimeout(() => {
+      if (_pending.has(id)) { _pending.delete(id); reject(new Error("timeout")); }
+    }, 15000);
+  });
+}
+
+// ── Render helpers ─────────────────────────────────────────────────────────
+function fmt(price, currency = "USD") {
+  return Number(price).toLocaleString("en-US", {
+    style: "currency", currency, maximumFractionDigits: 0
+  });
+}
+
+function renderGrid(products) {
+  const grid = document.getElementById("grid");
+  const status = document.getElementById("status");
+  grid.innerHTML = "";
+  if (!products || products.length === 0) {
+    grid.innerHTML = '<div class="empty">No products found for this search.</div>';
+    status.textContent = "0 results";
+    return;
+  }
+  status.textContent = `${products.length} result${products.length === 1 ? "" : "s"}`;
+  products.forEach(p => {
+    const card = document.createElement("div");
+    card.className = "card";
+    const img = p.image_url
+      ? `<img class="card-img" src="${p.image_url}" alt="${p.title}" loading="lazy" onerror="this.style.display='none'">`
+      : `<div class="card-img-placeholder">🛍️</div>`;
+    const inStock = p.in_stock !== false;
+    card.innerHTML = `
+      ${img}
+      <div class="card-body">
+        <div class="card-title">${p.title}</div>
+        ${p.brand ? `<div class="card-brand">${p.brand}</div>` : ""}
+        <div class="card-price">${fmt(p.price, p.currency || "USD")}</div>
+        <div class="card-stock${inStock ? "" : " out"}">${inStock ? "In stock" : "Out of stock"}</div>
+      </div>
+      <div class="card-actions">
+        <button class="btn-add" data-id="${p.product_id}" ${inStock ? "" : "disabled"}>
+          Add to cart
+        </button>
+      </div>`;
+    card.querySelector(".btn-add").addEventListener("click", async (e) => {
+      const btn = e.currentTarget;
+      const pid = btn.dataset.id;
+      btn.disabled = true;
+      btn.textContent = "Adding…";
+      try {
+        await callTool("add_to_cart", { product_id: pid, quantity: 1 });
+        btn.textContent = "Added ✓";
+        btn.classList.add("added");
+      } catch {
+        btn.textContent = "Add to cart";
+        btn.disabled = false;
+      }
+    });
+    grid.appendChild(card);
+  });
+}
+
+// ── Bootstrap: receive products from the host via postMessage ──────────────
+// The host injects the tool result as the initial message when the iframe loads.
+window.addEventListener("message", (evt) => {
+  const msg = evt.data;
+  if (!msg) return;
+  // Direct product list from host
+  if (Array.isArray(msg.products)) { renderGrid(msg.products); return; }
+  // Tool result envelope: parse the text content for JSON
+  if (msg.content) {
+    const text = (Array.isArray(msg.content) ? msg.content : [msg.content])
+      .filter(c => c.type === "text").map(c => c.text).join("");
+    try {
+      const parsed = JSON.parse(text);
+      const prods = parsed.products || parsed;
+      if (Array.isArray(prods)) { renderGrid(prods); return; }
+    } catch { /* not JSON */ }
+    // Fallback: show raw text
+    document.getElementById("status").textContent = "Results available — see assistant response";
+    document.getElementById("grid").innerHTML =
+      `<div class="empty" style="text-align:left;white-space:pre-wrap">${text}</div>`;
+  }
+});
+
+// Tell the host the UI is ready to receive data
+window.parent.postMessage({ jsonrpc: "2.0", method: "mcp/ui_ready", params: {} }, "*");
+document.getElementById("status").textContent = "Waiting for product data…";
+</script>
+</body>
+</html>

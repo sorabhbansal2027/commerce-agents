@@ -18,6 +18,7 @@ from demo_common import (
     MemorySeeder,
     build_anthropic_client,
     build_storefront_host,
+    build_ucp_router,
     load_demo_env,
 )
 from fastapi import Response
@@ -61,6 +62,7 @@ host = build_storefront_host(
 )
 app = host.app
 app.include_router(create_merchant_router(backend, InMemoryMemoryStore()), prefix="/api/merchant")
+app.include_router(build_ucp_router(backend))  # UCP manifest at /.well-known/ucp
 app.mount("/products", StaticFiles(directory=PRODUCT_IMAGES_DIR, check_dir=False), name="products")
 
 

@@ -19,10 +19,11 @@ import CatalogView from "@/components/views/CatalogView";
 import HomeView from "@/components/views/HomeView";
 import InventoryView from "@/components/views/InventoryView";
 import OrdersView from "@/components/views/OrdersView";
-import { api, fetchOverview, UNREACHABLE } from "@/lib/api";
+import QuoteApprovalsView from "@/components/views/QuoteApprovalsView";
+import { api, fetchOverview, fetchQuoteApprovals, UNREACHABLE } from "@/lib/api";
 import type { StagedChange } from "@/lib/types";
 
-type PortalView = "home" | "catalog" | "orders" | "inventory";
+type PortalView = "home" | "catalog" | "orders" | "inventory" | "quotes";
 
 function StoreMark() {
   return (
@@ -53,6 +54,8 @@ export default function PortalPage() {
 
   // The overview feeds the home page and the sidebar counts, so it loads here.
   const { data: overview, failed: overviewFailed } = useResource(session.sessionId ? fetchOverview : null, [session.sessionId, refreshKey]);
+  // Quote approval count for the nav badge.
+  const { data: quoteApprovals } = useResource(session.sessionId ? fetchQuoteApprovals : null, [session.sessionId, refreshKey]);
 
   // The rail is part of the default layout on wide screens; narrow screens open it on demand.
   useEffect(() => {
@@ -75,6 +78,12 @@ export default function PortalPage() {
         label: "Inventory",
         icon: "box",
         count: alerts ? (alerts.low_stock ?? 0) + (alerts.slow_movers ?? 0) : null,
+      },
+      {
+        id: "quotes",
+        label: "Quote Approvals",
+        icon: "edit",
+        count: quoteApprovals ? (quoteApprovals.approvals.length || null) : null,
       },
     ];
   }, [overview]);
@@ -125,6 +134,7 @@ export default function PortalPage() {
               <OrdersView refreshKey={refreshKey} recentOrders={overview?.recent_orders ?? (overviewFailed ? [] : null)} onAskAssistant={askAssistant} />
             ) : null}
             {view === "inventory" ? <InventoryView refreshKey={refreshKey} onAskAssistant={askAssistant} /> : null}
+            {view === "quotes" ? <QuoteApprovalsView refreshKey={refreshKey} onAskAssistant={askAssistant} /> : null}
           </>
         ) : null}
       </PortalShell>

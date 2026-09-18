@@ -211,6 +211,22 @@ export interface AlertsResponse {
   order_issues: OrderIssue[];
 }
 
+// --- Quote approvals ---
+
+export interface PendingQuoteApproval {
+  workitem_id: string;
+  quote_id: string;
+  quote_name: string;
+  account_name?: string | null;
+  grand_total: number;
+  submitted_by?: string | null;
+  submitted_at?: string | null;
+}
+
+export interface QuoteApprovalsResponse {
+  approvals: PendingQuoteApproval[];
+}
+
 // --- Presentation payloads, as streamed after server enrichment ---
 
 export interface MetricEntry {

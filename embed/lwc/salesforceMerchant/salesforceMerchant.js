@@ -108,6 +108,9 @@ export default class SalesforceMerchant extends LightningElement {
     @track _navTab         = 'home';    // sidebar navigation
     @track _listings       = null;
     @track _catalogLoading = false;
+    @track _quotes         = null;      // { approvals: PendingQuoteApproval[] }
+    @track _quotesLoading  = false;
+    @track _quoteActions   = {};        // workitemId -> 'approve' | 'reject' | null
 
     _sessionId      = null;
     _rafId          = null;
@@ -118,6 +121,7 @@ export default class SalesforceMerchant extends LightningElement {
     _nextId         = 0;
     _needsItems     = [];
     _catalogLoaded  = false;
+    _quotesLoaded   = false;
 
     // ── Lifecycle ──────────────────────────────────────────────────────────────
     connectedCallback()    { this._createSession(); }
@@ -142,6 +146,7 @@ export default class SalesforceMerchant extends LightningElement {
     get isCatalogTab()   { return this._navTab === 'catalog'; }
     get isOrdersTab()    { return this._navTab === 'orders'; }
     get isInventoryTab() { return this._navTab === 'inventory'; }
+    get isQuotesTab()    { return this._navTab === 'quotes'; }
     get isAssistantTab() { return this._navTab === 'assistant'; }
     get showRightCol()   { return this._navTab !== 'assistant'; }
 
@@ -150,6 +155,7 @@ export default class SalesforceMerchant extends LightningElement {
     get catalogNavClass()   { return this._navClass('catalog'); }
     get ordersNavClass()    { return this._navClass('orders'); }
     get inventoryNavClass() { return this._navClass('inventory'); }
+    get quotesNavClass()    { return this._navClass('quotes'); }
     get assistantNavClass() { return this._navClass('assistant'); }
 
     handleNavTab(evt) {
@@ -157,6 +163,9 @@ export default class SalesforceMerchant extends LightningElement {
         this._navTab = tab;
         if (tab === 'catalog' && !this._catalogLoaded) {
             this._loadCatalog();
+        }
+        if (tab === 'quotes' && !this._quotesLoaded) {
+            this._loadQuoteApprovals();
         }
     }
 
@@ -312,6 +321,85 @@ export default class SalesforceMerchant extends LightningElement {
             stock: a.stock != null ? String(a.stock) : '—',
             sold:  a.sales_last_30d != null ? String(a.sales_last_30d) : '—',
         }));
+    }
+
+    // ── Quote approvals ────────────────────────────────────────────────────────
+    get quotesLoading()       { return this._quotesLoading; }
+    get hasQuoteApprovals()   { return !this._quotesLoading && (this._quotes?.approvals || []).length > 0; }
+    get noQuoteApprovals()    { return !this._quotesLoading && this._quotes !== null && (this._quotes?.approvals || []).length === 0; }
+    get pendingQuoteCount()   { const n = (this._quotes?.approvals || []).length; return n || null; }
+
+    get quoteApprovalViews() {
+        return (this._quotes?.approvals || []).map((a, i) => {
+            const action = this._quoteActions[a.workitem_id] || null;
+            return {
+                uid:          `qa-${i}`,
+                workitemId:   a.workitem_id,
+                quoteName:    a.quote_name || a.quote_id || '—',
+                accountName:  a.account_name || null,
+                submittedBy:  a.submitted_by || null,
+                submittedAt:  a.submitted_at ? fmtShortDate(a.submitted_at) : null,
+                grandTotal:   fmtMoney(a.grand_total || 0, 'USD'),
+                busy:         action !== null,
+                approving:    action === 'approve',
+                rejecting:    action === 'reject',
+            };
+        });
+    }
+
+    handleQuoteApprove(evt) { this._quoteAction(evt.currentTarget.dataset.id, 'approve'); }
+    handleQuoteReject(evt)  { this._quoteAction(evt.currentTarget.dataset.id, 'reject'); }
+
+    handleQuoteAsk(evt) {
+        const id  = evt.currentTarget.dataset.id;
+        const row = (this._quotes?.approvals || []).find(a => a.workitem_id === id);
+        if (!row) return;
+        const msg = `Review quote ${row.quote_name} (${row.quote_id}) for ${row.account_name || 'the account'} — total ${fmtMoney(row.grand_total || 0, 'USD')}. Should I approve or reject it?`;
+        this._navTab = 'home';
+        this._submit(msg);
+    }
+
+    async _loadQuoteApprovals() {
+        if (this._quotesLoading) return;
+        this._quotesLoading = true;
+        try {
+            const sessionHdr = this._sessionId ? { 'X-Session-Id': this._sessionId } : {};
+            const res = await fetch(this._url('quote-approvals'), { headers: this._hdrs(sessionHdr) });
+            if (!res.ok) throw new Error(`Quote approvals ${res.status}`);
+            this._quotes = await res.json();
+            this._quotesLoaded = true;
+        } catch (err) {
+            console.warn('[salesforceMerchant] quote approvals load failed:', err.message);
+        } finally {
+            this._quotesLoading = false;
+        }
+    }
+
+    async _quoteAction(workitemId, action) {
+        if (!workitemId || this._quoteActions[workitemId]) return;
+        this._quoteActions = { ...this._quoteActions, [workitemId]: action };
+        const sessionHdr = this._sessionId ? { 'X-Session-Id': this._sessionId } : {};
+        try {
+            const res = await fetch(
+                this._url(`quote-approvals/${workitemId}/${action}`),
+                { method: 'POST', headers: this._hdrs(sessionHdr), body: JSON.stringify({ comments: '' }) }
+            );
+            if (!res.ok) throw new Error(`${action} ${res.status}`);
+            // Remove the approved/rejected item from the list
+            if (this._quotes) {
+                this._quotes = {
+                    ...this._quotes,
+                    approvals: this._quotes.approvals.filter(a => a.workitem_id !== workitemId),
+                };
+            }
+        } catch (err) {
+            this._pushError(`Failed to ${action} quote: ` + err.message);
+        } finally {
+            const updated = { ...this._quoteActions };
+            delete updated[workitemId];
+            this._quoteActions = updated;
+        }
+        this._scheduleRender();
     }
 
     // ── Chat template getters ──────────────────────────────────────────────────

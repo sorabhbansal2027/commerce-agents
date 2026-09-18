@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { AgentApi } from "web-shared";
-import type { AlertsResponse, ListingDetailResponse, ListingsResponse, OverviewResponse } from "./types";
+import type { AlertsResponse, ListingDetailResponse, ListingsResponse, OverviewResponse, QuoteApprovalsResponse } from "./types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -26,4 +26,16 @@ export function fetchListingDetail(listingId: string): Promise<ListingDetailResp
 
 export function fetchAlerts(): Promise<AlertsResponse | null> {
   return api.get<AlertsResponse>("/alerts");
+}
+
+export function fetchQuoteApprovals(): Promise<QuoteApprovalsResponse | null> {
+  return api.get<QuoteApprovalsResponse>("/quote-approvals");
+}
+
+export function approveQuote(workitemId: string, comments = ""): Promise<unknown> {
+  return api.post(`/quote-approvals/${encodeURIComponent(workitemId)}/approve`, { comments });
+}
+
+export function rejectQuote(workitemId: string, comments = ""): Promise<unknown> {
+  return api.post(`/quote-approvals/${encodeURIComponent(workitemId)}/reject`, { comments });
 }

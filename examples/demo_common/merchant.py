@@ -282,6 +282,41 @@ def build_merchant_router(
     async def discard_change(change_id: str, record: CurrentSession) -> dict:
         return await change_action(change_id, "discard_change", record)
 
+    # Quote approval routes: registered only when the backend implements the three SF methods.
+    if (
+        hasattr(backend, "get_pending_quote_approvals")
+        and hasattr(backend, "approve_quote")
+        and hasattr(backend, "reject_quote")
+    ):
+
+        class _QuoteAction(BaseModel):
+            comments: str = ""
+
+        @router.get("/quote-approvals")
+        async def pending_quote_approvals(record: CurrentSession) -> dict:
+            results = await backend.get_pending_quote_approvals(context(record))
+            return {"approvals": [a.model_dump(mode="json", exclude_none=True) for a in results]}
+
+        @router.post("/quote-approvals/{workitem_id}/approve")
+        async def approve_quote_action(
+            workitem_id: str, body: _QuoteAction, record: CurrentSession
+        ) -> dict:
+            result = await backend.approve_quote(context(record), workitem_id, body.comments)
+            record.pending_app_events.append(
+                f"Operator approved quote approval {workitem_id} from the portal."
+            )
+            return result
+
+        @router.post("/quote-approvals/{workitem_id}/reject")
+        async def reject_quote_action(
+            workitem_id: str, body: _QuoteAction, record: CurrentSession
+        ) -> dict:
+            result = await backend.reject_quote(context(record), workitem_id, body.comments)
+            record.pending_app_events.append(
+                f"Operator rejected quote approval {workitem_id} from the portal."
+            )
+            return result
+
     install_memory_routes(
         router, "/memory", current_session=CurrentSession, memory_store=memory_store
     )

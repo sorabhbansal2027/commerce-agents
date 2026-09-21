@@ -171,7 +171,7 @@ export default function LoginScreen({ onLogin }: Props) {
             </div>
           )}
 
-          {error && (
+          {error && !needsToken && (
             <div style={{
               background: '#fef2f2', border: '1px solid #fecaca',
               borderRadius: '8px', padding: '10px 14px',

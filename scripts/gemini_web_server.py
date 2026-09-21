@@ -63,16 +63,19 @@ class TrackedAgent(GeminiUCPAgent):
         super().__init__(*args, **kwargs)
         self.last_products: list[dict] = []
         self.last_tool_calls: list[dict] = []
-        self.cart_items: list[dict] = []  # tracks what's been added
+        self.cart_additions: list[dict] = []  # {product, quantity} pairs for UI sync
 
     def _call_ucp(self, fn_name: str, args: dict) -> dict:
         result = super()._call_ucp(fn_name, args)
         self.last_tool_calls.append({"tool": fn_name, "args": args})
         if fn_name == "search_products":
             self.last_products = result.get("products", [])
-        if fn_name == "create_checkout_session":
-            # Capture checkout result
-            self.last_checkout = result
+        if fn_name in ("add_to_cart", "add_item_to_cart", "cart_add"):
+            pid = args.get("product_id") or args.get("product_variant_id") or args.get("id", "")
+            qty = int(args.get("quantity", 1))
+            product = next((p for p in self.last_products if p.get("product_id") == pid), None)
+            if product:
+                self.cart_additions.append({"product": product, "quantity": qty})
         return result
 
 
@@ -189,11 +192,13 @@ async def chat(body: ChatRequest) -> dict:
         agent = get_agent()
         agent.last_products = []
         agent.last_tool_calls = []
+        agent.cart_additions = []
         reply = agent.send(body.message)
         return {
             "reply": reply,
             "products": agent.last_products,
             "tool_calls": agent.last_tool_calls,
+            "cart_additions": agent.cart_additions,
         }
     except Exception as e:
         _agent = None  # reset so next request retries agent init

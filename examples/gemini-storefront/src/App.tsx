@@ -39,6 +39,18 @@ export default function App() {
           ? { ...m, text: data.reply, products: data.products ?? [], toolCalls: data.tool_calls ?? [], loading: false }
           : m
       ))
+
+      // Sync cart when Gemini added items on the user's behalf
+      if (data.cart_additions?.length) {
+        for (const { product, quantity } of data.cart_additions) {
+          setCartItems(prev => {
+            const existing = prev.find(i => i.product.product_id === product.product_id)
+            if (existing) return prev.map(i => i.product.product_id === product.product_id ? { ...i, quantity: i.quantity + quantity } : i)
+            return [...prev, { product, quantity }]
+          })
+          setAddedIds(prev => new Set([...prev, product.product_id]))
+        }
+      }
     } catch {
       setMessages(prev => prev.map(m =>
         m.id === pendingMsg.id

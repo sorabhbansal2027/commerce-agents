@@ -65,17 +65,58 @@ class TrackedAgent(GeminiUCPAgent):
         self.last_tool_calls: list[dict] = []
         self.cart_additions: list[dict] = []  # {product, quantity} pairs for UI sync
 
+        # Inject a virtual add_to_cart tool so Gemini uses it instead of going
+        # straight to create_checkout_session when the user says "add to cart".
+        from google.genai import types as _gtypes  # already imported transitively
+        self._tools.append(
+            _gtypes.Tool(
+                function_declarations=[
+                    _gtypes.FunctionDeclaration(
+                        name="add_to_cart",
+                        description=(
+                            "Add a product to the shopping cart. Call this whenever the user "
+                            "asks to add an item to the cart. Do NOT proceed to "
+                            "create_checkout_session without the user's explicit confirmation."
+                        ),
+                        parameters={
+                            "type": "object",
+                            "properties": {
+                                "product_id": {
+                                    "type": "string",
+                                    "description": "The product_id returned by search_products",
+                                },
+                                "quantity": {
+                                    "type": "integer",
+                                    "description": "Quantity to add (default 1)",
+                                },
+                            },
+                            "required": ["product_id"],
+                        },
+                    )
+                ]
+            )
+        )
+        # Rebuild the generation config so the new tool is included
+        self._config = _gtypes.GenerateContentConfig(
+            tools=self._tools,
+            system_instruction=self._system_prompt(),
+        )
+
     def _call_ucp(self, fn_name: str, args: dict) -> dict:
-        result = super()._call_ucp(fn_name, args)
-        self.last_tool_calls.append({"tool": fn_name, "args": args})
-        if fn_name == "search_products":
-            self.last_products = result.get("products", [])
-        if fn_name in ("add_to_cart", "add_item_to_cart", "cart_add"):
-            pid = args.get("product_id") or args.get("product_variant_id") or args.get("id", "")
+        if fn_name == "add_to_cart":
+            # Virtual tool: record the addition for UI sync and return success.
+            pid = args.get("product_id", "")
             qty = int(args.get("quantity", 1))
             product = next((p for p in self.last_products if p.get("product_id") == pid), None)
             if product:
                 self.cart_additions.append({"product": product, "quantity": qty})
+                return {"ok": True, "message": f"Added {qty}x {product.get('title', pid)} to cart."}
+            return {"ok": True, "message": f"Added product {pid} (qty {qty}) to cart."}
+
+        result = super()._call_ucp(fn_name, args)
+        self.last_tool_calls.append({"tool": fn_name, "args": args})
+        if fn_name == "search_products":
+            self.last_products = result.get("products", [])
         return result
 
 

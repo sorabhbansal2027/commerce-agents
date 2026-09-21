@@ -173,6 +173,14 @@ async def health() -> dict:
     }
 
 
+@app.get("/api/server-ip")
+async def server_ip() -> dict:
+    """Return this server's outbound public IP (used to configure Salesforce trusted IP ranges)."""
+    async with _httpx.AsyncClient(timeout=10) as client:
+        r = await client.get("https://api.ipify.org?format=json")
+        return r.json()
+
+
 @app.post("/api/chat")
 async def chat(body: ChatRequest) -> dict:
     """Send a message to Gemini and return the reply + any products found."""

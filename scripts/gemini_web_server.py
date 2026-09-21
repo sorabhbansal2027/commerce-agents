@@ -106,31 +106,35 @@ import httpx as _httpx  # noqa: E402 – already a dep, imported here for clarit
 
 
 async def _sf_authenticate(username: str, password: str) -> tuple[bool, str]:
-    """Validate credentials via Salesforce Username-Password OAuth flow.
+    """Validate credentials via the Salesforce SOAP Partner API login endpoint.
 
-    Returns (True, "") on success or (False, error_message) on failure.
-    The Connected App must have 'Allow Username-Password Flows' enabled.
-    If the user's IP is not in the org's trusted range, they must append
-    their security token to the password (password+token).
+    Works without any Connected App flow setting — the classic SOAP login
+    accepts username + password directly against any Salesforce org.
+    Sandbox orgs use test.salesforce.com; production uses login.salesforce.com.
+    If the user's IP is not in the org's trusted range they must append their
+    security token to the password (e.g. MyPassword + MyToken).
     """
+    import re as _re
+    login_host = "test.salesforce.com" if "sandbox" in SF_BASE else "login.salesforce.com"
+    soap_body = (
+        '<?xml version="1.0" encoding="utf-8"?>'
+        '<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"'
+        ' xmlns:urn="urn:partner.soap.sforce.com">'
+        "<soapenv:Body><urn:login>"
+        f"<urn:username>{username}</urn:username>"
+        f"<urn:password>{password}</urn:password>"
+        "</urn:login></soapenv:Body></soapenv:Envelope>"
+    )
     async with _httpx.AsyncClient(timeout=15) as client:
         resp = await client.post(
-            f"{SF_BASE}/services/oauth2/token",
-            data={
-                "grant_type": "password",
-                "client_id": SF_CLIENT_ID,
-                "client_secret": SF_CLIENT_SECRET,
-                "username": username,
-                "password": password,
-            },
+            f"https://{login_host}/services/Soap/u/59.0",
+            content=soap_body.encode(),
+            headers={"Content-Type": "text/xml; charset=utf-8", "SOAPAction": '""'},
         )
-    if resp.status_code == 200:
+    if resp.status_code == 200 and "<sessionId>" in resp.text:
         return True, ""
-    try:
-        err = resp.json()
-        msg = err.get("error_description") or err.get("error") or "Authentication failed."
-    except Exception:
-        msg = f"Salesforce returned HTTP {resp.status_code}."
+    fault = _re.search(r"<faultstring>(.*?)</faultstring>", resp.text)
+    msg = fault.group(1) if fault else f"Salesforce returned HTTP {resp.status_code}."
     return False, msg
 
 

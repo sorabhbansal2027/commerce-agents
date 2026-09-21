@@ -35,7 +35,14 @@ export default function App() {
 
       setMessages(prev => prev.map(m =>
         m.id === pendingMsg.id
-          ? { ...m, text: data.reply, products: data.products ?? [], toolCalls: data.tool_calls ?? [], loading: false }
+          ? {
+              ...m,
+              text: data.reply,
+              products: data.products ?? [],
+              toolCalls: data.tool_calls ?? [],
+              checkoutSession: data.checkout_session ?? undefined,
+              loading: false,
+            }
           : m
       ))
 

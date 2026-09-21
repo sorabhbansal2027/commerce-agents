@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import type { Message } from '../types'
 import ProductGrid from './ProductGrid'
+import CheckoutConfirmation from './CheckoutConfirmation'
 import type { Product } from '../types'
 
 interface Props {
@@ -174,6 +175,9 @@ export default function ChatPanel({ messages, onSend, loading, onAddToCart, addi
                           addingId={addingId}
                           addedIds={addedIds}
                         />
+                      )}
+                      {msg.checkoutSession && (
+                        <CheckoutConfirmation session={msg.checkoutSession} />
                       )}
                     </>
                   )}

@@ -14,12 +14,32 @@ export interface ToolCall {
   args: Record<string, unknown>;
 }
 
+export interface CheckoutLineItem {
+  product_id: string;
+  title: string;
+  quantity: number;
+  unit_price: number;
+  line_total: number;
+  currency: string;
+}
+
+export interface CheckoutSession {
+  checkout_session_id: string;
+  status: string;
+  line_items: CheckoutLineItem[];
+  subtotal: number;
+  currency: string;
+  payment_handler: string;
+  buyer?: { name?: string; email?: string };
+}
+
 export interface Message {
   id: string;
   role: 'user' | 'assistant';
   text: string;
   products?: Product[];
   toolCalls?: ToolCall[];
+  checkoutSession?: CheckoutSession;
   loading?: boolean;
 }
 

@@ -68,6 +68,7 @@ class TrackedAgent(GeminiUCPAgent):
         self.last_products: list[dict] = []
         self.last_tool_calls: list[dict] = []
         self.cart_additions: list[dict] = []  # {product, quantity} pairs for UI sync
+        self.checkout_session: dict | None = None  # last checkout session for UI card
 
         from google.genai import types as _gtypes
         self._tools.append(
@@ -199,7 +200,20 @@ class TrackedAgent(GeminiUCPAgent):
         self.last_tool_calls.append({"tool": fn_name, "args": args})
         if fn_name == "search_products":
             self.last_products = result.get("products", [])
+        elif fn_name == "create_checkout_session" and "checkout_session_id" in result:
+            self.checkout_session = result
         return result
+
+    def _system_prompt(self) -> str:
+        # Remove the "always confirm first" instruction — the UI renders a
+        # CheckoutConfirmation card when create_checkout_session is called,
+        # so no separate text confirmation step is needed.
+        base = super()._system_prompt()
+        return base.replace(
+            "When creating a checkout session, always confirm the items and total with the user first. ",
+            "When the user asks to checkout or place an order, call create_checkout_session immediately. "
+            "Do NOT ask for confirmation in text first — the UI will show the order card. ",
+        )
 
 
 _agent: TrackedAgent | None = None
@@ -328,12 +342,14 @@ async def chat(body: ChatRequest) -> dict:
         agent.last_products = []
         agent.last_tool_calls = []
         agent.cart_additions = []
+        agent.checkout_session = None
         reply = agent.send(body.message)
         return {
             "reply": reply,
             "products": agent.last_products,
             "tool_calls": agent.last_tool_calls,
             "cart_additions": agent.cart_additions,
+            "checkout_session": agent.checkout_session,
         }
     except Exception as e:
         _agent = None  # reset so next request retries agent init

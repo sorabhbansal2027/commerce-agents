@@ -327,14 +327,15 @@ def build_ucp_router(backend: Any) -> APIRouter:
         payment_handler = body.get("payment_handler", "purchase_order")
         buyer = body.get("buyer", {})
 
-        buyer_uid = _SF_BUYER_USER_ID
+        # buyer_user_id comes from the logged-in user's Salesforce session (preferred);
+        # fall back to the env var for backwards-compat / local dev
+        buyer_uid = body.get("buyer_user_id") or _SF_BUYER_USER_ID
         if not buyer_uid:
             return Response(
                 status_code=501,
                 content=json.dumps({
-                    "error": "SF_BUYER_USER_ID is not configured on this service. "
-                             "Set it to the demo buyer's Salesforce user ID (starts with 005) "
-                             "to enable agentic order placement."
+                    "error": "No buyer user ID available. Log in via Salesforce first, "
+                             "or set SF_BUYER_USER_ID on this service."
                 }),
                 media_type="application/json",
             )

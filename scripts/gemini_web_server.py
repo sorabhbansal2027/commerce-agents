@@ -267,6 +267,7 @@ class TrackedAgent(GeminiUCPAgent):
                         "payment_handler": args.get("payment_handler", "purchase_order"),
                         "po_number": po_number,
                         "buyer": buyer,
+                        "buyer_user_id": _sf_buyer_user_id,  # from login, never hardcoded
                     },
                     timeout=30,
                 )
@@ -375,7 +376,9 @@ async def _sf_authenticate(username: str, password: str) -> tuple[bool, str]:
             headers={"Content-Type": "text/xml; charset=utf-8", "SOAPAction": '""'},
         )
     if resp.status_code == 200 and "<sessionId>" in resp.text:
-        return True, ""
+        user_id_match = _re.search(r"<userId>(.*?)</userId>", resp.text)
+        user_id = user_id_match.group(1) if user_id_match else ""
+        return True, "", user_id
     fault = _re.search(r"<faultstring>(.*?)</faultstring>", resp.text)
     raw = fault.group(1) if fault else f"Salesforce returned HTTP {resp.status_code}."
     if "LOGIN_MUST_USE_SECURITY_TOKEN" in raw:
@@ -386,8 +389,12 @@ async def _sf_authenticate(username: str, password: str) -> tuple[bool, str]:
         msg = "This Salesforce user is inactive."
     else:
         msg = raw
-    return False, msg
+    return False, msg, ""
 
+
+# Salesforce user ID of the currently authenticated buyer — set on login,
+# used by place_b2b_order so the real buyer's cart is operated on.
+_sf_buyer_user_id: str = ""
 
 class LoginRequest(BaseModel):
     username: str
@@ -417,9 +424,13 @@ class QuoteCreateRequest(BaseModel):
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 @app.post("/api/login")
 async def login(body: LoginRequest) -> dict:
+    global _sf_buyer_user_id
     if SF_BASE and SF_CLIENT_ID and SF_CLIENT_SECRET:
-        ok, error = await _sf_authenticate(body.username, body.password)
-        return {"ok": ok} if ok else {"ok": False, "error": error}
+        ok, error, user_id = await _sf_authenticate(body.username, body.password)
+        if ok:
+            _sf_buyer_user_id = user_id  # store for use by place_b2b_order
+            return {"ok": True}
+        return {"ok": False, "error": error}
     # Fallback for local dev when SF env vars are not set
     if body.username == DEMO_USER and body.password == DEMO_PASS:
         return {"ok": True}

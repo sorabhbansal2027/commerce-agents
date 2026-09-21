@@ -8,6 +8,7 @@ export default function LoginScreen({ onLogin }: Props) {
   const userRef = useRef<HTMLInputElement>(null)
   const passRef = useRef<HTMLInputElement>(null)
   const [error, setError] = useState('')
+  const [needsToken, setNeedsToken] = useState(false)
   const [loading, setLoading] = useState(false)
   const [authMode, setAuthMode] = useState<'salesforce' | 'demo' | null>(null)
 
@@ -29,6 +30,7 @@ export default function LoginScreen({ onLogin }: Props) {
       return
     }
     setError('')
+    setNeedsToken(false)
     setLoading(true)
     try {
       const res = await fetch('/api/login', {
@@ -40,6 +42,9 @@ export default function LoginScreen({ onLogin }: Props) {
       if (data.ok) {
         sessionStorage.setItem('gc_authed', '1')
         onLogin()
+      } else if (data.error === 'SECURITY_TOKEN_REQUIRED') {
+        setNeedsToken(true)
+        setError('Append your Salesforce security token to your password and try again.')
       } else {
         setError(data.error ?? 'Authentication failed.')
       }
@@ -149,8 +154,20 @@ export default function LoginScreen({ onLogin }: Props) {
           </label>
 
           {isSalesforce && (
-            <div style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '20px' }}>
-              If your IP is not trusted, append your security token to the password.
+            <div style={{
+              marginBottom: '20px',
+              padding: needsToken ? '10px 14px' : '0',
+              borderRadius: needsToken ? '8px' : '0',
+              background: needsToken ? '#fffbeb' : 'transparent',
+              border: needsToken ? '1px solid #fcd34d' : 'none',
+              fontSize: '12px',
+              color: needsToken ? '#92400e' : '#94a3b8',
+              transition: 'all .2s',
+            }}>
+              {needsToken && <div style={{ fontWeight: 700, marginBottom: '4px' }}>🔑 Security token required</div>}
+              {needsToken
+                ? 'Your network is not trusted by Salesforce. Append your security token directly to your password (e.g. MyPassword + AbCdEfGhIj123) and try again. Get your token: Salesforce Setup → Personal Settings → Reset My Security Token.'
+                : 'If your IP is not trusted, append your security token to the password.'}
             </div>
           )}
 

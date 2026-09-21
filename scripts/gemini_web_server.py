@@ -370,7 +370,15 @@ async def _sf_authenticate(username: str, password: str) -> tuple[bool, str]:
     if resp.status_code == 200 and "<sessionId>" in resp.text:
         return True, ""
     fault = _re.search(r"<faultstring>(.*?)</faultstring>", resp.text)
-    msg = fault.group(1) if fault else f"Salesforce returned HTTP {resp.status_code}."
+    raw = fault.group(1) if fault else f"Salesforce returned HTTP {resp.status_code}."
+    if "LOGIN_MUST_USE_SECURITY_TOKEN" in raw:
+        msg = "SECURITY_TOKEN_REQUIRED"
+    elif "INVALID_LOGIN" in raw or "Invalid username, password" in raw:
+        msg = "Invalid username or password."
+    elif "INACTIVE_USER" in raw:
+        msg = "This Salesforce user is inactive."
+    else:
+        msg = raw
     return False, msg
 
 

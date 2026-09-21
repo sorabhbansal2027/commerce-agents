@@ -16,7 +16,6 @@ export default function App() {
   const [cartItems, setCartItems] = useState<CartItem[]>([])
   const [addingId, setAddingId] = useState<string | null>(null)
   const [addedIds, setAddedIds] = useState<Set<string>>(new Set())
-  const [checkingOut, setCheckingOut] = useState(false)
 
   const sendMessage = useCallback(async (text: string) => {
     if (loading) return
@@ -40,7 +39,7 @@ export default function App() {
           : m
       ))
 
-      // Sync cart when Gemini added items on the user's behalf
+      // Sync cart when Gemini added or loaded items via tool calls
       if (data.cart_additions?.length) {
         for (const { product, quantity } of data.cart_additions) {
           setCartItems(prev => {
@@ -74,7 +73,7 @@ export default function App() {
     })
     setAddedIds(prev => new Set([...prev, product.product_id]))
 
-    // Also tell Gemini so it tracks the cart for checkout
+    // Tell Gemini so it tracks the item for checkout / quote
     const pendingMsg: Message = { id: uid(), role: 'assistant', text: '', loading: true }
     setMessages(prev => [...prev, pendingMsg])
     try {
@@ -96,13 +95,28 @@ export default function App() {
     }
   }, [addingId])
 
-  const checkout = useCallback(async () => {
-    if (checkingOut || cartItems.length === 0) return
-    setCheckingOut(true)
+  // All cart actions go through sendMessage so Gemini's tools handle them
+  const checkout = useCallback(() => {
+    if (cartItems.length === 0) return
     const names = cartItems.map(i => `${i.product.title} (qty ${i.quantity})`).join(', ')
-    await sendMessage(`Please create a checkout session for: ${names}. Payment method: credit card.`)
-    setCheckingOut(false)
-  }, [cartItems, checkingOut, sendMessage])
+    sendMessage(`Please create a checkout session for: ${names}. Payment method: credit card.`)
+  }, [cartItems, sendMessage])
+
+  const checkoutPO = useCallback(() => {
+    if (cartItems.length === 0) return
+    const names = cartItems.map(i => `${i.product.title} (qty ${i.quantity})`).join(', ')
+    sendMessage(`Please place an order for: ${names}. Payment method: purchase_order.`)
+  }, [cartItems, sendMessage])
+
+  const saveAsQuote = useCallback(() => {
+    if (cartItems.length === 0) return
+    const names = cartItems.map(i => `${i.product.title} (qty ${i.quantity})`).join(', ')
+    sendMessage(`Save my current cart as a quote. Items: ${names}.`)
+  }, [cartItems, sendMessage])
+
+  const loadQuote = useCallback((quoteId: string) => {
+    sendMessage(`Load quote ${quoteId} to my cart.`)
+  }, [sendMessage])
 
   const resetConversation = useCallback(async () => {
     await fetch(`${API}/reset`, { method: 'POST' })
@@ -195,7 +209,10 @@ export default function App() {
         <CartSidebar
           items={cartItems}
           onCheckout={checkout}
-          checkingOut={checkingOut}
+          onCheckoutPO={checkoutPO}
+          onSaveQuote={saveAsQuote}
+          onLoadQuote={loadQuote}
+          busy={loading}
         />
       </main>
     </div>

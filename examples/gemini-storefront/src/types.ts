@@ -27,3 +27,21 @@ export interface CartItem {
   product: Product;
   quantity: number;
 }
+
+export interface QuoteItem {
+  product_id: string;
+  title: string;
+  price: number;
+  currency: string;
+  image_url?: string;
+  quantity: number;
+}
+
+export interface Quote {
+  quote_id: string;
+  name: string;
+  items: QuoteItem[];
+  total: number;
+  currency: string;
+  created_at: string;
+}

@@ -57,6 +57,10 @@ if not API_KEY:
     sys.exit(1)
 
 
+# ── In-memory quote store (survives for the session lifetime) ─────────────────
+_quotes: dict[str, dict] = {}
+
+
 # ── Agent with product + cart capture ────────────────────────────────────────
 class TrackedAgent(GeminiUCPAgent):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
@@ -65,9 +69,7 @@ class TrackedAgent(GeminiUCPAgent):
         self.last_tool_calls: list[dict] = []
         self.cart_additions: list[dict] = []  # {product, quantity} pairs for UI sync
 
-        # Inject a virtual add_to_cart tool so Gemini uses it instead of going
-        # straight to create_checkout_session when the user says "add to cart".
-        from google.genai import types as _gtypes  # already imported transitively
+        from google.genai import types as _gtypes
         self._tools.append(
             _gtypes.Tool(
                 function_declarations=[
@@ -81,30 +83,55 @@ class TrackedAgent(GeminiUCPAgent):
                         parameters={
                             "type": "object",
                             "properties": {
-                                "product_id": {
-                                    "type": "string",
-                                    "description": "The product_id returned by search_products",
-                                },
-                                "quantity": {
-                                    "type": "integer",
-                                    "description": "Quantity to add (default 1)",
-                                },
+                                "product_id": {"type": "string", "description": "The product_id returned by search_products"},
+                                "quantity": {"type": "integer", "description": "Quantity to add (default 1)"},
                             },
                             "required": ["product_id"],
                         },
-                    )
+                    ),
+                    _gtypes.FunctionDeclaration(
+                        name="save_cart_as_quote",
+                        description=(
+                            "Save the current cart items as a draft quote. "
+                            "Call this when the user asks to save, quote, or get a price quote for cart items."
+                        ),
+                        parameters={
+                            "type": "object",
+                            "properties": {
+                                "name": {"type": "string", "description": "Optional quote name or reference"},
+                            },
+                        },
+                    ),
+                    _gtypes.FunctionDeclaration(
+                        name="load_quote_to_cart",
+                        description="Load an existing saved quote's items into the shopping cart.",
+                        parameters={
+                            "type": "object",
+                            "properties": {
+                                "quote_id": {"type": "string", "description": "Quote ID (e.g. Q-ABCD1234) from list_quotes"},
+                            },
+                            "required": ["quote_id"],
+                        },
+                    ),
+                    _gtypes.FunctionDeclaration(
+                        name="list_quotes",
+                        description="List all saved quotes so the user can pick one to load or review.",
+                        parameters={"type": "object", "properties": {}},
+                    ),
                 ]
             )
         )
-        # Rebuild the generation config so the new tool is included
+        # Rebuild config with all injected tools
         self._config = _gtypes.GenerateContentConfig(
             tools=self._tools,
             system_instruction=self._system_prompt(),
         )
 
-    def _call_ucp(self, fn_name: str, args: dict) -> dict:
+    def _call_ucp(self, fn_name: str, args: dict) -> dict:  # noqa: C901
+        import uuid as _uuid
+        import datetime as _dt
+
         if fn_name == "add_to_cart":
-            # Virtual tool: record the addition for UI sync and return success.
             pid = args.get("product_id", "")
             qty = int(args.get("quantity", 1))
             product = next((p for p in self.last_products if p.get("product_id") == pid), None)
@@ -112,6 +139,61 @@ class TrackedAgent(GeminiUCPAgent):
                 self.cart_additions.append({"product": product, "quantity": qty})
                 return {"ok": True, "message": f"Added {qty}x {product.get('title', pid)} to cart."}
             return {"ok": True, "message": f"Added product {pid} (qty {qty}) to cart."}
+
+        if fn_name == "save_cart_as_quote":
+            if not self.cart_additions:
+                return {"error": "Cart is empty — add items before saving a quote."}
+            quote_id = f"Q-{_uuid.uuid4().hex[:8].upper()}"
+            name = args.get("name") or f"Quote {len(_quotes) + 1}"
+            items = [
+                {
+                    "product_id": a["product"]["product_id"],
+                    "title": a["product"]["title"],
+                    "price": a["product"]["price"],
+                    "currency": a["product"].get("currency", "USD"),
+                    "image_url": a["product"].get("image_url"),
+                    "quantity": a["quantity"],
+                }
+                for a in self.cart_additions
+            ]
+            quote = {
+                "quote_id": quote_id,
+                "name": name,
+                "items": items,
+                "total": round(sum(i["price"] * i["quantity"] for i in items), 2),
+                "currency": "USD",
+                "created_at": _dt.datetime.utcnow().isoformat(),
+            }
+            _quotes[quote_id] = quote
+            return {"ok": True, "quote_id": quote_id, "name": name, "total": quote["total"], "items_count": len(items)}
+
+        if fn_name == "load_quote_to_cart":
+            qid = args.get("quote_id", "")
+            if qid not in _quotes:
+                return {"error": f"Quote {qid!r} not found. Use list_quotes to see available quotes."}
+            quote = _quotes[qid]
+            for item in quote["items"]:
+                product = {
+                    "product_id": item["product_id"],
+                    "title": item["title"],
+                    "price": item["price"],
+                    "currency": item.get("currency", "USD"),
+                    "image_url": item.get("image_url"),
+                    "in_stock": True,
+                }
+                self.cart_additions.append({"product": product, "quantity": item["quantity"]})
+            return {"ok": True, "quote_id": qid, "items_loaded": len(quote["items"]), "total": quote["total"]}
+
+        if fn_name == "list_quotes":
+            if not _quotes:
+                return {"quotes": [], "message": "No quotes saved yet."}
+            return {
+                "quotes": [
+                    {"quote_id": q["quote_id"], "name": q["name"], "total": q["total"],
+                     "items_count": len(q["items"]), "created_at": q["created_at"]}
+                    for q in _quotes.values()
+                ]
+            }
 
         result = super()._call_ucp(fn_name, args)
         self.last_tool_calls.append({"tool": fn_name, "args": args})
@@ -193,6 +275,18 @@ class CartRequest(BaseModel):
     product_id: str
     quantity: int = 1
     product_name: str = ""
+
+class QuoteItemIn(BaseModel):
+    product_id: str
+    title: str
+    price: float
+    currency: str = "USD"
+    image_url: str | None = None
+    quantity: int = 1
+
+class QuoteCreateRequest(BaseModel):
+    name: str = ""
+    items: list[QuoteItemIn]
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
@@ -280,7 +374,43 @@ async def reset() -> dict:
     agent.reset()
     agent.last_products = []
     agent.last_tool_calls = []
+    agent.cart_additions = []
     return {"ok": True}
+
+
+# ── Quote endpoints ────────────────────────────────────────────────────────────
+@app.post("/api/quotes", status_code=201)
+async def create_quote(body: QuoteCreateRequest) -> dict:
+    """Create a named quote from an explicit list of cart items."""
+    import uuid as _uuid
+    import datetime as _dt
+    quote_id = f"Q-{_uuid.uuid4().hex[:8].upper()}"
+    items = [i.model_dump() for i in body.items]
+    quote = {
+        "quote_id": quote_id,
+        "name": body.name or f"Quote {quote_id}",
+        "items": items,
+        "total": round(sum(i["price"] * i["quantity"] for i in items), 2),
+        "currency": "USD",
+        "created_at": _dt.datetime.utcnow().isoformat(),
+    }
+    _quotes[quote_id] = quote
+    return quote
+
+
+@app.get("/api/quotes")
+async def list_quotes() -> dict:
+    """Return all saved quotes for the session."""
+    return {"quotes": list(_quotes.values())}
+
+
+@app.get("/api/quotes/{quote_id}")
+async def get_quote(quote_id: str) -> dict:
+    """Return a single quote by ID."""
+    from fastapi import HTTPException
+    if quote_id not in _quotes:
+        raise HTTPException(status_code=404, detail=f"Quote {quote_id!r} not found")
+    return _quotes[quote_id]
 
 
 # ── Static frontend (production: dist/ built by Dockerfile.gemini) ───────────

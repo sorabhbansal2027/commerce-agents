@@ -1,13 +1,18 @@
+import { useState } from 'react'
 import type { CartItem } from '../types'
 
 interface Props {
   items: CartItem[]
   onCheckout: () => void
-  checkingOut: boolean
+  onCheckoutPO: () => void
+  onSaveQuote: () => void
+  onLoadQuote: (quoteId: string) => void
+  busy: boolean
 }
 
-export default function CartSidebar({ items, onCheckout, checkingOut }: Props) {
+export default function CartSidebar({ items, onCheckout, onCheckoutPO, onSaveQuote, onLoadQuote, busy }: Props) {
   const total = items.reduce((s, i) => s + i.product.price * i.quantity, 0)
+  const [quoteInput, setQuoteInput] = useState('')
 
   return (
     <aside style={{
@@ -90,33 +95,116 @@ export default function CartSidebar({ items, onCheckout, checkingOut }: Props) {
         )}
       </div>
 
-      {/* Footer */}
+      {/* Actions when cart has items */}
       {items.length > 0 && (
-        <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px', fontWeight: 700 }}>
+        <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          {/* Total */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700 }}>
             <span>Total</span>
             <span style={{ color: 'var(--primary)' }}>
               ${total.toLocaleString('en-US', { minimumFractionDigits: 2 })}
             </span>
           </div>
+
+          {/* Save as Quote */}
+          <button
+            onClick={onSaveQuote}
+            disabled={busy}
+            style={{
+              width: '100%', padding: '8px',
+              background: busy ? '#f1f5f9' : '#f8fafc',
+              color: busy ? '#94a3b8' : '#334155',
+              borderRadius: '8px', fontWeight: 600, fontSize: '13px',
+              border: '1px solid var(--border)',
+              transition: 'background .15s',
+              cursor: busy ? 'not-allowed' : 'pointer',
+            }}
+          >
+            📋 Save as Quote
+          </button>
+
+          {/* Checkout — Credit Card */}
           <button
             onClick={onCheckout}
-            disabled={checkingOut}
+            disabled={busy}
             style={{
-              width: '100%',
-              padding: '10px',
-              background: checkingOut ? '#93c5fd' : 'var(--primary)',
-              color: '#fff',
-              borderRadius: '10px',
-              fontWeight: 700,
-              fontSize: '14px',
+              width: '100%', padding: '10px',
+              background: busy ? '#93c5fd' : 'var(--primary)',
+              color: '#fff', borderRadius: '10px',
+              fontWeight: 700, fontSize: '14px',
               transition: 'background .2s',
             }}
           >
-            {checkingOut ? 'Processing…' : 'Checkout with Gemini →'}
+            {busy ? 'Processing…' : 'Checkout (Credit Card) →'}
+          </button>
+
+          {/* Checkout — Purchase Order */}
+          <button
+            onClick={onCheckoutPO}
+            disabled={busy}
+            style={{
+              width: '100%', padding: '10px',
+              background: busy ? '#e2e8f0' : '#0f172a',
+              color: busy ? '#94a3b8' : '#fff',
+              borderRadius: '10px', fontWeight: 700, fontSize: '14px',
+              transition: 'background .2s',
+            }}
+          >
+            {busy ? 'Processing…' : 'Place Order (PO) →'}
           </button>
         </div>
       )}
+
+      {/* Load Quote */}
+      <div style={{
+        padding: '12px 16px',
+        borderTop: '1px solid var(--border)',
+      }}>
+        <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+          Load Quote
+        </div>
+        <div style={{ display: 'flex', gap: '6px' }}>
+          <input
+            type="text"
+            value={quoteInput}
+            onChange={e => setQuoteInput(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter' && quoteInput.trim() && !busy) {
+                onLoadQuote(quoteInput.trim())
+                setQuoteInput('')
+              }
+            }}
+            placeholder="Q-ABCD1234"
+            disabled={busy}
+            style={{
+              flex: 1, padding: '7px 10px',
+              borderRadius: '8px', border: '1.5px solid var(--border)',
+              fontSize: '13px', outline: 'none', minWidth: 0,
+              background: busy ? '#f8fafc' : '#fff',
+            }}
+            onFocus={e => { e.currentTarget.style.borderColor = 'var(--primary)' }}
+            onBlur={e => { e.currentTarget.style.borderColor = 'var(--border)' }}
+          />
+          <button
+            onClick={() => {
+              if (quoteInput.trim() && !busy) {
+                onLoadQuote(quoteInput.trim())
+                setQuoteInput('')
+              }
+            }}
+            disabled={!quoteInput.trim() || busy}
+            style={{
+              padding: '7px 12px',
+              background: !quoteInput.trim() || busy ? '#e2e8f0' : 'var(--primary)',
+              color: !quoteInput.trim() || busy ? '#94a3b8' : '#fff',
+              borderRadius: '8px', fontWeight: 700, fontSize: '13px',
+              flexShrink: 0,
+            }}
+          >
+            Load
+          </button>
+        </div>
+      </div>
     </aside>
   )
 }

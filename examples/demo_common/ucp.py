@@ -304,6 +304,41 @@ def build_ucp_router(backend: Any) -> APIRouter:
             media_type="application/json",
         )
 
+    # ── Active cart fetch ──────────────────────────────────────────────────────
+
+    @router.get("/ucp/cart", summary="Fetch buyer's active cart from Salesforce")
+    async def ucp_get_buyer_cart(buyer_user_id: str = "", request: Request = None) -> Response:
+        """Return the buyer's active Salesforce B2B WebCart items.
+
+        ``buyer_user_id`` is the Salesforce User Id (starts with 005).
+        Used on login to pre-populate the UI cart.
+        """
+        uid = buyer_user_id or _SF_BUYER_USER_ID
+        if not uid or not hasattr(backend, "get_cart"):
+            return Response(content=json.dumps({"items": []}), media_type="application/json")
+
+        try:
+            from shopping_agent.types import ShoppingSessionContext as _SSC
+            import datetime as _dt
+            session = _SSC(user_id=uid, now=_dt.datetime.utcnow())
+            cart = await backend.get_cart(session)
+            items = [
+                {
+                    "product_id": ci.product_id,
+                    "title": ci.title,
+                    "price": float(ci.price or 0),
+                    "currency": getattr(cart, "currency", "USD"),
+                    "image_url": getattr(ci, "image_url", None),
+                    "in_stock": True,
+                    "quantity": int(ci.quantity or 1),
+                }
+                for ci in cart.items
+            ]
+            return Response(content=json.dumps({"items": items}), media_type="application/json")
+        except Exception as exc:
+            _log.warning("ucp_get_buyer_cart failed: %s", exc)
+            return Response(content=json.dumps({"items": [], "warning": str(exc)}), media_type="application/json")
+
     # ── Agentic order placement (B2B Commerce — no storefront required) ──────
 
     @router.post("/ucp/orders", status_code=201, summary="Place a B2B order agentically")

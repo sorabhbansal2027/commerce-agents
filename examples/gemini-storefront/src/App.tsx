@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import ChatPanel from './components/ChatPanel'
 import CartSidebar from './components/CartSidebar'
 import LoginScreen from './components/LoginScreen'
@@ -16,6 +16,12 @@ export default function App() {
   const [cartItems, setCartItems] = useState<CartItem[]>([])
   const [addingId, setAddingId] = useState<string | null>(null)
   const [addedIds, setAddedIds] = useState<Set<string>>(new Set())
+
+  // On page load, restore active cart if already authenticated
+  useEffect(() => {
+    if (authed) loadActiveCart()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const sendMessage = useCallback(async (text: string) => {
     if (loading) return
@@ -126,6 +132,33 @@ export default function App() {
     sendMessage(`Load quote ${quoteId} to my cart.`)
   }, [sendMessage])
 
+  const loadActiveCart = useCallback(async () => {
+    try {
+      const res = await fetch(`${API}/active-cart`)
+      const data = await res.json()
+      if (data.items?.length) {
+        const newItems: CartItem[] = data.items.map((it: {
+          product_id: string; title: string; price: number;
+          currency: string; image_url?: string; quantity: number
+        }) => ({
+          product: {
+            product_id: it.product_id,
+            title: it.title,
+            price: it.price,
+            currency: it.currency,
+            in_stock: true,
+            image_url: it.image_url,
+          },
+          quantity: it.quantity,
+        }))
+        setCartItems(newItems)
+        setAddedIds(new Set(newItems.map(i => i.product.product_id)))
+      }
+    } catch {
+      // silently ignore — cart stays empty if fetch fails
+    }
+  }, [])
+
   const resetConversation = useCallback(async () => {
     await fetch(`${API}/reset`, { method: 'POST' })
     setMessages([])
@@ -141,7 +174,7 @@ export default function App() {
     setAddedIds(new Set())
   }, [])
 
-  if (!authed) return <LoginScreen onLogin={() => setAuthed(true)} />
+  if (!authed) return <LoginScreen onLogin={() => { setAuthed(true); loadActiveCart() }} />
 
   return (
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--bg)' }}>

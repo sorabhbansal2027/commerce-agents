@@ -438,6 +438,39 @@ async def login(body: LoginRequest) -> dict:
     return {"ok": False, "error": "Invalid username or password."}
 
 
+@app.get("/api/active-cart")
+async def active_cart() -> dict:
+    """Fetch the signed-in buyer's active Salesforce cart and sync it into the agent."""
+    if not _sf_buyer_user_id:
+        return {"items": []}
+    try:
+        async with _httpx.AsyncClient(timeout=15) as client:
+            resp = await client.get(
+                f"{UCP_BASE}/ucp/cart",
+                params={"buyer_user_id": _sf_buyer_user_id},
+            )
+        data = resp.json()
+        items = data.get("items", [])
+        # Sync into the agent's persistent cart so tools like save_cart_as_quote work
+        agent = get_agent()
+        agent.cart = []
+        agent.last_products = []
+        for it in items:
+            product = {
+                "product_id": it["product_id"],
+                "title": it["title"],
+                "price": it["price"],
+                "currency": it.get("currency", "USD"),
+                "image_url": it.get("image_url"),
+                "in_stock": True,
+            }
+            agent.cart.append({"product": product, "quantity": it["quantity"]})
+            agent.last_products.append(product)
+        return {"items": items}
+    except Exception as exc:
+        return {"items": [], "warning": str(exc)}
+
+
 @app.get("/api/health")
 async def health() -> dict:
     return {

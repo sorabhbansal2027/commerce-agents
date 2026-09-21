@@ -184,10 +184,11 @@ async def server_ip() -> dict:
 @app.post("/api/chat")
 async def chat(body: ChatRequest) -> dict:
     """Send a message to Gemini and return the reply + any products found."""
-    agent = get_agent()
-    agent.last_products = []
-    agent.last_tool_calls = []
+    global _agent
     try:
+        agent = get_agent()
+        agent.last_products = []
+        agent.last_tool_calls = []
         reply = agent.send(body.message)
         return {
             "reply": reply,
@@ -195,16 +196,24 @@ async def chat(body: ChatRequest) -> dict:
             "tool_calls": agent.last_tool_calls,
         }
     except Exception as e:
+        _agent = None  # reset so next request retries agent init
         error_msg = str(e)
         if "API key" in error_msg or "INVALID_ARGUMENT" in error_msg:
             return {"reply": "Invalid Gemini API key. Please check your GEMINI_API_KEY.", "products": [], "tool_calls": []}
+        if any(x in error_msg for x in ["502", "503", "ucp", "manifest", "connect"]):
+            return {"reply": f"The storefront backend is not responding ({UCP_BASE}). Please check that it is running.", "products": [], "tool_calls": []}
         return {"reply": f"Error: {error_msg}", "products": [], "tool_calls": []}
 
 
 @app.post("/api/cart")
 async def add_to_cart(body: CartRequest) -> dict:
     """Tell Gemini to add a specific product to the cart and proceed to checkout."""
-    agent = get_agent()
+    global _agent
+    try:
+        agent = get_agent()
+    except Exception as e:
+        _agent = None
+        return {"reply": f"Error initialising agent: {e}", "tool_calls": []}
     agent.last_tool_calls = []
     name_hint = f" ({body.product_name})" if body.product_name else ""
     msg = f"Add product {body.product_id}{name_hint} to my cart, quantity {body.quantity}."

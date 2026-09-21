@@ -67,8 +67,10 @@ class TrackedAgent(GeminiUCPAgent):
         super().__init__(*args, **kwargs)
         self.last_products: list[dict] = []
         self.last_tool_calls: list[dict] = []
-        self.cart_additions: list[dict] = []  # {product, quantity} pairs for UI sync
-        self.checkout_session: dict | None = None  # last checkout session for UI card
+        self.cart_additions: list[dict] = []  # NEW additions this turn only — sent to frontend
+        self.cart: list[dict] = []            # Persistent cart across turns — used for save/checkout
+        self.checkout_session: dict | None = None
+        self.quote_result: dict | None = None
 
         from google.genai import types as _gtypes
         self._tools.append(
@@ -119,6 +121,26 @@ class TrackedAgent(GeminiUCPAgent):
                         description="List all saved quotes so the user can pick one to load or review.",
                         parameters={"type": "object", "properties": {}},
                     ),
+                    _gtypes.FunctionDeclaration(
+                        name="place_b2b_order",
+                        description=(
+                            "Place a real Salesforce B2B Commerce order without the storefront. "
+                            "Use this instead of create_checkout_session when the user asks to "
+                            "actually place / confirm / submit the order. "
+                            "Builds the cart and places the order agentically."
+                        ),
+                        parameters={
+                            "type": "object",
+                            "properties": {
+                                "payment_handler": {
+                                    "type": "string",
+                                    "description": "purchase_order or credit_card",
+                                },
+                                "buyer_name":  {"type": "string", "description": "Buyer full name"},
+                                "buyer_email": {"type": "string", "description": "Buyer email"},
+                            },
+                        },
+                    ),
                 ]
             )
         )
@@ -136,13 +158,23 @@ class TrackedAgent(GeminiUCPAgent):
             pid = args.get("product_id", "")
             qty = int(args.get("quantity", 1))
             product = next((p for p in self.last_products if p.get("product_id") == pid), None)
+            self.last_tool_calls.append({"tool": fn_name, "args": args})
             if product:
+                # Persist in self.cart (survives across turns)
+                existing = next((c for c in self.cart if c["product"]["product_id"] == pid), None)
+                if existing:
+                    existing["quantity"] += qty
+                else:
+                    self.cart.append({"product": product, "quantity": qty})
+                # Also record as this-turn addition so the UI syncs the cart display
                 self.cart_additions.append({"product": product, "quantity": qty})
                 return {"ok": True, "message": f"Added {qty}x {product.get('title', pid)} to cart."}
             return {"ok": True, "message": f"Added product {pid} (qty {qty}) to cart."}
 
         if fn_name == "save_cart_as_quote":
-            if not self.cart_additions:
+            self.last_tool_calls.append({"tool": fn_name, "args": args})
+            # Use persistent self.cart, NOT self.cart_additions (which is reset each turn)
+            if not self.cart:
                 return {"error": "Cart is empty — add items before saving a quote."}
             quote_id = f"Q-{_uuid.uuid4().hex[:8].upper()}"
             name = args.get("name") or f"Quote {len(_quotes) + 1}"
@@ -155,7 +187,7 @@ class TrackedAgent(GeminiUCPAgent):
                     "image_url": a["product"].get("image_url"),
                     "quantity": a["quantity"],
                 }
-                for a in self.cart_additions
+                for a in self.cart
             ]
             quote = {
                 "quote_id": quote_id,
@@ -166,9 +198,11 @@ class TrackedAgent(GeminiUCPAgent):
                 "created_at": _dt.datetime.utcnow().isoformat(),
             }
             _quotes[quote_id] = quote
+            self.quote_result = quote  # captured for UI card rendering
             return {"ok": True, "quote_id": quote_id, "name": name, "total": quote["total"], "items_count": len(items)}
 
         if fn_name == "load_quote_to_cart":
+            self.last_tool_calls.append({"tool": fn_name, "args": args})
             qid = args.get("quote_id", "")
             if qid not in _quotes:
                 return {"error": f"Quote {qid!r} not found. Use list_quotes to see available quotes."}
@@ -182,10 +216,17 @@ class TrackedAgent(GeminiUCPAgent):
                     "image_url": item.get("image_url"),
                     "in_stock": True,
                 }
+                # Keep both persistent cart and this-turn additions in sync
+                existing = next((c for c in self.cart if c["product"]["product_id"] == item["product_id"]), None)
+                if existing:
+                    existing["quantity"] += item["quantity"]
+                else:
+                    self.cart.append({"product": product, "quantity": item["quantity"]})
                 self.cart_additions.append({"product": product, "quantity": item["quantity"]})
             return {"ok": True, "quote_id": qid, "items_loaded": len(quote["items"]), "total": quote["total"]}
 
         if fn_name == "list_quotes":
+            self.last_tool_calls.append({"tool": fn_name, "args": args})
             if not _quotes:
                 return {"quotes": [], "message": "No quotes saved yet."}
             return {
@@ -196,6 +237,45 @@ class TrackedAgent(GeminiUCPAgent):
                 ]
             }
 
+        if fn_name == "place_b2b_order":
+            self.last_tool_calls.append({"tool": fn_name, "args": args})
+            # Build line_items from persistent cart and call the real B2B order endpoint
+            if not self.cart:
+                return {"error": "Cart is empty — add items before placing an order."}
+            line_items = [
+                {
+                    "product_id": c["product"]["product_id"],
+                    "title": c["product"]["title"],
+                    "unit_price": c["product"]["price"],
+                    "quantity": c["quantity"],
+                }
+                for c in self.cart
+            ]
+            buyer = {}
+            if args.get("buyer_name"):
+                buyer["name"] = args["buyer_name"]
+            if args.get("buyer_email"):
+                buyer["email"] = args["buyer_email"]
+            try:
+                import httpx as _httpx_inner
+                resp = _httpx_inner.post(
+                    f"{self.base}/ucp/orders",
+                    json={
+                        "line_items": line_items,
+                        "payment_handler": args.get("payment_handler", "purchase_order"),
+                        "buyer": buyer,
+                    },
+                    timeout=30,
+                )
+                result = resp.json()
+                if resp.status_code in (200, 201) and "order_id" in result:
+                    self.checkout_session = result  # reuse card for both pending + placed
+                    return {"ok": True, "order_id": result["order_id"], "status": result.get("status", "placed"),
+                            "subtotal": result.get("subtotal"), "currency": result.get("currency", "USD")}
+                return {"error": result.get("error", f"Order failed (HTTP {resp.status_code})")}
+            except Exception as exc:
+                return {"error": f"Could not reach order endpoint: {exc}"}
+
         result = super()._call_ucp(fn_name, args)
         self.last_tool_calls.append({"tool": fn_name, "args": args})
         if fn_name == "search_products":
@@ -204,16 +284,32 @@ class TrackedAgent(GeminiUCPAgent):
             self.checkout_session = result
         return result
 
+    def reset(self) -> None:
+        super().reset()
+        self.cart = []
+        self.cart_additions = []
+        self.quote_result = None
+        self.checkout_session = None
+
     def _system_prompt(self) -> str:
         # Remove the "always confirm first" instruction — the UI renders a
         # CheckoutConfirmation card when create_checkout_session is called,
         # so no separate text confirmation step is needed.
         base = super()._system_prompt()
-        return base.replace(
+        base = base.replace(
             "When creating a checkout session, always confirm the items and total with the user first. ",
             "When the user asks to checkout or place an order, call create_checkout_session immediately. "
             "Do NOT ask for confirmation in text first — the UI will show the order card. ",
         )
+        base += (
+            "\n\nUI RENDERING RULE: When you call create_checkout_session, place_b2b_order, or "
+            "save_cart_as_quote, the application renders a structured UI card automatically. "
+            "After calling one of these tools, respond with ONE brief sentence only (e.g. "
+            "'Your order has been placed.' or 'Quote saved.'). "
+            "Do NOT output markdown lists, item breakdowns, prices, or formatted summaries — "
+            "those details are already shown in the card."
+        )
+        return base
 
 
 _agent: TrackedAgent | None = None
@@ -341,8 +437,9 @@ async def chat(body: ChatRequest) -> dict:
         agent = get_agent()
         agent.last_products = []
         agent.last_tool_calls = []
-        agent.cart_additions = []
+        agent.cart_additions = []       # this-turn additions only; self.cart persists
         agent.checkout_session = None
+        agent.quote_result = None
         reply = agent.send(body.message)
         return {
             "reply": reply,
@@ -350,6 +447,7 @@ async def chat(body: ChatRequest) -> dict:
             "tool_calls": agent.last_tool_calls,
             "cart_additions": agent.cart_additions,
             "checkout_session": agent.checkout_session,
+            "quote_result": agent.quote_result,
         }
     except Exception as e:
         _agent = None  # reset so next request retries agent init
@@ -385,12 +483,11 @@ async def add_to_cart(body: CartRequest) -> dict:
 
 @app.post("/api/reset")
 async def reset() -> dict:
-    """Clear the conversation history."""
+    """Clear conversation history and cart state."""
     agent = get_agent()
-    agent.reset()
+    agent.reset()   # clears history, cart, cart_additions, quote_result, checkout_session
     agent.last_products = []
     agent.last_tool_calls = []
-    agent.cart_additions = []
     return {"ok": True}
 
 

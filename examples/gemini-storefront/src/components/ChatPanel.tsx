@@ -1,8 +1,8 @@
 import { useEffect, useRef } from 'react'
-import type { Message } from '../types'
+import type { Message, Product } from '../types'
 import ProductGrid from './ProductGrid'
 import CheckoutConfirmation from './CheckoutConfirmation'
-import type { Product } from '../types'
+import QuoteConfirmation from './QuoteConfirmation'
 
 interface Props {
   messages: Message[]
@@ -178,6 +178,9 @@ export default function ChatPanel({ messages, onSend, loading, onAddToCart, addi
                       )}
                       {msg.checkoutSession && (
                         <CheckoutConfirmation session={msg.checkoutSession} />
+                      )}
+                      {msg.quoteResult && (
+                        <QuoteConfirmation quote={msg.quoteResult} />
                       )}
                     </>
                   )}

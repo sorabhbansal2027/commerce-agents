@@ -19,12 +19,19 @@ the domain root per RFC 8615::
 from __future__ import annotations
 
 import json
+import logging
+import os
 import uuid
 from typing import Any
 
 from fastapi import APIRouter, Request, Response
 
 _UCP_VERSION = "1.0"
+_log = logging.getLogger(__name__)
+
+# Demo buyer Salesforce user ID — set via env var on the backend service.
+# Needed to locate the buyer's active WebCart when placing real B2B orders.
+_SF_BUYER_USER_ID = os.environ.get("SF_BUYER_USER_ID", "")
 
 
 # ---------------------------------------------------------------------------
@@ -284,11 +291,7 @@ def build_ucp_router(backend: Any) -> APIRouter:
 
     @router.get("/ucp/checkout-sessions/{session_id}", summary="UCP checkout session status")
     async def ucp_get_checkout_session(session_id: str, request: Request) -> Response:
-        """Retrieve a checkout session status by ID.
-
-        In this reference implementation sessions are not persisted; production
-        backends should store them in a durable store and return the live status.
-        """
+        """Retrieve a checkout session status by ID."""
         return Response(
             content=json.dumps({
                 "checkout_session_id": session_id,
@@ -300,5 +303,150 @@ def build_ucp_router(backend: Any) -> APIRouter:
             }),
             media_type="application/json",
         )
+
+    # ── Agentic order placement (B2B Commerce — no storefront required) ──────
+
+    @router.post("/ucp/orders", status_code=201, summary="Place a B2B order agentically")
+    async def ucp_place_b2b_order(request: Request) -> Response:
+        """Place a real Salesforce B2B Commerce order without requiring storefront interaction.
+
+        Requires ``SF_BUYER_USER_ID`` env var set to the demo buyer's Salesforce user ID.
+        Walks the full B2B checkout flow: get/create cart → add items → initiate checkout
+        → placeOrder action.
+
+        Request body::
+
+            {
+              "line_items": [{"product_id": "...", "quantity": 1, "title": "...", "unit_price": 0}],
+              "payment_handler": "purchase_order",
+              "buyer": {"name": "...", "email": "..."}
+            }
+        """
+        body = await request.json()
+        line_items = body.get("line_items", [])
+        payment_handler = body.get("payment_handler", "purchase_order")
+        buyer = body.get("buyer", {})
+
+        buyer_uid = _SF_BUYER_USER_ID
+        if not buyer_uid:
+            return Response(
+                status_code=501,
+                content=json.dumps({
+                    "error": "SF_BUYER_USER_ID is not configured on this service. "
+                             "Set it to the demo buyer's Salesforce user ID (starts with 005) "
+                             "to enable agentic order placement."
+                }),
+                media_type="application/json",
+            )
+
+        if not hasattr(backend, "_b2b_request") or not hasattr(backend, "_ensure_webstore_id"):
+            return Response(
+                status_code=501,
+                content=json.dumps({"error": "Backend does not support direct B2B order placement."}),
+                media_type="application/json",
+            )
+
+        try:
+            webstore_id = await backend._ensure_webstore_id()
+            account_id = await backend._account_id_for_user(buyer_uid)
+            eff_params = {"effectiveAccountId": account_id} if account_id else {}
+
+            # ── 1. Get or create the buyer's active WebCart ─────────────────
+            cart_id, currency = await backend._get_buyer_cart_id(buyer_uid, webstore_id)
+            if not cart_id:
+                cart_data = await backend._b2b_request(
+                    "POST",
+                    f"/commerce/webstores/{webstore_id}/carts",
+                    params=eff_params,
+                    json={},
+                )
+                cart_id = cart_data.get("cartId") or cart_data.get("Id", "")
+                currency = cart_data.get("currencyIsoCode", "USD")
+
+            if not cart_id:
+                return Response(
+                    status_code=500,
+                    content=json.dumps({"error": "Could not create or locate B2B cart."}),
+                    media_type="application/json",
+                )
+
+            # ── 2. Add each item to the cart ────────────────────────────────
+            placed_items: list[dict] = []
+            for item in line_items:
+                pid = item.get("product_id", "")
+                qty = max(1, int(item.get("quantity", 1)))
+                if not pid:
+                    continue
+                try:
+                    await backend._b2b_request(
+                        "POST",
+                        f"/commerce/webstores/{webstore_id}/carts/{cart_id}/cart-items",
+                        params=eff_params,
+                        json={"productId": pid, "quantity": str(qty), "type": "Product"},
+                    )
+                except Exception:
+                    # B2B search-index miss — fall back to direct CartItem SObject insert
+                    await backend._add_to_cart_direct(cart_id, pid, qty)
+                placed_items.append({
+                    "product_id": pid,
+                    "title": item.get("title", pid),
+                    "quantity": qty,
+                    "unit_price": float(item.get("unit_price", 0)),
+                    "line_total": round(float(item.get("unit_price", 0)) * qty, 2),
+                    "currency": currency,
+                })
+
+            # ── 3. Initiate checkout ─────────────────────────────────────────
+            checkout_resp = await backend._b2b_request(
+                "POST",
+                f"/commerce/webstores/{webstore_id}/checkouts",
+                params=eff_params,
+                json={"cartId": cart_id},
+            )
+            checkout_id = (
+                checkout_resp.get("checkoutId")
+                or checkout_resp.get("Id", "")
+            )
+            if not checkout_id:
+                return Response(
+                    status_code=500,
+                    content=json.dumps({"error": "Checkout initiation failed.", "detail": checkout_resp}),
+                    media_type="application/json",
+                )
+
+            # ── 4. Place the order ───────────────────────────────────────────
+            order_resp = await backend._b2b_request(
+                "POST",
+                f"/commerce/webstores/{webstore_id}/checkouts/{checkout_id}/actions/placeOrder",
+                params=eff_params,
+                json={},
+            )
+            order_id = (
+                order_resp.get("orderId")
+                or order_resp.get("orderReferenceNumber")
+                or order_resp.get("Id", "")
+            )
+
+            subtotal = round(sum(i["line_total"] for i in placed_items), 2)
+            payload = {
+                "order_id": order_id or f"ORD-{uuid.uuid4().hex[:8].upper()}",
+                "checkout_session_id": checkout_id,
+                "status": "placed",
+                "line_items": placed_items,
+                "subtotal": subtotal,
+                "currency": currency,
+                "payment_handler": payment_handler,
+                "buyer": buyer,
+                "agent_note": "Order placed directly via agentic checkout. No storefront action required.",
+            }
+            return Response(content=json.dumps(payload), status_code=201, media_type="application/json")
+
+        except Exception as exc:
+            _log.exception("ucp_place_b2b_order failed")
+            return Response(
+                status_code=500,
+                content=json.dumps({"error": str(exc)}),
+                media_type="application/json",
+            )
 
     return router

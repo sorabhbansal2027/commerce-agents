@@ -60,13 +60,13 @@ export default function CheckoutConfirmation({ session }: Props) {
 
       {/* Line items */}
       <div style={{ padding: '0 16px' }}>
-        {session.line_items.map((item, idx) => (
+        {(session.line_items ?? []).map((item, idx) => (
           <div key={idx} style={{
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
             padding: '10px 0',
-            borderBottom: idx < session.line_items.length - 1 ? '1px solid #f1f5f9' : undefined,
+            borderBottom: idx < (session.line_items ?? []).length - 1 ? '1px solid #f1f5f9' : undefined,
           }}>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: '13px', fontWeight: 600, color: '#1e293b' }}>
@@ -106,7 +106,7 @@ export default function CheckoutConfirmation({ session }: Props) {
         </div>
       )}
 
-      {/* Session ID footer */}
+      {/* Order / session ID footer */}
       <div style={{
         padding: '6px 16px',
         background: '#f1f5f9',
@@ -115,7 +115,9 @@ export default function CheckoutConfirmation({ session }: Props) {
         color: '#94a3b8',
         fontFamily: 'monospace',
       }}>
-        {session.checkout_session_id}
+        {session.order_id
+          ? `Order: ${session.order_id}`
+          : session.checkout_session_id}
       </div>
     </div>
   )

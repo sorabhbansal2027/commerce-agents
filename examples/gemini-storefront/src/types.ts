@@ -24,7 +24,8 @@ export interface CheckoutLineItem {
 }
 
 export interface CheckoutSession {
-  checkout_session_id: string;
+  checkout_session_id?: string;
+  order_id?: string;
   status: string;
   line_items: CheckoutLineItem[];
   subtotal: number;
@@ -40,6 +41,7 @@ export interface Message {
   products?: Product[];
   toolCalls?: ToolCall[];
   checkoutSession?: CheckoutSession;
+  quoteResult?: Quote;
   loading?: boolean;
 }
 

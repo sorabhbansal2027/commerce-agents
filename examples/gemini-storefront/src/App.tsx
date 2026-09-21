@@ -41,6 +41,7 @@ export default function App() {
               products: data.products ?? [],
               toolCalls: data.tool_calls ?? [],
               checkoutSession: data.checkout_session ?? undefined,
+              quoteResult: data.quote_result ?? undefined,
               loading: false,
             }
           : m

@@ -110,10 +110,10 @@ export default function App() {
     sendMessage(`Please place an order for: ${names}. Payment method: credit_card.`)
   }, [cartItems, sendMessage])
 
-  const checkoutPO = useCallback(() => {
+  const checkoutPO = useCallback((poNumber: string) => {
     if (cartItems.length === 0) return
     const names = cartItems.map(i => `${i.product.title} (qty ${i.quantity})`).join(', ')
-    sendMessage(`Please place an order for: ${names}. Payment method: purchase_order.`)
+    sendMessage(`Please place a purchase order for: ${names}. PO number: ${poNumber}. Payment method: purchase_order.`)
   }, [cartItems, sendMessage])
 
   const saveAsQuote = useCallback(() => {

@@ -4,7 +4,7 @@ import type { CartItem } from '../types'
 interface Props {
   items: CartItem[]
   onCheckout: () => void
-  onCheckoutPO: () => void
+  onCheckoutPO: (poNumber: string) => void
   onSaveQuote: () => void
   onLoadQuote: (quoteId: string) => void
   busy: boolean
@@ -13,6 +13,15 @@ interface Props {
 export default function CartSidebar({ items, onCheckout, onCheckoutPO, onSaveQuote, onLoadQuote, busy }: Props) {
   const total = items.reduce((s, i) => s + i.product.price * i.quantity, 0)
   const [quoteInput, setQuoteInput] = useState('')
+  const [showPoInput, setShowPoInput] = useState(false)
+  const [poInput, setPoInput] = useState('')
+
+  function submitPO() {
+    if (!poInput.trim() || busy) return
+    onCheckoutPO(poInput.trim())
+    setPoInput('')
+    setShowPoInput(false)
+  }
 
   return (
     <aside style={{
@@ -139,19 +148,76 @@ export default function CartSidebar({ items, onCheckout, onCheckoutPO, onSaveQuo
           </button>
 
           {/* Checkout — Purchase Order */}
-          <button
-            onClick={onCheckoutPO}
-            disabled={busy}
-            style={{
-              width: '100%', padding: '10px',
-              background: busy ? '#e2e8f0' : '#0f172a',
-              color: busy ? '#94a3b8' : '#fff',
-              borderRadius: '10px', fontWeight: 700, fontSize: '14px',
-              transition: 'background .2s',
-            }}
-          >
-            {busy ? 'Processing…' : 'Place Order (PO) →'}
-          </button>
+          {showPoInput ? (
+            <div style={{
+              border: '1.5px solid #334155',
+              borderRadius: '10px',
+              overflow: 'hidden',
+            }}>
+              <div style={{
+                background: '#0f172a',
+                padding: '8px 12px',
+                fontSize: '12px',
+                fontWeight: 600,
+                color: '#94a3b8',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+              }}>
+                <span>Purchase Order Number</span>
+                <button
+                  onClick={() => { setShowPoInput(false); setPoInput('') }}
+                  style={{ background: 'none', color: '#64748b', fontSize: '16px', padding: '0', lineHeight: 1 }}
+                >
+                  ×
+                </button>
+              </div>
+              <div style={{ padding: '8px', background: '#fff', display: 'flex', gap: '6px' }}>
+                <input
+                  autoFocus
+                  type="text"
+                  value={poInput}
+                  onChange={e => setPoInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') submitPO() }}
+                  placeholder="e.g. PO-2024-001"
+                  disabled={busy}
+                  style={{
+                    flex: 1, padding: '7px 10px', minWidth: 0,
+                    borderRadius: '7px', border: '1.5px solid #e2e8f0',
+                    fontSize: '13px', outline: 'none',
+                  }}
+                  onFocus={e => { e.currentTarget.style.borderColor = '#334155' }}
+                  onBlur={e => { e.currentTarget.style.borderColor = '#e2e8f0' }}
+                />
+                <button
+                  onClick={submitPO}
+                  disabled={!poInput.trim() || busy}
+                  style={{
+                    padding: '7px 12px', flexShrink: 0,
+                    background: !poInput.trim() || busy ? '#e2e8f0' : '#0f172a',
+                    color: !poInput.trim() || busy ? '#94a3b8' : '#fff',
+                    borderRadius: '7px', fontWeight: 700, fontSize: '13px',
+                  }}
+                >
+                  {busy ? '…' : 'Place →'}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => setShowPoInput(true)}
+              disabled={busy}
+              style={{
+                width: '100%', padding: '10px',
+                background: busy ? '#e2e8f0' : '#0f172a',
+                color: busy ? '#94a3b8' : '#fff',
+                borderRadius: '10px', fontWeight: 700, fontSize: '14px',
+                transition: 'background .2s',
+              }}
+            >
+              {busy ? 'Processing…' : 'Place Order (PO) →'}
+            </button>
+          )}
         </div>
       )}
 

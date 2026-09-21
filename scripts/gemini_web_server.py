@@ -136,6 +136,7 @@ class TrackedAgent(GeminiUCPAgent):
                                     "type": "string",
                                     "description": "purchase_order or credit_card",
                                 },
+                                "po_number":   {"type": "string", "description": "Purchase order number provided by the buyer (e.g. PO-2024-001)"},
                                 "buyer_name":  {"type": "string", "description": "Buyer full name"},
                                 "buyer_email": {"type": "string", "description": "Buyer email"},
                             },
@@ -256,6 +257,7 @@ class TrackedAgent(GeminiUCPAgent):
                 buyer["name"] = args["buyer_name"]
             if args.get("buyer_email"):
                 buyer["email"] = args["buyer_email"]
+            po_number = args.get("po_number", "")
             try:
                 import httpx as _httpx_inner
                 resp = _httpx_inner.post(
@@ -263,15 +265,19 @@ class TrackedAgent(GeminiUCPAgent):
                     json={
                         "line_items": line_items,
                         "payment_handler": args.get("payment_handler", "purchase_order"),
+                        "po_number": po_number,
                         "buyer": buyer,
                     },
                     timeout=30,
                 )
                 result = resp.json()
                 if resp.status_code in (200, 201) and "order_id" in result:
+                    if po_number:
+                        result["po_number"] = po_number
                     self.checkout_session = result  # reuse card for both pending + placed
                     return {"ok": True, "order_id": result["order_id"], "status": result.get("status", "placed"),
-                            "subtotal": result.get("subtotal"), "currency": result.get("currency", "USD")}
+                            "subtotal": result.get("subtotal"), "currency": result.get("currency", "USD"),
+                            "po_number": po_number or None}
                 return {"error": result.get("error", f"Order failed (HTTP {resp.status_code})")}
             except Exception as exc:
                 return {"error": f"Could not reach order endpoint: {exc}"}

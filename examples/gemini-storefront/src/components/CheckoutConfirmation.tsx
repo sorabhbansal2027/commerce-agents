@@ -98,6 +98,14 @@ export default function CheckoutConfirmation({ session }: Props) {
         </span>
       </div>
 
+      {/* PO number if present */}
+      {session.po_number && (
+        <div style={{ padding: '8px 16px', borderTop: '1px solid #e2e8f0', fontSize: '12px', color: '#334155', display: 'flex', justifyContent: 'space-between' }}>
+          <span style={{ fontWeight: 600 }}>PO Number</span>
+          <span style={{ fontFamily: 'monospace', fontWeight: 700 }}>{session.po_number}</span>
+        </div>
+      )}
+
       {/* Buyer info if present */}
       {(session.buyer?.name || session.buyer?.email) && (
         <div style={{ padding: '8px 16px', borderTop: '1px solid #e2e8f0', fontSize: '12px', color: '#64748b' }}>

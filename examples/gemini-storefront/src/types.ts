@@ -26,6 +26,7 @@ export interface CheckoutLineItem {
 export interface CheckoutSession {
   checkout_session_id?: string;
   order_id?: string;
+  po_number?: string;
   status: string;
   line_items: CheckoutLineItem[];
   subtotal: number;

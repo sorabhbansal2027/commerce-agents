@@ -124,10 +124,10 @@ class TrackedAgent(GeminiUCPAgent):
                     _gtypes.FunctionDeclaration(
                         name="place_b2b_order",
                         description=(
-                            "Place a real Salesforce B2B Commerce order without the storefront. "
-                            "Use this instead of create_checkout_session when the user asks to "
-                            "actually place / confirm / submit the order. "
-                            "Builds the cart and places the order agentically."
+                            "Place a real Salesforce B2B Commerce order. "
+                            "ALWAYS use this for any checkout or order placement request — "
+                            "never use create_checkout_session instead. "
+                            "If this returns an error, report it to the user and stop."
                         ),
                         parameters={
                             "type": "object",
@@ -242,7 +242,7 @@ class TrackedAgent(GeminiUCPAgent):
             self.last_tool_calls.append({"tool": fn_name, "args": args})
             # Build line_items from persistent cart and call the real B2B order endpoint
             if not self.cart:
-                return {"error": "Cart is empty — add items before placing an order."}
+                return {"error": "Cart is empty — add items before placing an order. Do not call any other tool."}
             line_items = [
                 {
                     "product_id": c["product"]["product_id"],
@@ -279,9 +279,9 @@ class TrackedAgent(GeminiUCPAgent):
                     return {"ok": True, "order_id": result["order_id"], "status": result.get("status", "placed"),
                             "subtotal": result.get("subtotal"), "currency": result.get("currency", "USD"),
                             "po_number": po_number or None}
-                return {"error": result.get("error", f"Order failed (HTTP {resp.status_code})")}
+                return {"error": result.get("error", f"Order failed (HTTP {resp.status_code})") + " Do not call any other tool — report this error to the user."}
             except Exception as exc:
-                return {"error": f"Could not reach order endpoint: {exc}"}
+                return {"error": f"Could not reach order endpoint: {exc}. Do not call any other tool — report this error to the user."}
 
         result = super()._call_ucp(fn_name, args)
         self.last_tool_calls.append({"tool": fn_name, "args": args})
@@ -305,15 +305,16 @@ class TrackedAgent(GeminiUCPAgent):
         base = super()._system_prompt()
         base = base.replace(
             "When creating a checkout session, always confirm the items and total with the user first. ",
-            "When the user asks to checkout or place an order, always call place_b2b_order immediately — "
-            "this places a real Salesforce order. Only use create_checkout_session if the user explicitly "
-            "asks for a pending/draft session. Do NOT ask for confirmation in text first. ",
+            "When the user asks to checkout or place an order, always call place_b2b_order immediately. "
+            "NEVER call create_checkout_session for checkout — it only creates a pending draft and does "
+            "NOT place a real order. Do NOT ask for confirmation in text first. "
+            "If place_b2b_order returns an error, relay that exact error message to the user and STOP — "
+            "do not call any other tool. ",
         )
         base += (
-            "\n\nUI RENDERING RULE: When you call create_checkout_session, place_b2b_order, or "
-            "save_cart_as_quote, the application renders a structured UI card automatically. "
-            "After calling one of these tools, respond with ONE brief sentence only (e.g. "
-            "'Your order has been placed.' or 'Quote saved.'). "
+            "\n\nUI RENDERING RULE: When you call place_b2b_order or save_cart_as_quote, the application "
+            "renders a structured UI card automatically. After calling one of these tools, respond with "
+            "ONE brief sentence only (e.g. 'Your order has been placed.' or 'Quote saved.'). "
             "Do NOT output markdown lists, item breakdowns, prices, or formatted summaries — "
             "those details are already shown in the card."
         )

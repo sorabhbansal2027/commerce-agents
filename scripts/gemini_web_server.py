@@ -44,10 +44,13 @@ _spec.loader.exec_module(_mod)  # type: ignore[union-attr]
 GeminiUCPAgent = _mod.GeminiUCPAgent
 
 # ── Config ────────────────────────────────────────────────────────────────────
-UCP_BASE = os.environ.get("UCP_BASE", "https://diligent-flow-production-afd7.up.railway.app")
-PORT     = int(os.environ.get("PORT", os.environ.get("GEMINI_WEB_PORT", "8090")))
-API_KEY  = os.environ.get("GEMINI_API_KEY")
-MODEL    = os.environ.get("GEMINI_MODEL", "gemini-3.6-flash")
+UCP_BASE    = os.environ.get("UCP_BASE", "https://diligent-flow-production-afd7.up.railway.app")
+PORT        = int(os.environ.get("PORT", os.environ.get("GEMINI_WEB_PORT", "8090")))
+API_KEY     = os.environ.get("GEMINI_API_KEY")
+MODEL       = os.environ.get("GEMINI_MODEL", "gemini-3.6-flash")
+SF_BASE     = os.environ.get("SF_INSTANCE_URL", "").rstrip("/")
+SF_CLIENT_ID     = os.environ.get("SF_CLIENT_ID", "")
+SF_CLIENT_SECRET = os.environ.get("SF_CLIENT_SECRET", "")
 
 if not API_KEY:
     print("Error: GEMINI_API_KEY environment variable is required")
@@ -99,6 +102,37 @@ app.add_middleware(
 DEMO_USER = os.environ.get("DEMO_USER", "demo")
 DEMO_PASS = os.environ.get("DEMO_PASSWORD", "demo123")
 
+import httpx as _httpx  # noqa: E402 – already a dep, imported here for clarity
+
+
+async def _sf_authenticate(username: str, password: str) -> tuple[bool, str]:
+    """Validate credentials via Salesforce Username-Password OAuth flow.
+
+    Returns (True, "") on success or (False, error_message) on failure.
+    The Connected App must have 'Allow Username-Password Flows' enabled.
+    If the user's IP is not in the org's trusted range, they must append
+    their security token to the password (password+token).
+    """
+    async with _httpx.AsyncClient(timeout=15) as client:
+        resp = await client.post(
+            f"{SF_BASE}/services/oauth2/token",
+            data={
+                "grant_type": "password",
+                "client_id": SF_CLIENT_ID,
+                "client_secret": SF_CLIENT_SECRET,
+                "username": username,
+                "password": password,
+            },
+        )
+    if resp.status_code == 200:
+        return True, ""
+    try:
+        err = resp.json()
+        msg = err.get("error_description") or err.get("error") or "Authentication failed."
+    except Exception:
+        msg = f"Salesforce returned HTTP {resp.status_code}."
+    return False, msg
+
 
 class LoginRequest(BaseModel):
     username: str
@@ -116,6 +150,10 @@ class CartRequest(BaseModel):
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 @app.post("/api/login")
 async def login(body: LoginRequest) -> dict:
+    if SF_BASE and SF_CLIENT_ID and SF_CLIENT_SECRET:
+        ok, error = await _sf_authenticate(body.username, body.password)
+        return {"ok": ok} if ok else {"ok": False, "error": error}
+    # Fallback for local dev when SF env vars are not set
     if body.username == DEMO_USER and body.password == DEMO_PASS:
         return {"ok": True}
     return {"ok": False, "error": "Invalid username or password."}
@@ -123,7 +161,12 @@ async def login(body: LoginRequest) -> dict:
 
 @app.get("/api/health")
 async def health() -> dict:
-    return {"status": "ok", "store": UCP_BASE, "model": MODEL}
+    return {
+        "status": "ok",
+        "store": UCP_BASE,
+        "model": MODEL,
+        "auth_mode": "salesforce" if (SF_BASE and SF_CLIENT_ID and SF_CLIENT_SECRET) else "demo",
+    }
 
 
 @app.post("/api/chat")

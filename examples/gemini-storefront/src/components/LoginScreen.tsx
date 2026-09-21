@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 
 interface Props {
   onLogin: () => void
@@ -9,6 +9,16 @@ export default function LoginScreen({ onLogin }: Props) {
   const passRef = useRef<HTMLInputElement>(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [authMode, setAuthMode] = useState<'salesforce' | 'demo' | null>(null)
+
+  useEffect(() => {
+    fetch('/api/health')
+      .then(r => r.json())
+      .then(d => setAuthMode(d.auth_mode ?? 'demo'))
+      .catch(() => setAuthMode('demo'))
+  }, [])
+
+  const isSalesforce = authMode === 'salesforce'
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -31,7 +41,7 @@ export default function LoginScreen({ onLogin }: Props) {
         sessionStorage.setItem('gc_authed', '1')
         onLogin()
       } else {
-        setError(data.error ?? 'Invalid credentials.')
+        setError(data.error ?? 'Authentication failed.')
       }
     } catch {
       setError('Cannot reach the server. Make sure the backend is running.')
@@ -50,7 +60,7 @@ export default function LoginScreen({ onLogin }: Props) {
     }}>
       <div style={{
         width: '100%',
-        maxWidth: '400px',
+        maxWidth: '420px',
         margin: '0 16px',
         background: '#fff',
         borderRadius: '20px',
@@ -67,56 +77,59 @@ export default function LoginScreen({ onLogin }: Props) {
           <div style={{ color: '#fff', fontWeight: 800, fontSize: '22px', letterSpacing: '-.3px' }}>
             Gemini Commerce
           </div>
-          <div style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '6px',
-            marginTop: '8px',
-            background: '#312e81',
-            color: '#a5b4fc',
-            borderRadius: '999px',
-            padding: '3px 12px',
-            fontSize: '12px',
-            fontWeight: 600,
-          }}>
-            <span style={{ color: '#86efac' }}>●</span> UCP · gemini-3.6-flash
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginTop: '10px' }}>
+            <span style={{
+              background: '#312e81', color: '#a5b4fc',
+              borderRadius: '999px', padding: '3px 12px',
+              fontSize: '12px', fontWeight: 600,
+              display: 'inline-flex', alignItems: 'center', gap: '5px',
+            }}>
+              <span style={{ color: '#86efac' }}>●</span> UCP · gemini-3.6-flash
+            </span>
+            {isSalesforce && (
+              <span style={{
+                background: '#00396b', color: '#7dd3fc',
+                borderRadius: '999px', padding: '3px 12px',
+                fontSize: '12px', fontWeight: 600,
+              }}>
+                Salesforce Auth
+              </span>
+            )}
           </div>
         </div>
 
         {/* Form */}
         <form onSubmit={handleSubmit} style={{ padding: '32px' }}>
-          <div style={{ marginBottom: '8px', fontSize: '20px', fontWeight: 700, color: '#1a202c' }}>
+          <div style={{ marginBottom: '6px', fontSize: '20px', fontWeight: 700, color: '#1a202c' }}>
             Sign in
           </div>
           <div style={{ fontSize: '13px', color: '#64748b', marginBottom: '24px' }}>
-            Enter your credentials to continue
+            {isSalesforce
+              ? 'Use your Salesforce credentials to continue'
+              : 'Enter your credentials to continue'}
           </div>
 
           <label style={{ display: 'block', marginBottom: '16px' }}>
             <span style={{ fontSize: '13px', fontWeight: 600, color: '#374151', display: 'block', marginBottom: '6px' }}>
-              Username
+              {isSalesforce ? 'Salesforce Username' : 'Username'}
             </span>
             <input
               ref={userRef}
-              type="text"
+              type={isSalesforce ? 'email' : 'text'}
               autoComplete="username"
               autoFocus
-              placeholder="Enter username"
+              placeholder={isSalesforce ? 'you@example.com' : 'Enter username'}
               style={{
-                width: '100%',
-                padding: '10px 14px',
-                borderRadius: '10px',
-                border: '1.5px solid #e2e8f0',
-                fontSize: '14px',
-                outline: 'none',
-                transition: 'border-color .15s',
+                width: '100%', padding: '10px 14px',
+                borderRadius: '10px', border: '1.5px solid #e2e8f0',
+                fontSize: '14px', outline: 'none', transition: 'border-color .15s',
               }}
               onFocus={e => { e.currentTarget.style.borderColor = '#1a56db' }}
               onBlur={e => { e.currentTarget.style.borderColor = '#e2e8f0' }}
             />
           </label>
 
-          <label style={{ display: 'block', marginBottom: '24px' }}>
+          <label style={{ display: 'block', marginBottom: isSalesforce ? '8px' : '24px' }}>
             <span style={{ fontSize: '13px', fontWeight: 600, color: '#374151', display: 'block', marginBottom: '6px' }}>
               Password
             </span>
@@ -126,28 +139,26 @@ export default function LoginScreen({ onLogin }: Props) {
               autoComplete="current-password"
               placeholder="Enter password"
               style={{
-                width: '100%',
-                padding: '10px 14px',
-                borderRadius: '10px',
-                border: '1.5px solid #e2e8f0',
-                fontSize: '14px',
-                outline: 'none',
-                transition: 'border-color .15s',
+                width: '100%', padding: '10px 14px',
+                borderRadius: '10px', border: '1.5px solid #e2e8f0',
+                fontSize: '14px', outline: 'none', transition: 'border-color .15s',
               }}
               onFocus={e => { e.currentTarget.style.borderColor = '#1a56db' }}
               onBlur={e => { e.currentTarget.style.borderColor = '#e2e8f0' }}
             />
           </label>
 
+          {isSalesforce && (
+            <div style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '20px' }}>
+              If your IP is not trusted, append your security token to the password.
+            </div>
+          )}
+
           {error && (
             <div style={{
-              background: '#fef2f2',
-              border: '1px solid #fecaca',
-              borderRadius: '8px',
-              padding: '10px 14px',
-              fontSize: '13px',
-              color: '#dc2626',
-              marginBottom: '16px',
+              background: '#fef2f2', border: '1px solid #fecaca',
+              borderRadius: '8px', padding: '10px 14px',
+              fontSize: '13px', color: '#dc2626', marginBottom: '16px',
             }}>
               {error}
             </div>
@@ -155,26 +166,23 @@ export default function LoginScreen({ onLogin }: Props) {
 
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || authMode === null}
             style={{
-              width: '100%',
-              padding: '12px',
-              borderRadius: '10px',
-              background: loading ? '#93c5fd' : '#1a56db',
-              color: '#fff',
-              fontWeight: 700,
-              fontSize: '15px',
-              transition: 'background .2s',
+              width: '100%', padding: '12px', borderRadius: '10px',
+              background: loading || authMode === null ? '#93c5fd' : '#1a56db',
+              color: '#fff', fontWeight: 700, fontSize: '15px', transition: 'background .2s',
             }}
-            onMouseOver={e => { if (!loading) e.currentTarget.style.background = '#1440a8' }}
-            onMouseOut={e => { if (!loading) e.currentTarget.style.background = '#1a56db' }}
+            onMouseOver={e => { if (!loading && authMode !== null) e.currentTarget.style.background = '#1440a8' }}
+            onMouseOut={e => { if (!loading && authMode !== null) e.currentTarget.style.background = '#1a56db' }}
           >
             {loading ? 'Signing in…' : 'Sign in'}
           </button>
 
-          <div style={{ marginTop: '20px', padding: '12px', background: '#f8fafc', borderRadius: '8px', fontSize: '12px', color: '#64748b', textAlign: 'center' }}>
-            Demo credentials: <strong>demo</strong> / <strong>demo123</strong>
-          </div>
+          {!isSalesforce && authMode === 'demo' && (
+            <div style={{ marginTop: '20px', padding: '12px', background: '#f8fafc', borderRadius: '8px', fontSize: '12px', color: '#64748b', textAlign: 'center' }}>
+              Demo credentials: <strong>demo</strong> / <strong>demo123</strong>
+            </div>
+          )}
         </form>
       </div>
     </div>

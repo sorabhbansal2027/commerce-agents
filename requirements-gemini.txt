@@ -1,0 +1,13 @@
+# Copyright 2026 Anthropic PBC
+# SPDX-License-Identifier: Apache-2.0
+#
+# Optional: Google Gemini × UCP integration
+# Install alongside the main requirements to run scripts/gemini_ucp_demo.py
+#
+#     pip install -r requirements.txt -r requirements-gemini.txt
+
+google-genai>=1.0.0
+fastapi>=0.111.0
+uvicorn[standard]>=0.29.0
+httpx>=0.27.0
+aiofiles>=23.0.0

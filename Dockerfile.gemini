@@ -1,0 +1,53 @@
+# Gemini Commerce — React frontend + FastAPI bridge, single Railway service.
+# The existing Dockerfile (Salesforce OMS API) is not changed.
+#
+# Build:  docker build -f Dockerfile.gemini -t gemini-commerce .
+# Run:    docker run -p 8090:8090 -e GEMINI_API_KEY=... gemini-commerce
+#
+# Railway env vars required:
+#   GEMINI_API_KEY   — Google AI Studio key
+# Optional:
+#   UCP_BASE         — defaults to the existing Railway UCP service
+#   GEMINI_MODEL     — defaults to gemini-3.6-flash
+
+FROM python:3.11-slim AS builder
+
+# ── Node.js 20 for Vite build ─────────────────────────────────────────────────
+RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates && \
+    curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
+    apt-get install -y --no-install-recommends nodejs && \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /build
+
+# Install npm deps (layer-cached until package-lock changes)
+COPY examples/gemini-storefront/package.json examples/gemini-storefront/package-lock.json ./storefront/
+RUN cd storefront && npm ci
+
+# Build React app
+COPY examples/gemini-storefront/ ./storefront/
+RUN cd storefront && npm run build
+
+
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# ── Python deps ───────────────────────────────────────────────────────────────
+COPY requirements-gemini.txt .
+RUN pip install --no-cache-dir fastapi uvicorn[standard] httpx google-genai aiofiles \
+    && pip install --no-cache-dir -r requirements-gemini.txt
+
+# ── Source files (mirror repo layout so path resolution in web server works) ──
+COPY scripts/gemini_web_server.py ./scripts/
+COPY examples/demo_common/gemini_ucp_agent.py ./examples/demo_common/
+
+# ── Built React app ───────────────────────────────────────────────────────────
+COPY --from=builder /build/storefront/dist ./examples/gemini-storefront/dist
+
+# Railway injects PORT automatically; GEMINI_WEB_PORT is the local fallback.
+ENV GEMINI_WEB_PORT=8090
+
+EXPOSE 8090
+
+CMD ["python", "scripts/gemini_web_server.py"]

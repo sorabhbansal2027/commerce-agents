@@ -96,6 +96,14 @@ app.add_middleware(
 
 
 # ── Request / response models ─────────────────────────────────────────────────
+DEMO_USER = os.environ.get("DEMO_USER", "demo")
+DEMO_PASS = os.environ.get("DEMO_PASSWORD", "demo123")
+
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
 class ChatRequest(BaseModel):
     message: str
 
@@ -106,6 +114,13 @@ class CartRequest(BaseModel):
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
+@app.post("/api/login")
+async def login(body: LoginRequest) -> dict:
+    if body.username == DEMO_USER and body.password == DEMO_PASS:
+        return {"ok": True}
+    return {"ok": False, "error": "Invalid username or password."}
+
+
 @app.get("/api/health")
 async def health() -> dict:
     return {"status": "ok", "store": UCP_BASE, "model": MODEL}

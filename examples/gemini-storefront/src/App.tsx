@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react'
 import ChatPanel from './components/ChatPanel'
 import CartSidebar from './components/CartSidebar'
+import LoginScreen from './components/LoginScreen'
 import type { Message, Product, CartItem } from './types'
 
 const API = '/api'   // proxied to localhost:8090 via vite.config.ts
@@ -9,6 +10,7 @@ let msgId = 0
 const uid = () => String(++msgId)
 
 export default function App() {
+  const [authed, setAuthed] = useState(() => sessionStorage.getItem('gc_authed') === '1')
   const [messages, setMessages] = useState<Message[]>([])
   const [loading, setLoading] = useState(false)
   const [cartItems, setCartItems] = useState<CartItem[]>([])
@@ -97,6 +99,16 @@ export default function App() {
     setAddedIds(new Set())
   }, [])
 
+  const logout = useCallback(() => {
+    sessionStorage.removeItem('gc_authed')
+    setAuthed(false)
+    setMessages([])
+    setCartItems([])
+    setAddedIds(new Set())
+  }, [])
+
+  if (!authed) return <LoginScreen onLogin={() => setAuthed(true)} />
+
   return (
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--bg)' }}>
       {/* Top nav */}
@@ -120,18 +132,32 @@ export default function App() {
             UCP · gemini-3.6-flash
           </span>
         </div>
-        <button
-          onClick={resetConversation}
-          style={{
-            background: 'transparent', color: '#94a3b8',
-            fontSize: '13px', padding: '6px 12px',
-            borderRadius: '8px', border: '1px solid #334155',
-          }}
-          onMouseOver={e => { (e.currentTarget.style.color) = '#fff'; (e.currentTarget.style.borderColor) = '#475569' }}
-          onMouseOut={e => { (e.currentTarget.style.color) = '#94a3b8'; (e.currentTarget.style.borderColor) = '#334155' }}
-        >
-          New conversation
-        </button>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button
+            onClick={resetConversation}
+            style={{
+              background: 'transparent', color: '#94a3b8',
+              fontSize: '13px', padding: '6px 12px',
+              borderRadius: '8px', border: '1px solid #334155',
+            }}
+            onMouseOver={e => { e.currentTarget.style.color = '#fff'; e.currentTarget.style.borderColor = '#475569' }}
+            onMouseOut={e => { e.currentTarget.style.color = '#94a3b8'; e.currentTarget.style.borderColor = '#334155' }}
+          >
+            New conversation
+          </button>
+          <button
+            onClick={logout}
+            style={{
+              background: 'transparent', color: '#94a3b8',
+              fontSize: '13px', padding: '6px 12px',
+              borderRadius: '8px', border: '1px solid #334155',
+            }}
+            onMouseOver={e => { e.currentTarget.style.color = '#fff'; e.currentTarget.style.borderColor = '#475569' }}
+            onMouseOut={e => { e.currentTarget.style.color = '#94a3b8'; e.currentTarget.style.borderColor = '#334155' }}
+          >
+            Sign out
+          </button>
+        </div>
       </header>
 
       {/* Main layout */}

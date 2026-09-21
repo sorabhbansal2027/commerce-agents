@@ -387,42 +387,36 @@ def build_ucp_router(backend: Any) -> APIRouter:
             account_id = await backend._account_id_for_user(buyer_uid)
             eff_params = {"effectiveAccountId": account_id} if account_id else {}
 
-            # ── 1. Get or create the buyer's active WebCart ─────────────────
+            # ── 1. Get the buyer's active WebCart (SOQL — no explicit creation) ───
             cart_id, currency = await backend._get_buyer_cart_id(buyer_uid, webstore_id)
-            if not cart_id:
-                cart_data = await backend._b2b_request(
-                    "POST",
-                    f"/commerce/webstores/{webstore_id}/carts",
-                    params=eff_params,
-                    json={},
-                )
-                cart_id = cart_data.get("cartId") or cart_data.get("Id", "")
-                currency = cart_data.get("currencyIsoCode", "USD")
 
-            if not cart_id:
-                return Response(
-                    status_code=500,
-                    content=json.dumps({"error": "Could not create or locate B2B cart."}),
-                    media_type="application/json",
-                )
-
-            # ── 2. Add each item to the cart ────────────────────────────────
+            # ── 2. Add each item to the cart ────────────────────────────────────
+            # When no cart exists yet, /carts/active/cart-items auto-creates one.
             placed_items: list[dict] = []
             for item in line_items:
                 pid = item.get("product_id", "")
                 qty = max(1, int(item.get("quantity", 1)))
                 if not pid:
                     continue
+                endpoint = (
+                    f"/commerce/webstores/{webstore_id}/carts/{cart_id}/cart-items"
+                    if cart_id
+                    else f"/commerce/webstores/{webstore_id}/carts/active/cart-items"
+                )
                 try:
                     await backend._b2b_request(
-                        "POST",
-                        f"/commerce/webstores/{webstore_id}/carts/{cart_id}/cart-items",
+                        "POST", endpoint,
                         params=eff_params,
                         json={"productId": pid, "quantity": str(qty), "type": "Product"},
                     )
+                    # After the first item auto-creates the cart, resolve the new cart ID.
+                    if not cart_id:
+                        cart_id, currency = await backend._get_buyer_cart_id(buyer_uid, webstore_id)
                 except Exception:
-                    # B2B search-index miss — fall back to direct CartItem SObject insert
-                    await backend._add_to_cart_direct(cart_id, pid, qty)
+                    if cart_id:
+                        # B2B search-index miss — fall back to direct CartItem SObject insert
+                        await backend._add_to_cart_direct(cart_id, pid, qty)
+                    # else: skip item if cart couldn't be created and direct insert needs cart_id
                 placed_items.append({
                     "product_id": pid,
                     "title": item.get("title", pid),
@@ -432,48 +426,45 @@ def build_ucp_router(backend: Any) -> APIRouter:
                     "currency": currency,
                 })
 
-            # ── 3. Initiate checkout ─────────────────────────────────────────
-            checkout_resp = await backend._b2b_request(
-                "POST",
-                f"/commerce/webstores/{webstore_id}/checkouts",
-                params=eff_params,
-                json={"cartId": cart_id},
-            )
-            checkout_id = (
-                checkout_resp.get("checkoutId")
-                or checkout_resp.get("Id", "")
-            )
-            if not checkout_id:
+            if not cart_id:
                 return Response(
                     status_code=500,
-                    content=json.dumps({"error": "Checkout initiation failed.", "detail": checkout_resp}),
+                    content=json.dumps({"error": "Could not locate or create B2B cart — no items were added."}),
                     media_type="application/json",
                 )
 
-            # ── 4. Place the order ───────────────────────────────────────────
+            # ── 3. Place the order via /commerce/sale/order ─────────────────────
+            # This single API handles the full checkout flow (pricing, tax, shipping)
+            # and creates the Salesforce Order in one call — no intermediate checkout
+            # session resource is needed.
+            order_body: dict = {"cartId": cart_id}
+            if account_id:
+                order_body["effectiveAccountId"] = account_id
+            if po_number := body.get("po_number", ""):
+                order_body["poNumber"] = po_number
             order_resp = await backend._b2b_request(
                 "POST",
-                f"/commerce/webstores/{webstore_id}/checkouts/{checkout_id}/actions/placeOrder",
-                params=eff_params,
-                json={},
+                "/commerce/sale/order",
+                json=order_body,
             )
             order_id = (
                 order_resp.get("orderId")
                 or order_resp.get("orderReferenceNumber")
+                or order_resp.get("orderNumber")
                 or order_resp.get("Id", "")
             )
 
             subtotal = round(sum(i["line_total"] for i in placed_items), 2)
             payload = {
                 "order_id": order_id or f"ORD-{uuid.uuid4().hex[:8].upper()}",
-                "checkout_session_id": checkout_id,
-                "status": "placed",
+                "status": order_resp.get("status", "placed"),
                 "line_items": placed_items,
                 "subtotal": subtotal,
                 "currency": currency,
                 "payment_handler": payment_handler,
+                "po_number": body.get("po_number") or None,
                 "buyer": buyer,
-                "agent_note": "Order placed directly via agentic checkout. No storefront action required.",
+                "agent_note": "Order placed via /commerce/sale/order. No storefront action required.",
             }
             return Response(content=json.dumps(payload), status_code=201, media_type="application/json")
 

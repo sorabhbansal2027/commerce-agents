@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<SecuritySettings xmlns="http://soap.sforce.com/2006/04/metadata">
+    <networkAccess>
+        <ipRanges>
+            <description>Local dev /24</description>
+            <end>182.77.70.255</end>
+            <start>182.77.70.0</start>
+        </ipRanges>
+        <ipRanges>
+            <description>Railway outbound /16 (152.55.177.95 observed)</description>
+            <end>152.55.255.255</end>
+            <start>152.55.0.0</start>
+        </ipRanges>
+        <ipRanges>
+            <description>Railway outbound /16 (AWS us-west-1 13.57.2.134 observed)</description>
+            <end>13.57.255.255</end>
+            <start>13.57.0.0</start>
+        </ipRanges>
+    </networkAccess>
+</SecuritySettings>

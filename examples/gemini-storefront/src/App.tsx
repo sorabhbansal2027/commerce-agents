@@ -107,7 +107,7 @@ export default function App() {
   const checkout = useCallback(() => {
     if (cartItems.length === 0) return
     const names = cartItems.map(i => `${i.product.title} (qty ${i.quantity})`).join(', ')
-    sendMessage(`Please create a checkout session for: ${names}. Payment method: credit card.`)
+    sendMessage(`Please place an order for: ${names}. Payment method: credit_card.`)
   }, [cartItems, sendMessage])
 
   const checkoutPO = useCallback(() => {
@@ -204,7 +204,7 @@ export default function App() {
         maxWidth: '1200px',
         width: '100%',
         margin: '0 auto',
-        alignItems: 'flex-start',
+        alignItems: 'stretch',
       }}>
         <ChatPanel
           messages={messages}
@@ -214,14 +214,16 @@ export default function App() {
           addingId={addingId}
           addedIds={addedIds}
         />
-        <CartSidebar
-          items={cartItems}
-          onCheckout={checkout}
-          onCheckoutPO={checkoutPO}
-          onSaveQuote={saveAsQuote}
-          onLoadQuote={loadQuote}
-          busy={loading}
-        />
+        <div style={{ alignSelf: 'flex-start', position: 'sticky', top: 0 }}>
+          <CartSidebar
+            items={cartItems}
+            onCheckout={checkout}
+            onCheckoutPO={checkoutPO}
+            onSaveQuote={saveAsQuote}
+            onLoadQuote={loadQuote}
+            busy={loading}
+          />
+        </div>
       </main>
     </div>
   )

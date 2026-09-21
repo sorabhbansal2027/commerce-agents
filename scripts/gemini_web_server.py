@@ -298,8 +298,9 @@ class TrackedAgent(GeminiUCPAgent):
         base = super()._system_prompt()
         base = base.replace(
             "When creating a checkout session, always confirm the items and total with the user first. ",
-            "When the user asks to checkout or place an order, call create_checkout_session immediately. "
-            "Do NOT ask for confirmation in text first — the UI will show the order card. ",
+            "When the user asks to checkout or place an order, always call place_b2b_order immediately — "
+            "this places a real Salesforce order. Only use create_checkout_session if the user explicitly "
+            "asks for a pending/draft session. Do NOT ask for confirmation in text first. ",
         )
         base += (
             "\n\nUI RENDERING RULE: When you call create_checkout_session, place_b2b_order, or "

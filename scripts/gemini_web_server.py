@@ -411,6 +411,9 @@ async def _sf_authenticate(username: str, password: str) -> tuple[bool, str, str
     nonce = _uuid.uuid4().hex
 
     # ── Step 2: POST credentials → receive authorization code ─────────────────
+    # Salesforce ACCF validates the Origin header — must match a CORS-allowed origin
+    # on the Connected App (Setup → Connected App → CORS/Allowed Origins).
+    app_origin = SF_CALLBACK_URL.rsplit("/", 2)[0]  # strip path → just the origin
     async with _httpx.AsyncClient(timeout=15, follow_redirects=False) as client:
         auth = await client.post(
             f"{oauth_base}/services/oauth2/authorize",
@@ -425,7 +428,10 @@ async def _sf_authenticate(username: str, password: str) -> tuple[bool, str, str
                 "username": username,
                 "password": password,
             },
-            headers={"Content-Type": "application/x-www-form-urlencoded"},
+            headers={
+                "Content-Type": "application/x-www-form-urlencoded",
+                "Origin": app_origin,
+            },
         )
     if auth.status_code != 200:
         err = auth.json() if auth.headers.get("content-type", "").startswith("application/json") else {}

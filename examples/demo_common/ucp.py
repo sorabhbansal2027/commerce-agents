@@ -414,7 +414,9 @@ def build_ucp_router(backend: Any) -> APIRouter:
 
         try:
             webstore_id = await backend._ensure_webstore_id()
-            account_id = await backend._account_id_for_user(buyer_uid)
+            # Prefer account_id supplied at login (from buyer/login response) to
+            # avoid an extra SOQL round-trip on every order.
+            account_id = body.get("buyer_account_id") or await backend._account_id_for_user(buyer_uid)
 
             # effectiveAccountId is required for all B2B headless cart operations.
             # Without it the integration user's context is used, which creates a cart

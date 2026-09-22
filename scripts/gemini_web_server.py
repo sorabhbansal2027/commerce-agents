@@ -280,7 +280,8 @@ class TrackedAgent(GeminiUCPAgent):
                         "payment_handler": args.get("payment_handler", "purchase_order"),
                         "po_number": po_number,
                         "buyer": buyer,
-                        "buyer_user_id": _sf_buyer_user_id,  # from login, never hardcoded
+                        "buyer_user_id": _sf_buyer_user_id,
+                        "buyer_account_id": _sf_account_id,  # skip SOQL in ucp.py
                     },
                     timeout=30,
                 )
@@ -363,49 +364,73 @@ DEMO_PASS = os.environ.get("DEMO_PASSWORD", "demo123")
 import httpx as _httpx  # noqa: E402 – already a dep, imported here for clarity
 
 
-async def _sf_authenticate(username: str, password: str) -> tuple[bool, str, str]:
-    """Authenticate via OAuth 2.0 Resource Owner Password Credentials flow.
+async def _sf_authenticate(username: str, password: str) -> tuple[bool, str, str, str]:
+    """Authenticate buyer via B2B Commerce buyer/login endpoint.
 
-    Uses the Connected App credentials already configured on this service
-    (SF_CLIENT_ID / SF_CLIENT_SECRET).  The Connected App's IP policy applies
-    instead of the org-level trusted network ranges, so login works from any
-    Railway IP without requiring a security token.
+    Flow:
+      1. Obtain an integration-user access token via client_credentials (works
+         from any IP — no trusted-range requirement).
+      2. Resolve the WebStore Id with a single SOQL query.
+      3. POST /commerce/webstores/{id}/buyer/login with the buyer credentials.
 
-    Falls back to SOAP Partner API login when no Connected App credentials are
-    present (local dev / demo mode without SF env vars).
+    Returns (ok, error, user_id, account_id).  Both user_id and account_id come
+    directly from the response — no extra SOQL lookup needed.
+
+    Falls back to SOAP when no Connected App credentials are configured (local
+    dev / demo mode).
     """
-    login_host = "test.salesforce.com" if "sandbox" in SF_BASE else "login.salesforce.com"
-
-    # ── OAuth ROPC — preferred; bypasses org-level IP restrictions ────────────
-    if SF_CLIENT_ID and SF_CLIENT_SECRET:
+    if SF_CLIENT_ID and SF_CLIENT_SECRET and SF_BASE:
+        # ── Step 1: integration-user token via client credentials ─────────────
         async with _httpx.AsyncClient(timeout=15) as client:
-            resp = await client.post(
-                f"https://{login_host}/services/oauth2/token",
+            tok = await client.post(
+                f"{SF_BASE}/services/oauth2/token",
                 data={
-                    "grant_type": "password",
+                    "grant_type": "client_credentials",
                     "client_id": SF_CLIENT_ID,
                     "client_secret": SF_CLIENT_SECRET,
-                    "username": username,
-                    "password": password,
                 },
             )
-        if resp.status_code == 200:
-            data = resp.json()
-            # id field is a URL ending with /<orgId>/<userId>
-            user_id = data.get("id", "").rsplit("/", 1)[-1]
-            return True, "", user_id
-        err = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else {}
-        raw = err.get("error_description") or err.get("error") or f"HTTP {resp.status_code}"
-        if "LOGIN_MUST_USE_SECURITY_TOKEN" in raw or "ip restricted" in raw.lower():
-            return False, "SECURITY_TOKEN_REQUIRED", ""
-        if "invalid_grant" in raw.lower() or "Invalid username" in raw:
-            return False, "Invalid username or password.", ""
-        if "inactive" in raw.lower():
-            return False, "This Salesforce user is inactive.", ""
-        return False, raw, ""
+        if tok.status_code >= 400:
+            err = tok.json() if tok.headers.get("content-type", "").startswith("application/json") else {}
+            return False, err.get("error_description", f"Integration token failed: HTTP {tok.status_code}"), "", ""
+        access_token = tok.json().get("access_token", "")
+        auth_hdr = {"Authorization": f"Bearer {access_token}"}
 
-    # ── SOAP fallback — only used when no Connected App is configured ──────────
+        # ── Step 2: resolve WebStore Id ───────────────────────────────────────
+        async with _httpx.AsyncClient(timeout=15) as client:
+            qs = await client.get(
+                f"{SF_BASE}/services/data/v62.0/query",
+                params={"q": "SELECT Id FROM WebStore LIMIT 1"},
+                headers=auth_hdr,
+            )
+        ws_rows = qs.json().get("records", []) if qs.status_code < 400 else []
+        if not ws_rows:
+            return False, "Could not resolve WebStore Id.", "", ""
+        webstore_id = ws_rows[0]["Id"]
+
+        # ── Step 3: buyer/login ───────────────────────────────────────────────
+        async with _httpx.AsyncClient(timeout=15) as client:
+            bl = await client.post(
+                f"{SF_BASE}/services/data/v62.0/commerce/webstores/{webstore_id}/buyer/login",
+                json={"username": username, "password": password},
+                headers={**auth_hdr, "Content-Type": "application/json"},
+            )
+        if bl.status_code == 200:
+            data = bl.json()
+            return True, "", data.get("userId", ""), data.get("accountId", "")
+        # Salesforce errors are a list: [{"errorCode": "...", "message": "..."}]
+        errs = bl.json() if bl.headers.get("content-type", "").startswith("application/json") else []
+        first = errs[0] if isinstance(errs, list) and errs else (errs if isinstance(errs, dict) else {})
+        msg = first.get("message") or first.get("errorCode") or f"HTTP {bl.status_code}"
+        if "INVALID_LOGIN" in msg or "Invalid username" in msg or "authentication failure" in msg.lower():
+            return False, "Invalid username or password.", "", ""
+        if "inactive" in msg.lower():
+            return False, "This Salesforce user is inactive.", "", ""
+        return False, msg, "", ""
+
+    # ── SOAP fallback — only when no Connected App is configured ──────────────
     import re as _re
+    login_host = "test.salesforce.com" if "sandbox" in SF_BASE else "login.salesforce.com"
     soap_body = (
         '<?xml version="1.0" encoding="utf-8"?>'
         '<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"'
@@ -424,7 +449,7 @@ async def _sf_authenticate(username: str, password: str) -> tuple[bool, str, str
     if resp.status_code == 200 and "<sessionId>" in resp.text:
         user_id_match = _re.search(r"<userId>(.*?)</userId>", resp.text)
         user_id = user_id_match.group(1) if user_id_match else ""
-        return True, "", user_id
+        return True, "", user_id, ""
     fault = _re.search(r"<faultstring>(.*?)</faultstring>", resp.text)
     raw = fault.group(1) if fault else f"Salesforce returned HTTP {resp.status_code}."
     if "LOGIN_MUST_USE_SECURITY_TOKEN" in raw:
@@ -435,12 +460,13 @@ async def _sf_authenticate(username: str, password: str) -> tuple[bool, str, str
         msg = "This Salesforce user is inactive."
     else:
         msg = raw
-    return False, msg, ""
+    return False, msg, "", ""
 
 
-# Salesforce user ID of the currently authenticated buyer — set on login only.
-# Empty string means no active session; place_b2b_order will fail fast.
+# Salesforce buyer session — both set on successful login, cleared on logout/redeploy.
+# Empty strings mean no active session; place_b2b_order will fail fast.
 _sf_buyer_user_id: str = ""
+_sf_account_id: str = ""  # returned by buyer/login; eliminates _account_id_for_user SOQL
 
 class LoginRequest(BaseModel):
     username: str
@@ -470,11 +496,12 @@ class QuoteCreateRequest(BaseModel):
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 @app.post("/api/login")
 async def login(body: LoginRequest) -> dict:
-    global _sf_buyer_user_id
+    global _sf_buyer_user_id, _sf_account_id
     if SF_BASE and SF_CLIENT_ID and SF_CLIENT_SECRET:
-        ok, error, user_id = await _sf_authenticate(body.username, body.password)
+        ok, error, user_id, account_id = await _sf_authenticate(body.username, body.password)
         if ok:
-            _sf_buyer_user_id = user_id  # store for use by place_b2b_order
+            _sf_buyer_user_id = user_id
+            _sf_account_id = account_id
             return {"ok": True}
         return {"ok": False, "error": error}
     # Fallback for local dev when SF env vars are not set

@@ -370,31 +370,83 @@ import httpx as _httpx  # noqa: E402 – already a dep, imported here for clarit
 
 
 async def _sf_authenticate(username: str, password: str) -> tuple[bool, str, str, str]:
-    """Authenticate buyer via OAuth 2.0 ROPC (username-password grant).
+    """Authenticate buyer via Salesforce ACCF (Authorization Code and Credentials Flow).
 
-    Uses the main org token URL. Requires the Connected App's IP Relaxation to be
-    set to "Relax IP restrictions" so no security token is needed from Railway's IP.
-
-    Setup → App Manager → [Connected App] → Manage → Edit Policies →
-      IP Relaxation: "Relax IP restrictions"
+    Uses the Experience Cloud site URL — required for community/buyer users.
+    Requires the External Client App to have:
+      - "Enable Authorization Code and Credentials Flow" checked
+      - "Require user credentials in the POST body" checked
+    And the org to have "Allow Authorization Code and Credentials Flows" ON.
 
     Returns (ok, error, user_id, account_id).
     """
+    import hashlib as _hashlib
+    import secrets as _secrets
+    import base64 as _b64
+    import uuid as _uuid
+    import urllib.parse as _up
+
     if not SF_CLIENT_ID or not SF_CLIENT_SECRET or not SF_BASE:
         return False, "Salesforce credentials not configured.", "", ""
 
-    token_url = f"{SF_BASE}/services/oauth2/token"
+    oauth_base = SF_COMMUNITY_URL if SF_COMMUNITY_URL else SF_BASE
 
-    # ── Step 1: ROPC token request ────────────────────────────────────────────
-    async with _httpx.AsyncClient(timeout=15) as client:
-        tok = await client.post(
-            token_url,
-            data={
-                "grant_type": "password",
+    # ── PKCE ──────────────────────────────────────────────────────────────────
+    raw = _secrets.token_bytes(32)
+    code_verifier = _b64.urlsafe_b64encode(raw).rstrip(b"=").decode()
+    code_challenge = _b64.urlsafe_b64encode(
+        _hashlib.sha256(code_verifier.encode()).digest()
+    ).rstrip(b"=").decode()
+    nonce = _uuid.uuid4().hex
+    app_origin = SF_CALLBACK_URL.rsplit("/", 2)[0]
+
+    # ── Step 1: POST credentials → headless init endpoint ────────────────────
+    async with _httpx.AsyncClient(timeout=15, follow_redirects=False) as client:
+        auth = await client.post(
+            f"{oauth_base}/services/auth/headless/init",
+            json={
                 "client_id": SF_CLIENT_ID,
-                "client_secret": SF_CLIENT_SECRET,
+                "response_type": "code_credentials",
+                "redirect_uri": SF_CALLBACK_URL,
+                "nonce": nonce,
+                "code_challenge": code_challenge,
+                "code_challenge_method": "S256",
                 "username": username,
                 "password": password,
+            },
+            headers={"Origin": app_origin},
+        )
+
+    if auth.status_code == 302:
+        location = auth.headers.get("location", "")
+        parsed = _up.urlparse(location)
+        params = _up.parse_qs(parsed.query)
+        if "error" in params:
+            msg = params.get("error_description", params.get("error", ["Unknown error"]))[0]
+            return False, f"[ACCF] {msg}", "", ""
+        code = params.get("code", [""])[0]
+    elif auth.status_code == 200:
+        code = auth.json().get("code", "")
+    else:
+        err = auth.json() if "application/json" in auth.headers.get("content-type", "") else {}
+        raw_msg = err.get("error_description") or err.get("error") or f"HTTP {auth.status_code}"
+        return False, f"[ACCF init] {raw_msg} | {auth.text[:300]}", "", ""
+
+    if not code:
+        location = auth.headers.get("location", "(none)")
+        return False, f"[ACCF] No code returned. Location: {location[:400]}", "", ""
+
+    # ── Step 2: exchange code for access token ────────────────────────────────
+    async with _httpx.AsyncClient(timeout=15) as client:
+        tok = await client.post(
+            f"{oauth_base}/services/oauth2/token",
+            data={
+                "grant_type": "authorization_code",
+                "code": code,
+                "client_id": SF_CLIENT_ID,
+                "client_secret": SF_CLIENT_SECRET,
+                "redirect_uri": SF_CALLBACK_URL,
+                "code_verifier": code_verifier,
             },
         )
 

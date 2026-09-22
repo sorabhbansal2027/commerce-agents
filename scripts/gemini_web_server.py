@@ -448,7 +448,8 @@ async def _sf_authenticate(username: str, password: str) -> tuple[bool, str, str
         return False, f"[ACCF init {auth.status_code}] {raw} | body={auth.text[:300]}", "", ""
 
     if not code:
-        return False, "No authorization code returned by Salesforce.", "", ""
+        location = auth.headers.get("location", "(no location header)")
+        return False, f"No code in redirect. Location: {location[:400]}", "", ""
 
     # ── Step 3: exchange code for access token ────────────────────────────────
     async with _httpx.AsyncClient(timeout=15) as client:

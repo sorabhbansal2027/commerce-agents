@@ -417,7 +417,7 @@ async def _sf_authenticate(username: str, password: str) -> tuple[bool, str, str
     async with _httpx.AsyncClient(timeout=15, follow_redirects=False) as client:
         auth = await client.post(
             f"{oauth_base}/services/oauth2/authorize",
-            data={
+            json={
                 "response_type": "code_credentials",
                 "client_id": SF_CLIENT_ID,
                 "redirect_uri": SF_CALLBACK_URL,
@@ -428,10 +428,7 @@ async def _sf_authenticate(username: str, password: str) -> tuple[bool, str, str
                 "username": username,
                 "password": password,
             },
-            headers={
-                "Content-Type": "application/x-www-form-urlencoded",
-                "Origin": app_origin,
-            },
+            headers={"Origin": app_origin},
         )
     if auth.status_code != 200:
         err = auth.json() if auth.headers.get("content-type", "").startswith("application/json") else {}

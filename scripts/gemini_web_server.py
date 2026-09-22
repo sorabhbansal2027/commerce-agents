@@ -363,17 +363,49 @@ DEMO_PASS = os.environ.get("DEMO_PASSWORD", "demo123")
 import httpx as _httpx  # noqa: E402 – already a dep, imported here for clarity
 
 
-async def _sf_authenticate(username: str, password: str) -> tuple[bool, str]:
-    """Validate credentials via the Salesforce SOAP Partner API login endpoint.
+async def _sf_authenticate(username: str, password: str) -> tuple[bool, str, str]:
+    """Authenticate via OAuth 2.0 Resource Owner Password Credentials flow.
 
-    Works without any Connected App flow setting — the classic SOAP login
-    accepts username + password directly against any Salesforce org.
-    Sandbox orgs use test.salesforce.com; production uses login.salesforce.com.
-    If the user's IP is not in the org's trusted range they must append their
-    security token to the password (e.g. MyPassword + MyToken).
+    Uses the Connected App credentials already configured on this service
+    (SF_CLIENT_ID / SF_CLIENT_SECRET).  The Connected App's IP policy applies
+    instead of the org-level trusted network ranges, so login works from any
+    Railway IP without requiring a security token.
+
+    Falls back to SOAP Partner API login when no Connected App credentials are
+    present (local dev / demo mode without SF env vars).
     """
-    import re as _re
     login_host = "test.salesforce.com" if "sandbox" in SF_BASE else "login.salesforce.com"
+
+    # ── OAuth ROPC — preferred; bypasses org-level IP restrictions ────────────
+    if SF_CLIENT_ID and SF_CLIENT_SECRET:
+        async with _httpx.AsyncClient(timeout=15) as client:
+            resp = await client.post(
+                f"https://{login_host}/services/oauth2/token",
+                data={
+                    "grant_type": "password",
+                    "client_id": SF_CLIENT_ID,
+                    "client_secret": SF_CLIENT_SECRET,
+                    "username": username,
+                    "password": password,
+                },
+            )
+        if resp.status_code == 200:
+            data = resp.json()
+            # id field is a URL ending with /<orgId>/<userId>
+            user_id = data.get("id", "").rsplit("/", 1)[-1]
+            return True, "", user_id
+        err = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else {}
+        raw = err.get("error_description") or err.get("error") or f"HTTP {resp.status_code}"
+        if "LOGIN_MUST_USE_SECURITY_TOKEN" in raw or "ip restricted" in raw.lower():
+            return False, "SECURITY_TOKEN_REQUIRED", ""
+        if "invalid_grant" in raw.lower() or "Invalid username" in raw:
+            return False, "Invalid username or password.", ""
+        if "inactive" in raw.lower():
+            return False, "This Salesforce user is inactive.", ""
+        return False, raw, ""
+
+    # ── SOAP fallback — only used when no Connected App is configured ──────────
+    import re as _re
     soap_body = (
         '<?xml version="1.0" encoding="utf-8"?>'
         '<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"'

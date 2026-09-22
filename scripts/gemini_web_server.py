@@ -51,6 +51,8 @@ MODEL       = os.environ.get("GEMINI_MODEL", "gemini-3.6-flash")
 SF_BASE          = os.environ.get("SF_INSTANCE_URL", "").rstrip("/")
 SF_CLIENT_ID     = os.environ.get("SF_CLIENT_ID", "")
 SF_CLIENT_SECRET = os.environ.get("SF_CLIENT_SECRET", "")
+# Experience Cloud site URL — ACCF authorize/token must go through this domain.
+SF_COMMUNITY_URL = os.environ.get("SF_COMMUNITY_URL", "").rstrip("/")
 # Registered callback URL on the Connected App — not actually redirected to,
 # but must match exactly what is entered in the Connected App settings.
 SF_CALLBACK_URL  = os.environ.get("SF_CALLBACK_URL", "https://perfect-achievement-production-83ee.up.railway.app/api/oauth/callback")
@@ -402,10 +404,13 @@ async def _sf_authenticate(username: str, password: str) -> tuple[bool, str, str
         _hashlib.sha256(code_verifier.encode()).digest()
     ).rstrip(b"=").decode()
 
+    # ACCF must go through the Experience Cloud site URL, not the main instance.
+    oauth_base = SF_COMMUNITY_URL if SF_COMMUNITY_URL else SF_BASE
+
     # ── Step 2: POST credentials → receive authorization code ─────────────────
     async with _httpx.AsyncClient(timeout=15) as client:
         auth = await client.post(
-            f"{SF_BASE}/services/oauth2/authorize",
+            f"{oauth_base}/services/oauth2/authorize",
             data={
                 "response_type": "code_credentials",
                 "client_id": SF_CLIENT_ID,
@@ -430,7 +435,7 @@ async def _sf_authenticate(username: str, password: str) -> tuple[bool, str, str
     # ── Step 3: exchange code for access token ────────────────────────────────
     async with _httpx.AsyncClient(timeout=15) as client:
         tok = await client.post(
-            f"{SF_BASE}/services/oauth2/token",
+            f"{oauth_base}/services/oauth2/token",
             data={
                 "grant_type": "authorization_code",
                 "code": code,

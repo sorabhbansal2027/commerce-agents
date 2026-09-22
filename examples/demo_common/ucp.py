@@ -510,42 +510,52 @@ def build_ucp_router(backend: Any) -> APIRouter:
                 )
 
             # ── 3. Fetch ContactPointAddress for delivery / billing ──────────────
-            # Resolve the buyer's Salesforce Contact, then look up their
-            # ContactPointAddress records (Shipping preferred, Billing fallback,
-            # same address used for both if only one type exists).
+            # User.ContactId is often null for portal users; fall back to a
+            # Contact lookup via AccountId so we always find the address.
             shipping_addr: dict = {}
             billing_addr: dict = {}
             try:
-                contact_rows = await backend._soql(
+                contact_id = ""
+                user_rows = await backend._soql(
                     f"SELECT ContactId FROM User WHERE Id = '{buyer_uid}' LIMIT 1"
                 )
-                contact_id = contact_rows[0].get("ContactId", "") if contact_rows else ""
+                contact_id = (user_rows[0].get("ContactId") or "") if user_rows else ""
+                if not contact_id and account_id:
+                    acct_rows = await backend._soql(
+                        f"SELECT Id FROM Contact "
+                        f"WHERE AccountId = '{account_id}' "
+                        f"ORDER BY CreatedDate DESC LIMIT 1"
+                    )
+                    contact_id = (acct_rows[0].get("Id") or "") if acct_rows else ""
                 if contact_id:
                     cpa_rows = await backend._soql(
-                        f"SELECT Id, AddressType, Street, City, State, PostalCode, "
-                        f"Country, Name, IsDefault "
+                        f"SELECT AddressType, Street, City, State, PostalCode, "
+                        f"Country, IsDefault "
                         f"FROM ContactPointAddress "
                         f"WHERE ParentId = '{contact_id}' "
                         f"ORDER BY IsDefault DESC"
                     )
                     for row in cpa_rows:
+                        # Only include fields that have real values — empty strings
+                        # cause JSON_PARSER_ERROR on the Salesforce PATCH endpoint.
                         addr = {
-                            "name": row.get("Name", ""),
-                            "street": row.get("Street", ""),
-                            "city": row.get("City", ""),
-                            "state": row.get("State", ""),
-                            "postalCode": row.get("PostalCode", ""),
-                            "country": row.get("Country", ""),
+                            k: v for k, v in {
+                                "street": row.get("Street"),
+                                "city": row.get("City"),
+                                "state": row.get("State"),
+                                "postalCode": row.get("PostalCode"),
+                                "country": row.get("Country"),
+                            }.items() if v
                         }
+                        if not addr:
+                            continue
                         atype = (row.get("AddressType") or "").lower()
                         if atype == "shipping" and not shipping_addr:
                             shipping_addr = addr
                         elif atype == "billing" and not billing_addr:
                             billing_addr = addr
                         elif not shipping_addr:
-                            # first/default record — use for shipping
                             shipping_addr = addr
-                    # If we only found one type, use it for both
                     if shipping_addr and not billing_addr:
                         billing_addr = shipping_addr
                     elif billing_addr and not shipping_addr:
@@ -567,22 +577,52 @@ def build_ucp_router(backend: Any) -> APIRouter:
                 or cart_id
             )
 
-            # ── 5. PATCH checkout — addresses + optional PO number ───────────────
+            # ── 5. PATCH checkout — addresses + PO number (non-fatal) ────────────
+            po_number = body.get("po_number", "")
             patch_body: dict = {}
             if shipping_addr:
                 patch_body["deliveryAddress"] = shipping_addr
             if billing_addr:
                 patch_body["billingAddress"] = billing_addr
-            po_number = body.get("po_number", "")
             if po_number:
                 patch_body["poNumber"] = po_number
             if patch_body:
-                await backend._b2b_request(
-                    "PATCH",
+                try:
+                    await backend._b2b_request(
+                        "PATCH",
+                        f"/commerce/webstores/{webstore_id}/checkouts/{checkout_id}",
+                        params=eff_params,
+                        json=patch_body,
+                    )
+                except Exception as patch_exc:
+                    _log.warning(
+                        "Checkout PATCH failed (proceeding to place order): %s", patch_exc
+                    )
+
+            # ── 5b. Select delivery method if none is set (non-fatal) ───────────
+            # Without a delivery method the POST .../order endpoint typically
+            # returns a validation error.  Fetch the checkout state, find the
+            # first available delivery method in each delivery group, and set it.
+            try:
+                cs = await backend._b2b_request(
+                    "GET",
                     f"/commerce/webstores/{webstore_id}/checkouts/{checkout_id}",
                     params=eff_params,
-                    json=patch_body,
                 )
+                for dg in (cs.get("deliveryGroups") or {}).get("items") or []:
+                    if not dg.get("selectedDeliveryMethod"):
+                        avail = dg.get("availableDeliveryMethods") or []
+                        method_id = (avail[0].get("id") or avail[0].get("Id")) if avail else ""
+                        if method_id:
+                            await backend._b2b_request(
+                                "PATCH",
+                                f"/commerce/webstores/{webstore_id}/checkouts/{checkout_id}",
+                                params=eff_params,
+                                json={"deliveryMethodId": method_id},
+                            )
+                            break
+            except Exception as dm_exc:
+                _log.warning("Delivery method selection failed (continuing): %s", dm_exc)
 
             # ── 6. Place order from checkout session ─────────────────────────────
             order_resp = await backend._b2b_request(

@@ -159,6 +159,19 @@ class TrackedAgent(GeminiUCPAgent):
             pid = args.get("product_id", "")
             qty = int(args.get("quantity", 1))
             product = next((p for p in self.last_products if p.get("product_id") == pid), None)
+            # Fallback: live UCP lookup when product isn't in last_products
+            # (happens when Gemini calls add_to_cart without a preceding search this turn)
+            if not product and pid:
+                try:
+                    import httpx as _hx
+                    r = _hx.get(f"{self.base}/ucp/products/{pid}", timeout=8)
+                    if r.status_code == 200:
+                        fetched = r.json()
+                        if fetched.get("product_id"):
+                            product = fetched
+                            self.last_products.append(product)
+                except Exception:
+                    pass
             self.last_tool_calls.append({"tool": fn_name, "args": args})
             if product:
                 # Persist in self.cart (survives across turns)

@@ -575,7 +575,7 @@ def build_ucp_router(backend: Any) -> APIRouter:
                 patch_body["billingAddress"] = billing_addr
             po_number = body.get("po_number", "")
             if po_number:
-                patch_body["purchaseOrderNumber"] = po_number
+                patch_body["poNumber"] = po_number
             if patch_body:
                 await backend._b2b_request(
                     "PATCH",

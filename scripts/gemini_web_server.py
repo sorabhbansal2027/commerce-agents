@@ -407,24 +407,31 @@ async def _sf_authenticate(username: str, password: str) -> tuple[bool, str, str
     # ACCF must go through the Experience Cloud site URL, not the main instance.
     oauth_base = SF_COMMUNITY_URL if SF_COMMUNITY_URL else SF_BASE
 
+    import uuid as _uuid
+    nonce = _uuid.uuid4().hex
+
     # ── Step 2: POST credentials → receive authorization code ─────────────────
-    async with _httpx.AsyncClient(timeout=15) as client:
+    async with _httpx.AsyncClient(timeout=15, follow_redirects=False) as client:
         auth = await client.post(
             f"{oauth_base}/services/oauth2/authorize",
             data={
                 "response_type": "code_credentials",
                 "client_id": SF_CLIENT_ID,
                 "redirect_uri": SF_CALLBACK_URL,
+                "scope": "api full",
+                "nonce": nonce,
                 "code_challenge": code_challenge,
                 "code_challenge_method": "S256",
                 "username": username,
                 "password": password,
             },
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
         )
     if auth.status_code != 200:
         err = auth.json() if auth.headers.get("content-type", "").startswith("application/json") else {}
         raw = err.get("error_description") or err.get("error") or f"HTTP {auth.status_code}"
-        return False, f"[ACCF authorize {auth.status_code}] {raw}", "", ""
+        # Show full response for debugging
+        return False, f"[ACCF authorize {auth.status_code}] {raw} | body={auth.text[:300]}", "", ""
 
     code = auth.json().get("code", "")
     if not code:

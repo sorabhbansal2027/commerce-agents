@@ -553,12 +553,18 @@ def build_ucp_router(backend: Any) -> APIRouter:
             except Exception as addr_exc:
                 _log.warning("ContactPointAddress lookup failed (continuing): %s", addr_exc)
 
-            # ── 4. Initiate checkout session (GET checkouts/{cart_id}) ───────────
-            # In Salesforce B2B Commerce the cart ID doubles as the checkout ID.
-            await backend._b2b_request(
-                "GET",
-                f"/commerce/webstores/{webstore_id}/checkouts/{cart_id}",
+            # ── 4. Create checkout session (POST /checkouts with cartId) ─────────
+            checkout_resp = await backend._b2b_request(
+                "POST",
+                f"/commerce/webstores/{webstore_id}/checkouts",
                 params=eff_params,
+                json={"cartId": cart_id},
+            )
+            checkout_id = (
+                checkout_resp.get("checkoutId")
+                or checkout_resp.get("id")
+                or checkout_resp.get("Id")
+                or cart_id
             )
 
             # ── 5. PATCH checkout — addresses + optional PO number ───────────────
@@ -573,7 +579,7 @@ def build_ucp_router(backend: Any) -> APIRouter:
             if patch_body:
                 await backend._b2b_request(
                     "PATCH",
-                    f"/commerce/webstores/{webstore_id}/checkouts/{cart_id}",
+                    f"/commerce/webstores/{webstore_id}/checkouts/{checkout_id}",
                     params=eff_params,
                     json=patch_body,
                 )
@@ -581,7 +587,7 @@ def build_ucp_router(backend: Any) -> APIRouter:
             # ── 6. Place order from checkout session ─────────────────────────────
             order_resp = await backend._b2b_request(
                 "POST",
-                f"/commerce/webstores/{webstore_id}/checkouts/{cart_id}/order",
+                f"/commerce/webstores/{webstore_id}/checkouts/{checkout_id}/order",
                 params=eff_params,
                 json={},
             )
@@ -604,7 +610,7 @@ def build_ucp_router(backend: Any) -> APIRouter:
                 "buyer": buyer,
                 "agent_note": (
                     "Order placed via B2B Commerce checkout session flow "
-                    "(GET checkouts → PATCH addresses → POST order)."
+                    "(POST checkouts → PATCH addresses → POST order)."
                 ),
             }
             return Response(

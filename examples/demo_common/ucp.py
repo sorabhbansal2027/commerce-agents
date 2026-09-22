@@ -462,6 +462,18 @@ def build_ucp_router(backend: Any) -> APIRouter:
                     # After the first item auto-creates the cart, resolve the new cart ID.
                     if not cart_id:
                         cart_id, currency = await backend._get_buyer_cart_id(buyer_uid, webstore_id)
+                    # Fallback: integration-user context may set OwnerId to the integration
+                    # user rather than the buyer, so also search by AccountId.
+                    if not cart_id and account_id:
+                        rows = await backend._soql(
+                            f"SELECT Id, CurrencyIsoCode FROM WebCart "
+                            f"WHERE AccountId = '{account_id}' AND Status = 'Active' "
+                            f"AND WebStoreId = '{webstore_id}' "
+                            f"ORDER BY LastModifiedDate DESC LIMIT 1"
+                        )
+                        if rows:
+                            cart_id = rows[0].get("Id", "")
+                            currency = rows[0].get("CurrencyIsoCode", "USD")
                     added = True
                 except Exception as item_exc:
                     if not first_item_error:

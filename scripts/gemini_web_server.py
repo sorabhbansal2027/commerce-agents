@@ -370,110 +370,50 @@ import httpx as _httpx  # noqa: E402 – already a dep, imported here for clarit
 
 
 async def _sf_authenticate(username: str, password: str) -> tuple[bool, str, str, str]:
-    """Authenticate buyer via Salesforce Authorization Code and Credentials Flow (ACCF).
+    """Authenticate buyer via OAuth 2.0 ROPC against the Experience Cloud site URL.
 
-    This headless OAuth 2.0 flow accepts username/password server-side without
-    any browser redirect. It works from any IP permanently because it goes through
-    the Connected App OAuth layer (not org-level SOAP IP restrictions).
+    Community/buyer users authenticate through the Experience Cloud site endpoint,
+    not the main org endpoint. This bypasses org-level IP restrictions and does not
+    require a security token — OAuth ROPC through the community URL is IP-unrestricted.
 
-    Requirements (one-time Salesforce setup):
-      - Org:  "Allow Authorization Code and Credentials Flows" = ON
-      - App:  "Enable Authorization Code and Credentials Flow" = ON (already done)
-      - App:  Callback URL includes SF_CALLBACK_URL value
-
-    Flow:
-      1. Generate PKCE pair (code_verifier / code_challenge).
-      2. POST /services/oauth2/authorize with response_type=code_credentials
-         → Salesforce returns {"code": "..."} without any browser redirect.
-      3. POST /services/oauth2/token to exchange code for access token.
-      4. SOQL to resolve Account Id under the buyer's own token.
+    Requirements:
+      - Org: "Allow OAuth Username-Password Flows" = ON
+      - SF_COMMUNITY_URL env var set to Experience Cloud site URL
+        e.g. https://atci-b2b-lex--b2bpoc.sandbox.my.site.com/b2bcommerce
 
     Returns (ok, error, user_id, account_id).
     """
-    import hashlib as _hashlib
-    import secrets as _secrets
-
     if not SF_CLIENT_ID or not SF_CLIENT_SECRET or not SF_BASE:
         return False, "Salesforce credentials not configured.", "", ""
 
-    # ── Step 1: PKCE ──────────────────────────────────────────────────────────
-    import base64 as _b64
-    raw_verifier = _secrets.token_bytes(32)
-    code_verifier = _b64.urlsafe_b64encode(raw_verifier).rstrip(b"=").decode()
-    code_challenge = _b64.urlsafe_b64encode(
-        _hashlib.sha256(code_verifier.encode()).digest()
-    ).rstrip(b"=").decode()
+    # Community users must authenticate against the Experience Cloud site URL.
+    # Using the main org URL returns "authentication failure" for external users.
+    token_url = f"{SF_COMMUNITY_URL}/services/oauth2/token" if SF_COMMUNITY_URL else f"{SF_BASE}/services/oauth2/token"
 
-    # ACCF must go through the Experience Cloud site URL, not the main instance.
-    oauth_base = SF_COMMUNITY_URL if SF_COMMUNITY_URL else SF_BASE
-
-    import uuid as _uuid
-    nonce = _uuid.uuid4().hex
-
-    # ── Step 2: POST credentials to headless init endpoint → auth code ───────────
-    # The standard /oauth2/authorize does not support response_type=code_credentials.
-    # The correct Salesforce headless identity endpoint is /services/auth/headless/init.
-    app_origin = SF_CALLBACK_URL.rsplit("/", 2)[0]  # strip path → just the origin
-    async with _httpx.AsyncClient(timeout=15, follow_redirects=False) as client:
-        auth = await client.post(
-            f"{oauth_base}/services/auth/headless/init",
-            json={
+    # ── Step 1: ROPC token request ────────────────────────────────────────────
+    async with _httpx.AsyncClient(timeout=15) as client:
+        tok = await client.post(
+            token_url,
+            data={
+                "grant_type": "password",
                 "client_id": SF_CLIENT_ID,
-                "response_type": "code_credentials",
-                "redirect_uri": SF_CALLBACK_URL,
-                "nonce": nonce,
-                "code_challenge": code_challenge,
-                "code_challenge_method": "S256",
+                "client_secret": SF_CLIENT_SECRET,
                 "username": username,
                 "password": password,
             },
-            headers={"Origin": app_origin},
         )
-    # Salesforce returns the code via 302 redirect to the callback URL,
-    # or 200 with JSON body depending on the org version. Handle both.
-    if auth.status_code == 302:
-        import urllib.parse as _up
-        location = auth.headers.get("location", "")
-        parsed = _up.urlparse(location)
-        params = _up.parse_qs(parsed.query)
-        if "error" in params:
-            msg = params.get("error_description", params.get("error", ["Unknown error"]))[0]
-            return False, msg, "", ""
-        code = params.get("code", [""])[0]
-    elif auth.status_code == 200:
-        code = auth.json().get("code", "")
-    else:
-        err = auth.json() if auth.headers.get("content-type", "").startswith("application/json") else {}
-        raw = err.get("error_description") or err.get("error") or f"HTTP {auth.status_code}"
-        return False, f"[ACCF init {auth.status_code}] {raw} | body={auth.text[:300]}", "", ""
 
-    if not code:
-        location = auth.headers.get("location", "(no location header)")
-        return False, f"No code in redirect. Location: {location[:400]}", "", ""
-
-    # ── Step 3: exchange code for access token ────────────────────────────────
-    async with _httpx.AsyncClient(timeout=15) as client:
-        tok = await client.post(
-            f"{oauth_base}/services/oauth2/token",
-            data={
-                "grant_type": "authorization_code",
-                "code": code,
-                "client_id": SF_CLIENT_ID,
-                "client_secret": SF_CLIENT_SECRET,
-                "redirect_uri": SF_CALLBACK_URL,
-                "code_verifier": code_verifier,
-            },
-        )
     if tok.status_code != 200:
         err = tok.json() if tok.headers.get("content-type", "").startswith("application/json") else {}
-        return False, err.get("error_description", f"Token exchange failed: HTTP {tok.status_code}"), "", ""
+        raw = err.get("error_description") or err.get("error") or f"HTTP {tok.status_code}"
+        return False, f"[ROPC {tok.status_code}] {raw} | body={tok.text[:300]}", "", ""
 
     data = tok.json()
     access_token = data.get("access_token", "")
     user_id = data.get("id", "").rsplit("/", 1)[-1]
     auth_hdr = {"Authorization": f"Bearer {access_token}"}
 
-    # ── Step 4: resolve Account Id ────────────────────────────────────────────
+    # ── Step 2: resolve Account Id ────────────────────────────────────────────
     async with _httpx.AsyncClient(timeout=15) as client:
         qs = await client.get(
             f"{SF_BASE}/services/data/v62.0/query",

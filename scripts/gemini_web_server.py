@@ -424,9 +424,7 @@ async def _sf_authenticate(username: str, password: str) -> tuple[bool, str, str
     if auth.status_code != 200:
         err = auth.json() if auth.headers.get("content-type", "").startswith("application/json") else {}
         raw = err.get("error_description") or err.get("error") or f"HTTP {auth.status_code}"
-        if "invalid" in raw.lower() or "authentication" in raw.lower():
-            return False, "Invalid username or password.", "", ""
-        return False, raw, "", ""
+        return False, f"[ACCF authorize {auth.status_code}] {raw}", "", ""
 
     code = auth.json().get("code", "")
     if not code:

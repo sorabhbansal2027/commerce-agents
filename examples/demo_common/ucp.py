@@ -508,17 +508,17 @@ def build_ucp_router(backend: Any) -> APIRouter:
                 )
 
             # ── 3. Place the order via /commerce/sale/order ─────────────────────
-            # This single API handles the full checkout flow (pricing, tax, shipping)
-            # and creates the Salesforce Order in one call — no intermediate checkout
-            # session resource is needed.
-            order_body: dict = {"cartId": cart_id}
-            if account_id:
-                order_body["effectiveAccountId"] = account_id
+            # This endpoint uses the buyer's active WebCart (resolved via
+            # effectiveAccountId query param) — it does NOT accept cartId in
+            # the body; passing it causes a JSON_PARSER_ERROR 400.
+            order_params: dict = {"effectiveAccountId": account_id}
+            order_body: dict = {}
             if po_number := body.get("po_number", ""):
                 order_body["poNumber"] = po_number
             order_resp = await backend._b2b_request(
                 "POST",
                 "/commerce/sale/order",
+                params=order_params,
                 json=order_body,
             )
             order_id = (

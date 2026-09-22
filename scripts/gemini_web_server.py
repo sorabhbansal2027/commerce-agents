@@ -51,6 +51,9 @@ MODEL       = os.environ.get("GEMINI_MODEL", "gemini-3.6-flash")
 SF_BASE          = os.environ.get("SF_INSTANCE_URL", "").rstrip("/")
 SF_CLIENT_ID     = os.environ.get("SF_CLIENT_ID", "")
 SF_CLIENT_SECRET = os.environ.get("SF_CLIENT_SECRET", "")
+# Registered callback URL on the Connected App — not actually redirected to,
+# but must match exactly what is entered in the Connected App settings.
+SF_CALLBACK_URL  = os.environ.get("SF_CALLBACK_URL", "https://perfect-achievement-production-83ee.up.railway.app/api/oauth/callback")
 
 if not API_KEY:
     print("Error: GEMINI_API_KEY environment variable is required")
@@ -365,71 +368,108 @@ import httpx as _httpx  # noqa: E402 – already a dep, imported here for clarit
 
 
 async def _sf_authenticate(username: str, password: str) -> tuple[bool, str, str, str]:
-    """Authenticate buyer via OAuth 2.0 ROPC flow using the Connected App.
+    """Authenticate buyer via Salesforce Authorization Code and Credentials Flow (ACCF).
 
-    The Connected App must have:
-      - "Enable Resource Owner Password Credentials Flow" checked
-      - "IP Relaxation" set to "Relax IP restrictions" in OAuth Policies
+    This headless OAuth 2.0 flow accepts username/password server-side without
+    any browser redirect. It works from any IP permanently because it goes through
+    the Connected App OAuth layer (not org-level SOAP IP restrictions).
 
-    With IP relaxation set, this works from any Railway IP permanently —
-    no trusted IP ranges or security tokens needed.
+    Requirements (one-time Salesforce setup):
+      - Org:  "Allow Authorization Code and Credentials Flows" = ON
+      - App:  "Enable Authorization Code and Credentials Flow" = ON (already done)
+      - App:  Callback URL includes SF_CALLBACK_URL value
 
-    On success, fetches User Id + Account Id via SOQL under the buyer's token.
+    Flow:
+      1. Generate PKCE pair (code_verifier / code_challenge).
+      2. POST /services/oauth2/authorize with response_type=code_credentials
+         → Salesforce returns {"code": "..."} without any browser redirect.
+      3. POST /services/oauth2/token to exchange code for access token.
+      4. SOQL to resolve Account Id under the buyer's own token.
+
     Returns (ok, error, user_id, account_id).
     """
+    import hashlib as _hashlib
+    import secrets as _secrets
+
     if not SF_CLIENT_ID or not SF_CLIENT_SECRET or not SF_BASE:
         return False, "Salesforce credentials not configured.", "", ""
 
-    # ── Step 1: authenticate buyer via ROPC ───────────────────────────────────
+    # ── Step 1: PKCE ──────────────────────────────────────────────────────────
+    import base64 as _b64
+    raw_verifier = _secrets.token_bytes(32)
+    code_verifier = _b64.urlsafe_b64encode(raw_verifier).rstrip(b"=").decode()
+    code_challenge = _b64.urlsafe_b64encode(
+        _hashlib.sha256(code_verifier.encode()).digest()
+    ).rstrip(b"=").decode()
+
+    # ── Step 2: POST credentials → receive authorization code ─────────────────
     async with _httpx.AsyncClient(timeout=15) as client:
-        tok = await client.post(
-            f"{SF_BASE}/services/oauth2/token",
+        auth = await client.post(
+            f"{SF_BASE}/services/oauth2/authorize",
             data={
-                "grant_type": "password",
+                "response_type": "code_credentials",
                 "client_id": SF_CLIENT_ID,
-                "client_secret": SF_CLIENT_SECRET,
+                "redirect_uri": SF_CALLBACK_URL,
+                "code_challenge": code_challenge,
+                "code_challenge_method": "S256",
                 "username": username,
                 "password": password,
             },
         )
-    if tok.status_code == 200:
-        data = tok.json()
-        access_token = data.get("access_token", "")
-        # id field is a URL ending with /<orgId>/<userId>
-        user_id = data.get("id", "").rsplit("/", 1)[-1]
-        auth_hdr = {"Authorization": f"Bearer {access_token}"}
+    if auth.status_code != 200:
+        err = auth.json() if auth.headers.get("content-type", "").startswith("application/json") else {}
+        raw = err.get("error_description") or err.get("error") or f"HTTP {auth.status_code}"
+        if "invalid" in raw.lower() or "authentication" in raw.lower():
+            return False, "Invalid username or password.", "", ""
+        return False, raw, "", ""
 
-        # ── Step 2: get Account Id via SOQL ───────────────────────────────────
-        q = f"SELECT AccountId, ContactId FROM User WHERE Id = '{user_id}' LIMIT 1"
+    code = auth.json().get("code", "")
+    if not code:
+        return False, "No authorization code returned by Salesforce.", "", ""
+
+    # ── Step 3: exchange code for access token ────────────────────────────────
+    async with _httpx.AsyncClient(timeout=15) as client:
+        tok = await client.post(
+            f"{SF_BASE}/services/oauth2/token",
+            data={
+                "grant_type": "authorization_code",
+                "code": code,
+                "client_id": SF_CLIENT_ID,
+                "client_secret": SF_CLIENT_SECRET,
+                "redirect_uri": SF_CALLBACK_URL,
+                "code_verifier": code_verifier,
+            },
+        )
+    if tok.status_code != 200:
+        err = tok.json() if tok.headers.get("content-type", "").startswith("application/json") else {}
+        return False, err.get("error_description", f"Token exchange failed: HTTP {tok.status_code}"), "", ""
+
+    data = tok.json()
+    access_token = data.get("access_token", "")
+    user_id = data.get("id", "").rsplit("/", 1)[-1]
+    auth_hdr = {"Authorization": f"Bearer {access_token}"}
+
+    # ── Step 4: resolve Account Id ────────────────────────────────────────────
+    async with _httpx.AsyncClient(timeout=15) as client:
+        qs = await client.get(
+            f"{SF_BASE}/services/data/v62.0/query",
+            params={"q": f"SELECT AccountId, ContactId FROM User WHERE Id = '{user_id}' LIMIT 1"},
+            headers=auth_hdr,
+        )
+    rows = qs.json().get("records", []) if qs.status_code < 400 else []
+    account_id = (rows[0].get("AccountId") or "") if rows else ""
+
+    if not account_id and rows and rows[0].get("ContactId"):
         async with _httpx.AsyncClient(timeout=15) as client:
-            qs = await client.get(
+            qs2 = await client.get(
                 f"{SF_BASE}/services/data/v62.0/query",
-                params={"q": q},
+                params={"q": f"SELECT AccountId FROM Contact WHERE Id = '{rows[0]['ContactId']}' LIMIT 1"},
                 headers=auth_hdr,
             )
-        rows = qs.json().get("records", []) if qs.status_code < 400 else []
-        account_id = (rows[0].get("AccountId") or "") if rows else ""
+        rows2 = qs2.json().get("records", []) if qs2.status_code < 400 else []
+        account_id = rows2[0].get("AccountId", "") if rows2 else ""
 
-        if not account_id and rows and rows[0].get("ContactId"):
-            q2 = f"SELECT AccountId FROM Contact WHERE Id = '{rows[0]['ContactId']}' LIMIT 1"
-            async with _httpx.AsyncClient(timeout=15) as client:
-                qs2 = await client.get(
-                    f"{SF_BASE}/services/data/v62.0/query",
-                    params={"q": q2},
-                    headers=auth_hdr,
-                )
-            rows2 = qs2.json().get("records", []) if qs2.status_code < 400 else []
-            account_id = rows2[0].get("AccountId", "") if rows2 else ""
-
-        return True, "", user_id, account_id
-
-    err = tok.json() if tok.headers.get("content-type", "").startswith("application/json") else {}
-    raw = err.get("error_description") or err.get("error") or f"HTTP {tok.status_code}"
-    if "invalid_grant" in raw.lower() or "authentication failure" in raw.lower():
-        return False, "Invalid username or password.", "", ""
-    if "inactive" in raw.lower():
-        return False, "This Salesforce user is inactive.", "", ""
-    return False, raw, "", ""
+    return True, "", user_id, account_id
 
 
 # Salesforce buyer session — both set on successful login, cleared on logout/redeploy.

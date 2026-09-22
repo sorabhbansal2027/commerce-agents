@@ -370,25 +370,20 @@ import httpx as _httpx  # noqa: E402 – already a dep, imported here for clarit
 
 
 async def _sf_authenticate(username: str, password: str) -> tuple[bool, str, str, str]:
-    """Authenticate buyer via OAuth 2.0 ROPC against the Experience Cloud site URL.
+    """Authenticate buyer via OAuth 2.0 ROPC (username-password grant).
 
-    Community/buyer users authenticate through the Experience Cloud site endpoint,
-    not the main org endpoint. This bypasses org-level IP restrictions and does not
-    require a security token — OAuth ROPC through the community URL is IP-unrestricted.
+    Uses the main org token URL. Requires the Connected App's IP Relaxation to be
+    set to "Relax IP restrictions" so no security token is needed from Railway's IP.
 
-    Requirements:
-      - Org: "Allow OAuth Username-Password Flows" = ON
-      - SF_COMMUNITY_URL env var set to Experience Cloud site URL
-        e.g. https://atci-b2b-lex--b2bpoc.sandbox.my.site.com/b2bcommerce
+    Setup → App Manager → [Connected App] → Manage → Edit Policies →
+      IP Relaxation: "Relax IP restrictions"
 
     Returns (ok, error, user_id, account_id).
     """
     if not SF_CLIENT_ID or not SF_CLIENT_SECRET or not SF_BASE:
         return False, "Salesforce credentials not configured.", "", ""
 
-    # Community users must authenticate against the Experience Cloud site URL.
-    # Using the main org URL returns "authentication failure" for external users.
-    token_url = f"{SF_COMMUNITY_URL}/services/oauth2/token" if SF_COMMUNITY_URL else f"{SF_BASE}/services/oauth2/token"
+    token_url = f"{SF_BASE}/services/oauth2/token"
 
     # ── Step 1: ROPC token request ────────────────────────────────────────────
     async with _httpx.AsyncClient(timeout=15) as client:

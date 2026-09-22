@@ -509,19 +509,81 @@ def build_ucp_router(backend: Any) -> APIRouter:
                     media_type="application/json",
                 )
 
-            # ── 3. Place the order via /commerce/sale/order ─────────────────────
-            # This endpoint uses the buyer's active WebCart (resolved via
-            # effectiveAccountId query param) — it does NOT accept cartId in
-            # the body; passing it causes a JSON_PARSER_ERROR 400.
-            order_params: dict = {"effectiveAccountId": account_id}
-            order_body: dict = {}
-            if po_number := body.get("po_number", ""):
-                order_body["poNumber"] = po_number
+            # ── 3. Fetch ContactPointAddress for delivery / billing ──────────────
+            # Resolve the buyer's Salesforce Contact, then look up their
+            # ContactPointAddress records (Shipping preferred, Billing fallback,
+            # same address used for both if only one type exists).
+            shipping_addr: dict = {}
+            billing_addr: dict = {}
+            try:
+                contact_rows = await backend._soql(
+                    f"SELECT ContactId FROM User WHERE Id = '{buyer_uid}' LIMIT 1"
+                )
+                contact_id = contact_rows[0].get("ContactId", "") if contact_rows else ""
+                if contact_id:
+                    cpa_rows = await backend._soql(
+                        f"SELECT Id, AddressType, Street, City, State, PostalCode, "
+                        f"Country, Name, IsDefault "
+                        f"FROM ContactPointAddress "
+                        f"WHERE ParentId = '{contact_id}' "
+                        f"ORDER BY IsDefault DESC"
+                    )
+                    for row in cpa_rows:
+                        addr = {
+                            "name": row.get("Name", ""),
+                            "street": row.get("Street", ""),
+                            "city": row.get("City", ""),
+                            "state": row.get("State", ""),
+                            "postalCode": row.get("PostalCode", ""),
+                            "country": row.get("Country", ""),
+                        }
+                        atype = (row.get("AddressType") or "").lower()
+                        if atype == "shipping" and not shipping_addr:
+                            shipping_addr = addr
+                        elif atype == "billing" and not billing_addr:
+                            billing_addr = addr
+                        elif not shipping_addr:
+                            # first/default record — use for shipping
+                            shipping_addr = addr
+                    # If we only found one type, use it for both
+                    if shipping_addr and not billing_addr:
+                        billing_addr = shipping_addr
+                    elif billing_addr and not shipping_addr:
+                        shipping_addr = billing_addr
+            except Exception as addr_exc:
+                _log.warning("ContactPointAddress lookup failed (continuing): %s", addr_exc)
+
+            # ── 4. Initiate checkout session (GET checkouts/{cart_id}) ───────────
+            # In Salesforce B2B Commerce the cart ID doubles as the checkout ID.
+            await backend._b2b_request(
+                "GET",
+                f"/commerce/webstores/{webstore_id}/checkouts/{cart_id}",
+                params=eff_params,
+            )
+
+            # ── 5. PATCH checkout — addresses + optional PO number ───────────────
+            patch_body: dict = {}
+            if shipping_addr:
+                patch_body["deliveryAddress"] = shipping_addr
+            if billing_addr:
+                patch_body["billingAddress"] = billing_addr
+            po_number = body.get("po_number", "")
+            if po_number:
+                patch_body["purchaseOrderNumber"] = po_number
+            if patch_body:
+                await backend._b2b_request(
+                    "PATCH",
+                    f"/commerce/webstores/{webstore_id}/checkouts/{cart_id}",
+                    params=eff_params,
+                    json=patch_body,
+                )
+
+            # ── 6. Place order from checkout session ─────────────────────────────
             order_resp = await backend._b2b_request(
                 "POST",
-                "/commerce/sale/order",
-                params=order_params,
-                json=order_body,
+                f"/commerce/webstores/{webstore_id}/checkouts/{cart_id}/order",
+                params=eff_params,
+                json={},
             )
             order_id = (
                 order_resp.get("orderId")
@@ -538,9 +600,12 @@ def build_ucp_router(backend: Any) -> APIRouter:
                 "subtotal": subtotal,
                 "currency": currency,
                 "payment_handler": payment_handler,
-                "po_number": body.get("po_number") or None,
+                "po_number": po_number or None,
                 "buyer": buyer,
-                "agent_note": "Order placed via /commerce/sale/order. No storefront action required.",
+                "agent_note": (
+                    "Order placed via B2B Commerce checkout session flow "
+                    "(GET checkouts → PATCH addresses → POST order)."
+                ),
             }
             return Response(
                 content=json.dumps(payload), status_code=201, media_type="application/json"

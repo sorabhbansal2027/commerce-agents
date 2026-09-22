@@ -17,9 +17,22 @@ export default function App() {
   const [addingId, setAddingId] = useState<string | null>(null)
   const [addedIds, setAddedIds] = useState<Set<string>>(new Set())
 
-  // On page load, restore active cart if already authenticated
+  // On page load, verify the server session is still valid before trusting
+  // the browser's cached auth state.  After a server redeploy the in-memory
+  // buyer user ID is gone even though sessionStorage still says authed=1.
   useEffect(() => {
-    if (authed) loadActiveCart()
+    if (!authed) return
+    fetch(`${API}/session`)
+      .then(r => r.json())
+      .then(d => {
+        if (!d.authenticated) {
+          sessionStorage.removeItem('gc_authed')
+          setAuthed(false)
+        } else {
+          loadActiveCart()
+        }
+      })
+      .catch(() => loadActiveCart()) // network error — optimistically proceed
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 

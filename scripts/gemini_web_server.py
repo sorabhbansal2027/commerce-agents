@@ -406,10 +406,9 @@ async def _sf_authenticate(username: str, password: str) -> tuple[bool, str]:
     return False, msg, ""
 
 
-# Salesforce user ID of the currently authenticated buyer — set on login,
-# or pre-populated from SF_BUYER_USER_ID for single-user deployments where
-# the server may restart without requiring re-login.
-_sf_buyer_user_id: str = os.environ.get("SF_BUYER_USER_ID", "")
+# Salesforce user ID of the currently authenticated buyer — set on login only.
+# Empty string means no active session; place_b2b_order will fail fast.
+_sf_buyer_user_id: str = ""
 
 class LoginRequest(BaseModel):
     username: str
@@ -492,6 +491,21 @@ async def health() -> dict:
         "store": UCP_BASE,
         "model": MODEL,
         "auth_mode": "salesforce" if (SF_BASE and SF_CLIENT_ID and SF_CLIENT_SECRET) else "demo",
+    }
+
+
+@app.get("/api/session")
+async def session_status() -> dict:
+    """Return whether the server has an active buyer session.
+
+    In Salesforce auth mode the session is valid only after a successful login
+    that sets the in-memory buyer user ID.  In demo mode a login just checks a
+    static password so there is nothing server-side to lose — always valid.
+    """
+    sf_mode = bool(SF_BASE and SF_CLIENT_ID and SF_CLIENT_SECRET)
+    return {
+        "authenticated": bool(_sf_buyer_user_id) if sf_mode else True,
+        "auth_mode": "salesforce" if sf_mode else "demo",
     }
 
 

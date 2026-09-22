@@ -16,5 +16,10 @@
             <end>13.57.255.255</end>
             <start>13.57.0.0</start>
         </ipRanges>
+        <ipRanges>
+            <description>Railway outbound /16 (162.220.232.100 observed 2026-09-22)</description>
+            <end>162.220.255.255</end>
+            <start>162.220.0.0</start>
+        </ipRanges>
     </networkAccess>
 </SecuritySettings>

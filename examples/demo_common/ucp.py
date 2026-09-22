@@ -38,6 +38,7 @@ _SF_BUYER_USER_ID = os.environ.get("SF_BUYER_USER_ID", "")
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _base(request: Request) -> str:
     """Root URL of this server, no trailing slash."""
     return str(request.base_url).rstrip("/")
@@ -45,8 +46,16 @@ def _base(request: Request) -> str:
 
 def _listing_to_ucp(listing: Any) -> dict[str, Any]:
     """Map an internal Listing/Product object to the UCP product schema."""
+    product_id = getattr(listing, "listing_id", None) or getattr(listing, "product_id", "")
+    # FAMILY-* are synthetic grouping IDs — not valid Salesforce Product2Ids.
+    # Resolve to the first (lowest-price) variant's real product_id so that
+    # cart and order operations via the B2B Commerce REST API succeed.
+    if str(product_id).startswith("FAMILY-"):
+        variants = getattr(listing, "variants", None) or []
+        if variants:
+            product_id = getattr(variants[0], "product_id", product_id)
     d: dict[str, Any] = {
-        "product_id": getattr(listing, "listing_id", None) or getattr(listing, "product_id", ""),
+        "product_id": product_id,
         "title": getattr(listing, "title", ""),
         "price": getattr(listing, "price", 0.0),
         "currency": getattr(listing, "currency", "USD"),
@@ -66,6 +75,7 @@ def _listing_to_ucp(listing: Any) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 # Manifest builder
 # ---------------------------------------------------------------------------
+
 
 def build_ucp_manifest(backend: Any, base_url: str) -> dict[str, Any]:
     """Return the UCP manifest dict for this storefront."""
@@ -157,6 +167,7 @@ def build_ucp_manifest(backend: Any, base_url: str) -> dict[str, Any]:
 # Router
 # ---------------------------------------------------------------------------
 
+
 def build_ucp_router(backend: Any) -> APIRouter:
     """Return an ``APIRouter`` with the UCP manifest and core commerce endpoints.
 
@@ -198,7 +209,11 @@ def build_ucp_router(backend: Any) -> APIRouter:
         results = []
         q_lower = q.lower()
         for p in all_products:
-            if q_lower and q_lower not in (p.title or "").lower() and q_lower not in (getattr(p, "brand", "") or "").lower():
+            if (
+                q_lower
+                and q_lower not in (p.title or "").lower()
+                and q_lower not in (getattr(p, "brand", "") or "").lower()
+            ):
                 continue
             if category and getattr(p, "category", None) != category:
                 continue
@@ -260,14 +275,18 @@ def build_ucp_router(backend: Any) -> APIRouter:
                 price = float(p.price or 0)
                 qty = max(1, int(item.get("quantity", 1)))
                 total += price * qty
-                items_out.append({
-                    "product_id": p.product_id if hasattr(p, "product_id") else getattr(p, "listing_id", ""),
-                    "title": p.title,
-                    "quantity": qty,
-                    "unit_price": price,
-                    "line_total": round(price * qty, 2),
-                    "currency": getattr(p, "currency", "USD"),
-                })
+                items_out.append(
+                    {
+                        "product_id": p.product_id
+                        if hasattr(p, "product_id")
+                        else getattr(p, "listing_id", ""),
+                        "title": p.title,
+                        "quantity": qty,
+                        "unit_price": price,
+                        "line_total": round(price * qty, 2),
+                        "currency": getattr(p, "currency", "USD"),
+                    }
+                )
 
         payload = {
             "checkout_session_id": session_id,
@@ -293,14 +312,16 @@ def build_ucp_router(backend: Any) -> APIRouter:
     async def ucp_get_checkout_session(session_id: str, request: Request) -> Response:
         """Retrieve a checkout session status by ID."""
         return Response(
-            content=json.dumps({
-                "checkout_session_id": session_id,
-                "status": "pending",
-                "note": (
-                    "Reference implementation: session state is not persisted. "
-                    "Integrate with your order management system for live status."
-                ),
-            }),
+            content=json.dumps(
+                {
+                    "checkout_session_id": session_id,
+                    "status": "pending",
+                    "note": (
+                        "Reference implementation: session state is not persisted. "
+                        "Integrate with your order management system for live status."
+                    ),
+                }
+            ),
             media_type="application/json",
         )
 
@@ -318,8 +339,10 @@ def build_ucp_router(backend: Any) -> APIRouter:
             return Response(content=json.dumps({"items": []}), media_type="application/json")
 
         try:
-            from shopping_agent.types import ShoppingSessionContext as _SSC
             import datetime as _dt
+
+            from shopping_agent.types import ShoppingSessionContext as _SSC
+
             session = _SSC(user_id=uid, now=_dt.datetime.utcnow())
             cart = await backend.get_cart(session)
             items = [
@@ -337,7 +360,10 @@ def build_ucp_router(backend: Any) -> APIRouter:
             return Response(content=json.dumps({"items": items}), media_type="application/json")
         except Exception as exc:
             _log.warning("ucp_get_buyer_cart failed: %s", exc)
-            return Response(content=json.dumps({"items": [], "warning": str(exc)}), media_type="application/json")
+            return Response(
+                content=json.dumps({"items": [], "warning": str(exc)}),
+                media_type="application/json",
+            )
 
     # ── Agentic order placement (B2B Commerce — no storefront required) ──────
 
@@ -368,31 +394,53 @@ def build_ucp_router(backend: Any) -> APIRouter:
         if not buyer_uid:
             return Response(
                 status_code=501,
-                content=json.dumps({
-                    "error": "No buyer user ID available. Log in via Salesforce first, "
-                             "or set SF_BUYER_USER_ID on this service."
-                }),
+                content=json.dumps(
+                    {
+                        "error": "No buyer user ID available. Log in via Salesforce first, "
+                        "or set SF_BUYER_USER_ID on this service."
+                    }
+                ),
                 media_type="application/json",
             )
 
         if not hasattr(backend, "_b2b_request") or not hasattr(backend, "_ensure_webstore_id"):
             return Response(
                 status_code=501,
-                content=json.dumps({"error": "Backend does not support direct B2B order placement."}),
+                content=json.dumps(
+                    {"error": "Backend does not support direct B2B order placement."}
+                ),
                 media_type="application/json",
             )
 
         try:
             webstore_id = await backend._ensure_webstore_id()
             account_id = await backend._account_id_for_user(buyer_uid)
-            eff_params = {"effectiveAccountId": account_id} if account_id else {}
+
+            # effectiveAccountId is required for all B2B headless cart operations.
+            # Without it the integration user's context is used, which creates a cart
+            # the buyer can't see and that SOQL by OwnerId will never find.
+            if not account_id:
+                return Response(
+                    status_code=501,
+                    content=json.dumps(
+                        {
+                            "error": f"No buyer account found for user {buyer_uid}. "
+                            "The signed-in user must be an active B2B Commerce portal "
+                            "user with an associated Account."
+                        }
+                    ),
+                    media_type="application/json",
+                )
+            eff_params = {"effectiveAccountId": account_id}
 
             # ── 1. Get the buyer's active WebCart (SOQL — no explicit creation) ───
             cart_id, currency = await backend._get_buyer_cart_id(buyer_uid, webstore_id)
 
             # ── 2. Add each item to the cart ────────────────────────────────────
             # When no cart exists yet, /carts/active/cart-items auto-creates one.
+            # Track the first failure so we can surface a meaningful error.
             placed_items: list[dict] = []
+            first_item_error: str = ""
             for item in line_items:
                 pid = item.get("product_id", "")
                 qty = max(1, int(item.get("quantity", 1)))
@@ -403,33 +451,47 @@ def build_ucp_router(backend: Any) -> APIRouter:
                     if cart_id
                     else f"/commerce/webstores/{webstore_id}/carts/active/cart-items"
                 )
+                added = False
                 try:
                     await backend._b2b_request(
-                        "POST", endpoint,
+                        "POST",
+                        endpoint,
                         params=eff_params,
                         json={"productId": pid, "quantity": str(qty), "type": "Product"},
                     )
                     # After the first item auto-creates the cart, resolve the new cart ID.
                     if not cart_id:
                         cart_id, currency = await backend._get_buyer_cart_id(buyer_uid, webstore_id)
-                except Exception:
+                    added = True
+                except Exception as item_exc:
+                    if not first_item_error:
+                        first_item_error = str(item_exc)
                     if cart_id:
                         # B2B search-index miss — fall back to direct CartItem SObject insert
-                        await backend._add_to_cart_direct(cart_id, pid, qty)
-                    # else: skip item if cart couldn't be created and direct insert needs cart_id
-                placed_items.append({
-                    "product_id": pid,
-                    "title": item.get("title", pid),
-                    "quantity": qty,
-                    "unit_price": float(item.get("unit_price", 0)),
-                    "line_total": round(float(item.get("unit_price", 0)) * qty, 2),
-                    "currency": currency,
-                })
+                        try:
+                            await backend._add_to_cart_direct(cart_id, pid, qty)
+                            added = True
+                        except Exception:
+                            pass
+                if added:
+                    placed_items.append(
+                        {
+                            "product_id": pid,
+                            "title": item.get("title", pid),
+                            "quantity": qty,
+                            "unit_price": float(item.get("unit_price", 0)),
+                            "line_total": round(float(item.get("unit_price", 0)) * qty, 2),
+                            "currency": currency,
+                        }
+                    )
 
             if not cart_id:
+                error_msg = "Could not locate or create B2B cart — no items were added."
+                if first_item_error:
+                    error_msg += f" Detail: {first_item_error}"
                 return Response(
                     status_code=500,
-                    content=json.dumps({"error": "Could not locate or create B2B cart — no items were added."}),
+                    content=json.dumps({"error": error_msg}),
                     media_type="application/json",
                 )
 
@@ -466,7 +528,9 @@ def build_ucp_router(backend: Any) -> APIRouter:
                 "buyer": buyer,
                 "agent_note": "Order placed via /commerce/sale/order. No storefront action required.",
             }
-            return Response(content=json.dumps(payload), status_code=201, media_type="application/json")
+            return Response(
+                content=json.dumps(payload), status_code=201, media_type="application/json"
+            )
 
         except Exception as exc:
             _log.exception("ucp_place_b2b_order failed")

@@ -410,18 +410,17 @@ async def _sf_authenticate(username: str, password: str) -> tuple[bool, str, str
     import uuid as _uuid
     nonce = _uuid.uuid4().hex
 
-    # ── Step 2: POST credentials → receive authorization code ─────────────────
-    # Salesforce ACCF validates the Origin header — must match a CORS-allowed origin
-    # on the Connected App (Setup → Connected App → CORS/Allowed Origins).
+    # ── Step 2: POST credentials to headless init endpoint → auth code ───────────
+    # The standard /oauth2/authorize does not support response_type=code_credentials.
+    # The correct Salesforce headless identity endpoint is /services/auth/headless/init.
     app_origin = SF_CALLBACK_URL.rsplit("/", 2)[0]  # strip path → just the origin
     async with _httpx.AsyncClient(timeout=15, follow_redirects=False) as client:
         auth = await client.post(
-            f"{oauth_base}/services/oauth2/authorize",
+            f"{oauth_base}/services/auth/headless/init",
             json={
-                "response_type": "code_credentials",
                 "client_id": SF_CLIENT_ID,
+                "response_type": "code_credentials",
                 "redirect_uri": SF_CALLBACK_URL,
-                "scope": "api full",
                 "nonce": nonce,
                 "code_challenge": code_challenge,
                 "code_challenge_method": "S256",
@@ -433,8 +432,7 @@ async def _sf_authenticate(username: str, password: str) -> tuple[bool, str, str
     if auth.status_code != 200:
         err = auth.json() if auth.headers.get("content-type", "").startswith("application/json") else {}
         raw = err.get("error_description") or err.get("error") or f"HTTP {auth.status_code}"
-        # Show full response for debugging
-        return False, f"[ACCF authorize {auth.status_code}] {raw} | body={auth.text[:300]}", "", ""
+        return False, f"[ACCF init {auth.status_code}] {raw} | body={auth.text[:300]}", "", ""
 
     code = auth.json().get("code", "")
     if not code:

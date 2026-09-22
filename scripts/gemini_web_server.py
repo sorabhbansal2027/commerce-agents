@@ -407,8 +407,9 @@ async def _sf_authenticate(username: str, password: str) -> tuple[bool, str]:
 
 
 # Salesforce user ID of the currently authenticated buyer — set on login,
-# used by place_b2b_order so the real buyer's cart is operated on.
-_sf_buyer_user_id: str = ""
+# or pre-populated from SF_BUYER_USER_ID for single-user deployments where
+# the server may restart without requiring re-login.
+_sf_buyer_user_id: str = os.environ.get("SF_BUYER_USER_ID", "")
 
 class LoginRequest(BaseModel):
     username: str

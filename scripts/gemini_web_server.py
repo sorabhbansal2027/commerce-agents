@@ -51,9 +51,6 @@ MODEL       = os.environ.get("GEMINI_MODEL", "gemini-3.6-flash")
 SF_BASE          = os.environ.get("SF_INSTANCE_URL", "").rstrip("/")
 SF_CLIENT_ID     = os.environ.get("SF_CLIENT_ID", "")
 SF_CLIENT_SECRET = os.environ.get("SF_CLIENT_SECRET", "")
-# Buyer credentials validated server-side (not sent to Salesforce) — IP-restriction-free.
-SF_BUYER_USERNAME = os.environ.get("SF_BUYER_USERNAME", "")
-SF_BUYER_PASSWORD = os.environ.get("SF_BUYER_PASSWORD", "")
 
 if not API_KEY:
     print("Error: GEMINI_API_KEY environment variable is required")
@@ -368,72 +365,71 @@ import httpx as _httpx  # noqa: E402 – already a dep, imported here for clarit
 
 
 async def _sf_authenticate(username: str, password: str) -> tuple[bool, str, str, str]:
-    """Authenticate the buyer using the integration user's client_credentials token.
+    """Authenticate buyer via OAuth 2.0 ROPC flow using the Connected App.
 
-    Validates credentials server-side against SF_BUYER_USERNAME / SF_BUYER_PASSWORD
-    (env vars set on the Railway service), then looks up the buyer's Salesforce
-    User Id and Account Id via SOQL under the integration user token.
+    The Connected App must have:
+      - "Enable Resource Owner Password Credentials Flow" checked
+      - "IP Relaxation" set to "Relax IP restrictions" in OAuth Policies
 
-    This completely bypasses org-level IP restrictions — no trusted IP ranges, no
-    ROPC flow, no security tokens required regardless of which IP Railway is using.
+    With IP relaxation set, this works from any Railway IP permanently —
+    no trusted IP ranges or security tokens needed.
 
+    On success, fetches User Id + Account Id via SOQL under the buyer's token.
     Returns (ok, error, user_id, account_id).
     """
     if not SF_CLIENT_ID or not SF_CLIENT_SECRET or not SF_BASE:
         return False, "Salesforce credentials not configured.", "", ""
 
-    # ── Step 1: validate buyer credentials server-side ────────────────────────
-    expected_user = SF_BUYER_USERNAME or username   # accept any username if not locked down
-    expected_pass = SF_BUYER_PASSWORD
-    if expected_pass and (username != expected_user or password != expected_pass):
-        return False, "Invalid username or password.", "", ""
-
-    # ── Step 2: integration-user token via client credentials ─────────────────
+    # ── Step 1: authenticate buyer via ROPC ───────────────────────────────────
     async with _httpx.AsyncClient(timeout=15) as client:
         tok = await client.post(
             f"{SF_BASE}/services/oauth2/token",
             data={
-                "grant_type": "client_credentials",
+                "grant_type": "password",
                 "client_id": SF_CLIENT_ID,
                 "client_secret": SF_CLIENT_SECRET,
+                "username": username,
+                "password": password,
             },
         )
-    if tok.status_code >= 400:
-        err = tok.json() if tok.headers.get("content-type", "").startswith("application/json") else {}
-        return False, err.get("error_description", f"Integration token failed: HTTP {tok.status_code}"), "", ""
-    auth_hdr = {"Authorization": f"Bearer {tok.json().get('access_token', '')}"}
+    if tok.status_code == 200:
+        data = tok.json()
+        access_token = data.get("access_token", "")
+        # id field is a URL ending with /<orgId>/<userId>
+        user_id = data.get("id", "").rsplit("/", 1)[-1]
+        auth_hdr = {"Authorization": f"Bearer {access_token}"}
 
-    # ── Step 3: resolve buyer User Id and Account Id via SOQL ─────────────────
-    import urllib.parse as _up
-    q = f"SELECT Id, AccountId, ContactId FROM User WHERE Username = '{username}' AND IsActive = true LIMIT 1"
-    async with _httpx.AsyncClient(timeout=15) as client:
-        qs = await client.get(
-            f"{SF_BASE}/services/data/v62.0/query",
-            params={"q": q},
-            headers=auth_hdr,
-        )
-    rows = qs.json().get("records", []) if qs.status_code < 400 else []
-    if not rows:
-        return False, "Invalid username or password.", "", ""
-
-    user_id = rows[0].get("Id", "")
-    account_id = rows[0].get("AccountId") or ""
-
-    # Portal users often have AccountId via Contact rather than directly on User.
-    if not account_id and rows[0].get("ContactId"):
-        contact_id = rows[0]["ContactId"]
-        q2 = f"SELECT AccountId FROM Contact WHERE Id = '{contact_id}' LIMIT 1"
+        # ── Step 2: get Account Id via SOQL ───────────────────────────────────
+        q = f"SELECT AccountId, ContactId FROM User WHERE Id = '{user_id}' LIMIT 1"
         async with _httpx.AsyncClient(timeout=15) as client:
-            qs2 = await client.get(
+            qs = await client.get(
                 f"{SF_BASE}/services/data/v62.0/query",
-                params={"q": q2},
+                params={"q": q},
                 headers=auth_hdr,
             )
-        rows2 = qs2.json().get("records", []) if qs2.status_code < 400 else []
-        if rows2:
-            account_id = rows2[0].get("AccountId", "")
+        rows = qs.json().get("records", []) if qs.status_code < 400 else []
+        account_id = (rows[0].get("AccountId") or "") if rows else ""
 
-    return True, "", user_id, account_id
+        if not account_id and rows and rows[0].get("ContactId"):
+            q2 = f"SELECT AccountId FROM Contact WHERE Id = '{rows[0]['ContactId']}' LIMIT 1"
+            async with _httpx.AsyncClient(timeout=15) as client:
+                qs2 = await client.get(
+                    f"{SF_BASE}/services/data/v62.0/query",
+                    params={"q": q2},
+                    headers=auth_hdr,
+                )
+            rows2 = qs2.json().get("records", []) if qs2.status_code < 400 else []
+            account_id = rows2[0].get("AccountId", "") if rows2 else ""
+
+        return True, "", user_id, account_id
+
+    err = tok.json() if tok.headers.get("content-type", "").startswith("application/json") else {}
+    raw = err.get("error_description") or err.get("error") or f"HTTP {tok.status_code}"
+    if "invalid_grant" in raw.lower() or "authentication failure" in raw.lower():
+        return False, "Invalid username or password.", "", ""
+    if "inactive" in raw.lower():
+        return False, "This Salesforce user is inactive.", "", ""
+    return False, raw, "", ""
 
 
 # Salesforce buyer session — both set on successful login, cleared on logout/redeploy.

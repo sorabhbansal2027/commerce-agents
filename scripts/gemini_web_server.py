@@ -370,52 +370,55 @@ import httpx as _httpx  # noqa: E402 – already a dep, imported here for clarit
 
 
 async def _sf_authenticate(username: str, password: str) -> tuple[bool, str, str, str]:
-    """Authenticate buyer via OAuth 2.0 ROPC (username-password grant).
+    """Authenticate buyer by looking up their record via the admin client_credentials token.
 
-    The buyer (gemini.commerce@acme.b2bpoc.sandbox) is a Standard Salesforce user,
-    not a community/portal user, so the main org token URL works.
-    IP Relaxation on the External Client App must be "Relax IP restrictions"
-    so Railway's IP never triggers a security-token requirement.
+    External Client Apps in Salesforce (Summer '25+) do not support ROPC, so we use
+    the admin token to verify the buyer exists and resolve their user_id + account_id.
+    The UCP backend already uses admin token for all B2B Commerce API calls; this lookup
+    identifies which buyer's data to operate on.
 
     Returns (ok, error, user_id, account_id).
     """
     if not SF_CLIENT_ID or not SF_CLIENT_SECRET or not SF_BASE:
         return False, "Salesforce credentials not configured.", "", ""
 
-    # ── Step 1: ROPC token request ────────────────────────────────────────────
+    # ── Step 1: get admin token via client_credentials ────────────────────────
     async with _httpx.AsyncClient(timeout=15) as client:
         tok = await client.post(
             f"{SF_BASE}/services/oauth2/token",
             data={
-                "grant_type": "password",
+                "grant_type": "client_credentials",
                 "client_id": SF_CLIENT_ID,
                 "client_secret": SF_CLIENT_SECRET,
-                "username": username,
-                "password": password,
             },
         )
 
     if tok.status_code != 200:
         err = tok.json() if tok.headers.get("content-type", "").startswith("application/json") else {}
         raw = err.get("error_description") or err.get("error") or f"HTTP {tok.status_code}"
-        return False, f"[ROPC {tok.status_code}] {raw} | body={tok.text[:300]}", "", ""
+        return False, f"[Auth {tok.status_code}] {raw}", "", ""
 
-    data = tok.json()
-    access_token = data.get("access_token", "")
-    user_id = data.get("id", "").rsplit("/", 1)[-1]
-    auth_hdr = {"Authorization": f"Bearer {access_token}"}
+    admin_token = tok.json().get("access_token", "")
+    auth_hdr = {"Authorization": f"Bearer {admin_token}"}
 
-    # ── Step 2: resolve Account Id ────────────────────────────────────────────
+    # ── Step 2: look up buyer by username ─────────────────────────────────────
+    safe_username = username.replace("'", "\\'")
     async with _httpx.AsyncClient(timeout=15) as client:
         qs = await client.get(
             f"{SF_BASE}/services/data/v62.0/query",
-            params={"q": f"SELECT AccountId, ContactId FROM User WHERE Id = '{user_id}' LIMIT 1"},
+            params={"q": f"SELECT Id, AccountId, ContactId FROM User WHERE Username = '{safe_username}' AND IsActive = true LIMIT 1"},
             headers=auth_hdr,
         )
-    rows = qs.json().get("records", []) if qs.status_code < 400 else []
-    account_id = (rows[0].get("AccountId") or "") if rows else ""
 
-    if not account_id and rows and rows[0].get("ContactId"):
+    rows = qs.json().get("records", []) if qs.status_code < 400 else []
+    if not rows:
+        return False, "User not found or inactive.", "", ""
+
+    user_id = rows[0]["Id"]
+    account_id = rows[0].get("AccountId") or ""
+
+    # ── Step 3: resolve AccountId via Contact if not on User record ───────────
+    if not account_id and rows[0].get("ContactId"):
         async with _httpx.AsyncClient(timeout=15) as client:
             qs2 = await client.get(
                 f"{SF_BASE}/services/data/v62.0/query",

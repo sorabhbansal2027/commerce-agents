@@ -429,12 +429,24 @@ async def _sf_authenticate(username: str, password: str) -> tuple[bool, str, str
             },
             headers={"Origin": app_origin},
         )
-    if auth.status_code != 200:
+    # Salesforce returns the code via 302 redirect to the callback URL,
+    # or 200 with JSON body depending on the org version. Handle both.
+    if auth.status_code == 302:
+        import urllib.parse as _up
+        location = auth.headers.get("location", "")
+        parsed = _up.urlparse(location)
+        params = _up.parse_qs(parsed.query)
+        if "error" in params:
+            msg = params.get("error_description", params.get("error", ["Unknown error"]))[0]
+            return False, msg, "", ""
+        code = params.get("code", [""])[0]
+    elif auth.status_code == 200:
+        code = auth.json().get("code", "")
+    else:
         err = auth.json() if auth.headers.get("content-type", "").startswith("application/json") else {}
         raw = err.get("error_description") or err.get("error") or f"HTTP {auth.status_code}"
         return False, f"[ACCF init {auth.status_code}] {raw} | body={auth.text[:300]}", "", ""
 
-    code = auth.json().get("code", "")
     if not code:
         return False, "No authorization code returned by Salesforce.", "", ""
 

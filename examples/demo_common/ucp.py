@@ -18,10 +18,12 @@ the domain root per RFC 8615::
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import os
 import uuid
+from datetime import date as _date
 from typing import Any
 
 from fastapi import APIRouter, Request, Response
@@ -416,7 +418,9 @@ def build_ucp_router(backend: Any) -> APIRouter:
             webstore_id = await backend._ensure_webstore_id()
             # Prefer account_id supplied at login (from buyer/login response) to
             # avoid an extra SOQL round-trip on every order.
-            account_id = body.get("buyer_account_id") or await backend._account_id_for_user(buyer_uid)
+            account_id = body.get("buyer_account_id") or await backend._account_id_for_user(
+                buyer_uid
+            )
 
             # effectiveAccountId is required for all B2B headless cart operations.
             # Without it the integration user's context is used, which creates a cart
@@ -447,23 +451,21 @@ def build_ucp_router(backend: Any) -> APIRouter:
                 f"AND Status IN ('Active', 'Checkout') "
                 f"ORDER BY LastModifiedDate DESC LIMIT 10"
             )
-            active_rows    = [r for r in all_open_rows if r.get("Status") == "Active"]
-            checkout_rows  = [r for r in all_open_rows if r.get("Status") == "Checkout"]
+            active_rows = [r for r in all_open_rows if r.get("Status") == "Active"]
+            checkout_rows = [r for r in all_open_rows if r.get("Status") == "Checkout"]
 
             if active_rows:
-                cart_id  = active_rows[0]["Id"]
+                cart_id = active_rows[0]["Id"]
                 currency = active_rows[0].get("CurrencyIsoCode", "USD")
             else:
                 # Close any stuck Checkout-status carts so we can create a fresh one.
                 for old in checkout_rows:
-                    try:
+                    with contextlib.suppress(Exception):
                         await backend._b2b_request(
                             "PATCH",
                             f"/sobjects/WebCart/{old['Id']}",
                             json={"Status": "Closed"},
                         )
-                    except Exception:
-                        pass
                 # Create a new cart for the buyer account.
                 new_cart = await backend._b2b_request(
                     "POST",
@@ -471,7 +473,7 @@ def build_ucp_router(backend: Any) -> APIRouter:
                     params=eff_params,
                     json={},
                 )
-                cart_id  = new_cart.get("cartId") or new_cart.get("id") or new_cart.get("Id", "")
+                cart_id = new_cart.get("cartId") or new_cart.get("id") or new_cart.get("Id", "")
                 currency = new_cart.get("currencyIsoCode", "USD")
 
             if not cart_id:
@@ -545,39 +547,100 @@ def build_ucp_router(backend: Any) -> APIRouter:
                 except Exception as po_exc:
                     _log.warning("WebCart PoNumber PATCH failed (continuing): %s", po_exc)
 
-            # ── 4. Place order via POST /checkouts ────────────────────────────────
-            # In this Salesforce B2B Commerce implementation POST /checkouts
-            # creates the checkout session and places the order atomically (202).
-            # The POST .../order sub-resource does not exist (returns 404).
-            # The response always contains orderReferenceNumber as the order handle.
-            order_resp = await backend._b2b_request(
-                "POST",
-                f"/commerce/webstores/{webstore_id}/checkouts",
-                params=eff_params,
-                json={"cartId": cart_id},
+            # ── 4. Resolve webstore pricebook and PricebookEntry IDs ─────────────
+            # Salesforce Order SObjects require a PricebookEntryId per line.
+            # We prefer the pricebook assigned to this webstore; fall back to any
+            # active entry for the product.
+            ws_pb_rows = await backend._soql(
+                f"SELECT Pricebook2Id FROM WebStorePricebook "
+                f"WHERE WebStoreId = '{webstore_id}' AND IsActive = true LIMIT 1"
             )
-            order_id = (
-                order_resp.get("orderReferenceNumber")
-                or order_resp.get("orderId")
-                or order_resp.get("orderNumber")
-                or order_resp.get("checkoutId")
-                or order_resp.get("Id", "")
+            ws_pricebook_id: str = ws_pb_rows[0]["Pricebook2Id"] if ws_pb_rows else ""
+            product_ids = [i["product_id"] for i in placed_items if i.get("product_id")]
+            pbe_lookup: dict[str, dict] = {}
+            if product_ids:
+                pid_csv = "','".join(product_ids)
+                pbe_rows = await backend._soql(
+                    f"SELECT Id, Product2Id, UnitPrice, Pricebook2Id "
+                    f"FROM PricebookEntry "
+                    f"WHERE Product2Id IN ('{pid_csv}') AND IsActive = true LIMIT 200"
+                )
+                # Build pid → best PricebookEntry: webstore pricebook wins over others.
+                for row in pbe_rows:
+                    pid = row["Product2Id"]
+                    existing = pbe_lookup.get(pid)
+                    if existing is None or row.get("Pricebook2Id") == ws_pricebook_id:
+                        pbe_lookup[pid] = row
+
+            # Determine the pricebook for the Order header.
+            pricebook_id = ws_pricebook_id
+            if not pricebook_id and pbe_lookup:
+                pricebook_id = next(iter(pbe_lookup.values())).get("Pricebook2Id", "")
+
+            # ── 5. Create Salesforce Order ────────────────────────────────────────
+            order_body: dict[str, Any] = {
+                "AccountId": account_id,
+                "Status": "Draft",
+                "EffectiveDate": _date.today().isoformat(),
+            }
+            if pricebook_id:
+                order_body["Pricebook2Id"] = pricebook_id
+            order_resp = await backend._b2b_request("POST", "/sobjects/Order", json=order_body)
+            sf_order_id = order_resp.get("id") or order_resp.get("Id", "")
+
+            # ── 6. Create OrderItems ──────────────────────────────────────────────
+            for item in placed_items:
+                pid = item["product_id"]
+                pbe = pbe_lookup.get(pid)
+                if not pbe:
+                    _log.warning("No PricebookEntry for product %s — skipping OrderItem", pid)
+                    continue
+                try:
+                    await backend._b2b_request(
+                        "POST",
+                        "/sobjects/OrderItem",
+                        json={
+                            "OrderId": sf_order_id,
+                            "PricebookEntryId": pbe["Id"],
+                            "Quantity": item["quantity"],
+                            "UnitPrice": pbe["UnitPrice"],
+                        },
+                    )
+                except Exception as oi_exc:
+                    _log.warning("OrderItem creation failed for %s: %s", pid, oi_exc)
+
+            # ── 7. Activate Order ─────────────────────────────────────────────────
+            await backend._b2b_request(
+                "PATCH",
+                f"/sobjects/Order/{sf_order_id}",
+                json={"Status": "Activated"},
             )
+
+            # ── 8. Read back OrderNumber ──────────────────────────────────────────
+            order_detail = await backend._b2b_request(
+                "GET", f"/sobjects/Order/{sf_order_id}", params={"fields": "Id,OrderNumber,Status"}
+            )
+            order_number = order_detail.get("OrderNumber") or sf_order_id
+
+            # ── 9. Close cart (best effort) ───────────────────────────────────────
+            with contextlib.suppress(Exception):
+                await backend._b2b_request(
+                    "PATCH",
+                    f"/sobjects/WebCart/{cart_id}",
+                    json={"Status": "Closed"},
+                )
 
             subtotal = round(sum(i["line_total"] for i in placed_items), 2)
             payload = {
-                "order_id": order_id or f"ORD-{uuid.uuid4().hex[:8].upper()}",
-                "status": order_resp.get("status", "placed"),
+                "order_id": order_number,
+                "salesforce_order_id": sf_order_id,
+                "status": "placed",
                 "line_items": placed_items,
                 "subtotal": subtotal,
                 "currency": currency,
                 "payment_handler": payment_handler,
                 "po_number": po_number or None,
                 "buyer": buyer,
-                "agent_note": (
-                    "Order placed via B2B Commerce: POST /checkouts atomically "
-                    "creates checkout and places the order (returns orderReferenceNumber)."
-                ),
             }
             return Response(
                 content=json.dumps(payload), status_code=201, media_type="application/json"

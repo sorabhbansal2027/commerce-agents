@@ -3,7 +3,7 @@
 
 "use client";
 
-import { AskLink, BagPanel, CheckoutButton, formatMoney, optionValuesLabel, plural, RemoveLink, Stepper, TotalRow, useCatalogIndex, useStoreFrame } from "web-shared";
+import { AskLink, BagPanel, formatMoney, optionValuesLabel, plural, RemoveLink, Stepper, TotalRow, useCatalogIndex, useStoreFrame } from "web-shared";
 import { fetchProducts } from "@/lib/api";
 import { STORE_POLICY } from "@/lib/storePolicy";
 import type { CartItem, CartPayload, Product } from "@/lib/types";
@@ -81,7 +81,24 @@ export default function CartPanel({ cart, checkoutStaged = false }: { cart: Cart
         <>
           {items.length ? <FreeShippingMeter subtotal={cart?.subtotal ?? 0} /> : null}
           <TotalRow label={count ? `Subtotal · ${plural(count, "item")}` : "Subtotal"} value={formatMoney(cart?.subtotal ?? 0, cart?.currency)} />
-          <CheckoutButton staged={checkoutStaged} disabled={items.length === 0} prompt="Check out my cart." />
+          {!checkoutStaged ? (
+            <button
+              type="button"
+              onClick={() => ask("Check out my cart and prepare a purchase order.")}
+              disabled={items.length === 0}
+              className="btn-primary mt-3 w-full"
+            >
+              Checkout (PO)
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => ask("Place the purchase order now.")}
+              className="btn-primary mt-3 w-full"
+            >
+              Place Order (PO)
+            </button>
+          )}
           {items.length ? (
             <div className="mt-2.5 flex justify-center">
               <AskLink label="Ask about this cart" prompt="Look over my cart: anything missing or worth swapping?" />

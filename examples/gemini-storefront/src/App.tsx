@@ -66,8 +66,16 @@ export default function App() {
           : m
       ))
 
+      // Clear cart when an order was placed this turn
+      const orderPlaced = (data.tool_calls as Array<{tool: string}> ?? [])
+        .some(tc => tc.tool === 'place_b2b_order' || tc.tool === 'place_order')
+      if (orderPlaced) {
+        setCartItems([])
+        setAddedIds(new Set())
+      }
+
       // Sync cart when Gemini added or loaded items via tool calls
-      if (data.cart_additions?.length) {
+      if (!orderPlaced && data.cart_additions?.length) {
         for (const { product, quantity } of data.cart_additions) {
           setCartItems(prev => {
             const existing = prev.find(i => i.product.product_id === product.product_id)

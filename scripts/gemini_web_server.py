@@ -295,9 +295,10 @@ class TrackedAgent(GeminiUCPAgent):
                     if po_number:
                         result["po_number"] = po_number
                     self.checkout_session = result  # reuse card for both pending + placed
+                    self.cart.clear()  # cart is closed after order — agent must see it as empty
                     return {"ok": True, "order_id": result["order_id"], "status": result.get("status", "placed"),
                             "subtotal": result.get("subtotal"), "currency": result.get("currency", "USD"),
-                            "po_number": po_number or None}
+                            "po_number": po_number or None, "cart_cleared": True}
                 return {"error": result.get("error", f"Order failed (HTTP {resp.status_code})") + " Do not call any other tool — report this error to the user."}
             except Exception as exc:
                 return {"error": f"Could not reach order endpoint: {exc}. Do not call any other tool — report this error to the user."}

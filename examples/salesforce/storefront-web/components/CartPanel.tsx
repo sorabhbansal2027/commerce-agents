@@ -94,6 +94,7 @@ export default function CartPanel({ cart, checkoutStaged = false }: { cart: Cart
             <button
               type="button"
               onClick={() => ask("Place the purchase order now.")}
+              disabled={items.length === 0}
               className="btn-primary mt-3 w-full"
             >
               Place Order (PO)

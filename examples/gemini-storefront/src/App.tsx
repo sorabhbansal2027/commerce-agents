@@ -17,6 +17,15 @@ export default function App() {
   const [addingId, setAddingId] = useState<string | null>(null)
   const [addedIds, setAddedIds] = useState<Set<string>>(new Set())
 
+  // Clear cart whenever a placed-order message arrives, regardless of how sendMessage ran
+  useEffect(() => {
+    const last = messages[messages.length - 1]
+    if (!last?.loading && last?.checkoutSession?.status === 'placed') {
+      setCartItems(prev => prev.length > 0 ? [] : prev)
+      setAddedIds(prev => prev.size > 0 ? new Set() : prev)
+    }
+  }, [messages])
+
   // On page load, verify the server session is still valid before trusting
   // the browser's cached auth state.  After a server redeploy the in-memory
   // buyer user ID is gone even though sessionStorage still says authed=1.
@@ -67,8 +76,10 @@ export default function App() {
       ))
 
       // Clear cart when an order was placed this turn
-      const orderPlaced = (data.tool_calls as Array<{tool: string}> ?? [])
-        .some(tc => tc.tool === 'place_b2b_order' || tc.tool === 'place_order')
+      const orderPlaced =
+        (data.tool_calls as Array<{tool: string}> ?? [])
+          .some(tc => tc.tool === 'place_b2b_order' || tc.tool === 'place_order') ||
+        data.checkout_session?.status === 'placed'
       if (orderPlaced) {
         setCartItems([])
         setAddedIds(new Set())

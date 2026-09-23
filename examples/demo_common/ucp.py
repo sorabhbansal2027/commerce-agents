@@ -435,12 +435,56 @@ def build_ucp_router(backend: Any) -> APIRouter:
                 )
             eff_params = {"effectiveAccountId": account_id}
 
-            # ── 1. Get the buyer's active WebCart (SOQL — no explicit creation) ───
-            cart_id, currency = await backend._get_buyer_cart_id(buyer_uid, webstore_id)
+            # ── 1. Find or create an Active cart for this account ───────────────
+            # Primary: look up by AccountId (OwnerId may differ for portal users).
+            # If only Checkout-status carts exist they block new cart creation, so
+            # close them first before creating a fresh one.
+            cart_id = ""
+            currency = "USD"
+            all_open_rows = await backend._soql(
+                f"SELECT Id, Status, CurrencyIsoCode FROM WebCart "
+                f"WHERE AccountId = '{account_id}' AND WebStoreId = '{webstore_id}' "
+                f"AND Status IN ('Active', 'Checkout') "
+                f"ORDER BY LastModifiedDate DESC LIMIT 10"
+            )
+            active_rows    = [r for r in all_open_rows if r.get("Status") == "Active"]
+            checkout_rows  = [r for r in all_open_rows if r.get("Status") == "Checkout"]
+
+            if active_rows:
+                cart_id  = active_rows[0]["Id"]
+                currency = active_rows[0].get("CurrencyIsoCode", "USD")
+            else:
+                # Close any stuck Checkout-status carts so we can create a fresh one.
+                for old in checkout_rows:
+                    try:
+                        await backend._b2b_request(
+                            "PATCH",
+                            f"/sobjects/WebCart/{old['Id']}",
+                            json={"Status": "Closed"},
+                        )
+                    except Exception:
+                        pass
+                # Create a new cart for the buyer account.
+                new_cart = await backend._b2b_request(
+                    "POST",
+                    f"/commerce/webstores/{webstore_id}/carts",
+                    params=eff_params,
+                    json={},
+                )
+                cart_id  = new_cart.get("cartId") or new_cart.get("id") or new_cart.get("Id", "")
+                currency = new_cart.get("currencyIsoCode", "USD")
+
+            if not cart_id:
+                return Response(
+                    status_code=500,
+                    content=json.dumps({"error": "Could not locate or create a B2B cart."}),
+                    media_type="application/json",
+                )
 
             # ── 2. Add each item to the cart ────────────────────────────────────
-            # When no cart exists yet, /carts/active/cart-items auto-creates one.
-            # Track the first failure so we can surface a meaningful error.
+            # B2B Commerce cart-items API requires quantity as an integer and the
+            # "type" field.  Direct CartItem insert is used as fallback for products
+            # not yet in the search index (returns NOT_FOUND, not 400).
             placed_items: list[dict] = []
             first_item_error: str = ""
             for item in line_items:
@@ -448,45 +492,23 @@ def build_ucp_router(backend: Any) -> APIRouter:
                 qty = max(1, int(item.get("quantity", 1)))
                 if not pid:
                     continue
-                endpoint = (
-                    f"/commerce/webstores/{webstore_id}/carts/{cart_id}/cart-items"
-                    if cart_id
-                    else f"/commerce/webstores/{webstore_id}/carts/active/cart-items"
-                )
                 added = False
                 try:
                     await backend._b2b_request(
                         "POST",
-                        endpoint,
+                        f"/commerce/webstores/{webstore_id}/carts/{cart_id}/cart-items",
                         params=eff_params,
-                        json={"productId": pid, "quantity": str(qty), "type": "Product"},
+                        json={"productId": pid, "quantity": qty, "type": "Product"},
                     )
-                    # After the first item auto-creates the cart, resolve the new cart ID.
-                    if not cart_id:
-                        cart_id, currency = await backend._get_buyer_cart_id(buyer_uid, webstore_id)
-                    # Fallback: integration-user context may set OwnerId to the integration
-                    # user rather than the buyer, so also search by AccountId.
-                    if not cart_id and account_id:
-                        rows = await backend._soql(
-                            f"SELECT Id, CurrencyIsoCode FROM WebCart "
-                            f"WHERE AccountId = '{account_id}' AND Status = 'Active' "
-                            f"AND WebStoreId = '{webstore_id}' "
-                            f"ORDER BY LastModifiedDate DESC LIMIT 1"
-                        )
-                        if rows:
-                            cart_id = rows[0].get("Id", "")
-                            currency = rows[0].get("CurrencyIsoCode", "USD")
                     added = True
                 except Exception as item_exc:
                     if not first_item_error:
                         first_item_error = str(item_exc)
-                    if cart_id:
-                        # B2B search-index miss — fall back to direct CartItem SObject insert
-                        try:
-                            await backend._add_to_cart_direct(cart_id, pid, qty)
-                            added = True
-                        except Exception:
-                            pass
+                    try:
+                        await backend._add_to_cart_direct(cart_id, pid, qty)
+                        added = True
+                    except Exception:
+                        pass
                 if added:
                     placed_items.append(
                         {
@@ -499,8 +521,8 @@ def build_ucp_router(backend: Any) -> APIRouter:
                         }
                     )
 
-            if not cart_id:
-                error_msg = "Could not locate or create B2B cart — no items were added."
+            if not placed_items:
+                error_msg = "No items could be added to the cart."
                 if first_item_error:
                     error_msg += f" Detail: {first_item_error}"
                 return Response(
@@ -509,132 +531,36 @@ def build_ucp_router(backend: Any) -> APIRouter:
                     media_type="application/json",
                 )
 
-            # ── 3. Fetch ContactPointAddress for delivery / billing ──────────────
-            # User.ContactId is often null for portal users; fall back to a
-            # Contact lookup via AccountId so we always find the address.
-            shipping_addr: dict = {}
-            billing_addr: dict = {}
-            try:
-                contact_id = ""
-                user_rows = await backend._soql(
-                    f"SELECT ContactId FROM User WHERE Id = '{buyer_uid}' LIMIT 1"
-                )
-                contact_id = (user_rows[0].get("ContactId") or "") if user_rows else ""
-                if not contact_id and account_id:
-                    acct_rows = await backend._soql(
-                        f"SELECT Id FROM Contact "
-                        f"WHERE AccountId = '{account_id}' "
-                        f"ORDER BY CreatedDate DESC LIMIT 1"
+            # ── 3. Set PO number directly on the WebCart SObject (non-fatal) ─────
+            # The B2B Commerce checkout endpoints reject poNumber / purchaseOrderNumber.
+            # The correct WebCart field is PoNumber (set before initiating checkout).
+            po_number = body.get("po_number", "")
+            if po_number:
+                try:
+                    await backend._b2b_request(
+                        "PATCH",
+                        f"/sobjects/WebCart/{cart_id}",
+                        json={"PoNumber": po_number},
                     )
-                    contact_id = (acct_rows[0].get("Id") or "") if acct_rows else ""
-                if contact_id:
-                    cpa_rows = await backend._soql(
-                        f"SELECT AddressType, Street, City, State, PostalCode, "
-                        f"Country, IsDefault "
-                        f"FROM ContactPointAddress "
-                        f"WHERE ParentId = '{contact_id}' "
-                        f"ORDER BY IsDefault DESC"
-                    )
-                    for row in cpa_rows:
-                        # Only include fields that have real values — empty strings
-                        # cause JSON_PARSER_ERROR on the Salesforce PATCH endpoint.
-                        addr = {
-                            k: v for k, v in {
-                                "street": row.get("Street"),
-                                "city": row.get("City"),
-                                "state": row.get("State"),
-                                "postalCode": row.get("PostalCode"),
-                                "country": row.get("Country"),
-                            }.items() if v
-                        }
-                        if not addr:
-                            continue
-                        atype = (row.get("AddressType") or "").lower()
-                        if atype == "shipping" and not shipping_addr:
-                            shipping_addr = addr
-                        elif atype == "billing" and not billing_addr:
-                            billing_addr = addr
-                        elif not shipping_addr:
-                            shipping_addr = addr
-                    if shipping_addr and not billing_addr:
-                        billing_addr = shipping_addr
-                    elif billing_addr and not shipping_addr:
-                        shipping_addr = billing_addr
-            except Exception as addr_exc:
-                _log.warning("ContactPointAddress lookup failed (continuing): %s", addr_exc)
+                except Exception as po_exc:
+                    _log.warning("WebCart PoNumber PATCH failed (continuing): %s", po_exc)
 
-            # ── 4. Create checkout session (POST /checkouts with cartId) ─────────
-            checkout_resp = await backend._b2b_request(
+            # ── 4. Place order via POST /checkouts ────────────────────────────────
+            # In this Salesforce B2B Commerce implementation POST /checkouts
+            # creates the checkout session and places the order atomically (202).
+            # The POST .../order sub-resource does not exist (returns 404).
+            # The response always contains orderReferenceNumber as the order handle.
+            order_resp = await backend._b2b_request(
                 "POST",
                 f"/commerce/webstores/{webstore_id}/checkouts",
                 params=eff_params,
                 json={"cartId": cart_id},
             )
-            checkout_id = (
-                checkout_resp.get("checkoutId")
-                or checkout_resp.get("id")
-                or checkout_resp.get("Id")
-                or cart_id
-            )
-
-            # ── 5. PATCH checkout — addresses + PO number (non-fatal) ────────────
-            po_number = body.get("po_number", "")
-            patch_body: dict = {}
-            if shipping_addr:
-                patch_body["deliveryAddress"] = shipping_addr
-            if billing_addr:
-                patch_body["billingAddress"] = billing_addr
-            if po_number:
-                patch_body["poNumber"] = po_number
-            if patch_body:
-                try:
-                    await backend._b2b_request(
-                        "PATCH",
-                        f"/commerce/webstores/{webstore_id}/checkouts/{checkout_id}",
-                        params=eff_params,
-                        json=patch_body,
-                    )
-                except Exception as patch_exc:
-                    _log.warning(
-                        "Checkout PATCH failed (proceeding to place order): %s", patch_exc
-                    )
-
-            # ── 5b. Select delivery method if none is set (non-fatal) ───────────
-            # Without a delivery method the POST .../order endpoint typically
-            # returns a validation error.  Fetch the checkout state, find the
-            # first available delivery method in each delivery group, and set it.
-            try:
-                cs = await backend._b2b_request(
-                    "GET",
-                    f"/commerce/webstores/{webstore_id}/checkouts/{checkout_id}",
-                    params=eff_params,
-                )
-                for dg in (cs.get("deliveryGroups") or {}).get("items") or []:
-                    if not dg.get("selectedDeliveryMethod"):
-                        avail = dg.get("availableDeliveryMethods") or []
-                        method_id = (avail[0].get("id") or avail[0].get("Id")) if avail else ""
-                        if method_id:
-                            await backend._b2b_request(
-                                "PATCH",
-                                f"/commerce/webstores/{webstore_id}/checkouts/{checkout_id}",
-                                params=eff_params,
-                                json={"deliveryMethodId": method_id},
-                            )
-                            break
-            except Exception as dm_exc:
-                _log.warning("Delivery method selection failed (continuing): %s", dm_exc)
-
-            # ── 6. Place order from checkout session ─────────────────────────────
-            order_resp = await backend._b2b_request(
-                "POST",
-                f"/commerce/webstores/{webstore_id}/checkouts/{checkout_id}/order",
-                params=eff_params,
-                json={},
-            )
             order_id = (
-                order_resp.get("orderId")
-                or order_resp.get("orderReferenceNumber")
+                order_resp.get("orderReferenceNumber")
+                or order_resp.get("orderId")
                 or order_resp.get("orderNumber")
+                or order_resp.get("checkoutId")
                 or order_resp.get("Id", "")
             )
 
@@ -649,8 +575,8 @@ def build_ucp_router(backend: Any) -> APIRouter:
                 "po_number": po_number or None,
                 "buyer": buyer,
                 "agent_note": (
-                    "Order placed via B2B Commerce checkout session flow "
-                    "(POST checkouts → PATCH addresses → POST order)."
+                    "Order placed via B2B Commerce: POST /checkouts atomically "
+                    "creates checkout and places the order (returns orderReferenceNumber)."
                 ),
             }
             return Response(

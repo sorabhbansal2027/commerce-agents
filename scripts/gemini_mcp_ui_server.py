@@ -361,6 +361,39 @@ _DEMO_HTML = """<!DOCTYPE html>
                   cursor: pointer; transition: opacity .15s; }
   #checkout-btn:hover { opacity: .88; }
   #checkout-btn:disabled { opacity: .4; cursor: not-allowed; }
+
+  /* Checkout form view */
+  #checkout-view { display: none; flex-direction: column; flex: 1; overflow: hidden; }
+  .co-back { padding: 10px 14px; font-size: 12px; color: var(--brand); cursor: pointer;
+             border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 4px; }
+  .co-back:hover { background: var(--bg); }
+  .co-summary { padding: 10px 14px; font-size: 12px; color: var(--ink2);
+                border-bottom: 1px solid var(--line); background: var(--bg); }
+  .co-summary b { color: var(--ink); }
+  .co-fields { flex: 1; overflow-y: auto; padding: 12px 14px;
+               display: flex; flex-direction: column; gap: 10px; }
+  .co-field label { font-size: 11px; font-weight: 600; color: var(--ink2);
+                    display: block; margin-bottom: 3px; }
+  .co-field input, .co-field select {
+    width: 100%; padding: 8px 10px; border: 1px solid var(--line);
+    border-radius: 8px; font-size: 13px; outline: none; background: var(--bg); }
+  .co-field input:focus, .co-field select:focus { border-color: var(--brand); background: var(--card); }
+  .co-footer { border-top: 1px solid var(--line); padding: 12px 14px; }
+  #place-order-btn { width: 100%; padding: 11px; background: var(--ok); color: #fff;
+                     border: none; border-radius: 10px; font-size: 13px; font-weight: 700;
+                     cursor: pointer; transition: opacity .15s; }
+  #place-order-btn:hover { opacity: .88; }
+  #place-order-btn:disabled { opacity: .4; cursor: not-allowed; }
+
+  /* Order success state */
+  .order-success { display: flex; flex-direction: column; align-items: center;
+                   justify-content: center; flex: 1; padding: 20px; text-align: center; gap: 8px; }
+  .order-success-icon { font-size: 36px; }
+  .order-success h3 { font-size: 14px; font-weight: 700; color: var(--ok); }
+  .order-success p { font-size: 12px; color: var(--ink2); }
+  .order-success button { margin-top: 8px; padding: 8px 16px; background: var(--brand); color: #fff;
+                          border: none; border-radius: 8px; font-size: 12px; font-weight: 600;
+                          cursor: pointer; }
 </style>
 </head>
 <body>
@@ -402,23 +435,52 @@ _DEMO_HTML = """<!DOCTYPE html>
   <div class="cart-panel">
     <div class="cart-header">
       <div class="cart-title">
-        🛒 Cart
+        &#x1F6D2; Cart
         <span class="cart-count" id="cart-count">0</span>
       </div>
     </div>
-    <div class="cart-items" id="cart-items">
-      <div class="cart-empty">
-        <div class="cart-empty-icon">&#128;</div>
-        <div>Your cart is empty</div>
-        <div style="font-size:11px;opacity:.7">Add items from the chat</div>
+    <!-- Cart items view -->
+    <div id="cart-view" style="display:flex;flex-direction:column;flex:1;overflow:hidden">
+      <div class="cart-items" id="cart-items">
+        <div class="cart-empty">
+          <div class="cart-empty-icon">&#x1F6D2;</div>
+          <div>Your cart is empty</div>
+          <div style="font-size:11px;opacity:.7">Add items from the chat</div>
+        </div>
+      </div>
+      <div class="cart-footer">
+        <div class="cart-total">
+          <span class="cart-total-label">Total</span>
+          <span class="cart-total-val" id="cart-total">$0.00</span>
+        </div>
+        <button id="checkout-btn" disabled onclick="showCheckoutForm()">Checkout &rarr;</button>
       </div>
     </div>
-    <div class="cart-footer">
-      <div class="cart-total">
-        <span class="cart-total-label">Total</span>
-        <span class="cart-total-val" id="cart-total">$0.00</span>
+
+    <!-- Checkout form view -->
+    <div id="checkout-view" style="display:none;flex-direction:column;flex:1;overflow:hidden">
+      <div class="co-back" onclick="showCartView()">&#8592; Back to cart</div>
+      <div class="co-summary" id="co-summary"></div>
+      <div class="co-fields">
+        <div class="co-field">
+          <label>Name <span style="font-weight:400;color:var(--ink2)">(optional)</span></label>
+          <input id="co-name" type="text" placeholder="Your name" autocomplete="name"/>
+        </div>
+        <div class="co-field">
+          <label>Email <span style="font-weight:400;color:var(--ink2)">(optional)</span></label>
+          <input id="co-email" type="email" placeholder="you@example.com" autocomplete="email"/>
+        </div>
+        <div class="co-field">
+          <label>Payment Method</label>
+          <select id="co-payment">
+            <option value="purchase_order">Purchase Order</option>
+            <option value="credit_card">Credit Card</option>
+          </select>
+        </div>
       </div>
-      <button id="checkout-btn" disabled onclick="checkout()">Checkout</button>
+      <div class="co-footer">
+        <button id="place-order-btn" onclick="placeOrder()">&#x2713; Place Order</button>
+      </div>
     </div>
   </div>
 </div>
@@ -428,10 +490,12 @@ const messages   = document.getElementById("messages");
 const input      = document.getElementById("msg-input");
 const sendBtn    = document.getElementById("send-btn");
 const toolsLog   = document.getElementById("tools-log");
-const cartItems  = document.getElementById("cart-items");
-const cartCount  = document.getElementById("cart-count");
-const cartTotal  = document.getElementById("cart-total");
-const checkoutBtn= document.getElementById("checkout-btn");
+const cartItems   = document.getElementById("cart-items");
+const cartCount   = document.getElementById("cart-count");
+const cartTotal   = document.getElementById("cart-total");
+const checkoutBtn = document.getElementById("checkout-btn");
+const cartView    = document.getElementById("cart-view");
+const checkoutView= document.getElementById("checkout-view");
 
 // Cart state: { product_id: {title, price, image_url, qty} }
 const cart = {};
@@ -465,7 +529,7 @@ function renderCart() {
 
   if (items.length === 0) {
     cartItems.innerHTML = `<div class="cart-empty">
-      <div class="cart-empty-icon">🛒</div>
+      <div class="cart-empty-icon">&#x1F6D2;</div>
       <div>Your cart is empty</div>
       <div style="font-size:11px;opacity:.7">Add items from the chat</div>
     </div>`;
@@ -593,36 +657,57 @@ function addProductCards(products) {
   messages.scrollTop = messages.scrollHeight;
 }
 
-async function cartAction(productId, btn) {
+function cartAction(productId, btn) {
   const p = JSON.parse(btn.dataset.product || "{}");
+  cartAddItem(p);
+  btn.textContent = "Added ✓";
   btn.disabled = true;
-  btn.textContent = "Adding…";
-  setBusy(true);
-  try {
-    const res = await fetch("/api/cart", {
-      method: "POST", headers: {"Content-Type":"application/json"},
-      body: JSON.stringify({ product_id: productId, quantity: 1 })
-    });
-    const data = await res.json();
-    logTools(data.tool_calls);
-    addAgentMsg(data.reply);
-    btn.textContent = "Added ✓";
-    cartAddItem(p);
-  } catch(e) {
-    addAgentMsg("Sorry, couldn't add to cart: " + e.message);
-    btn.disabled = false;
-    btn.textContent = "Add to Cart";
-  } finally { setBusy(false); }
+  btn.style.background = "var(--ok)";
 }
 
-async function checkout() {
+function showCheckoutForm() {
   const items = Object.entries(cart);
   if (!items.length) return;
-  const summary = items.map(([,v]) => `${v.title} x${v.qty}`).join(", ");
-  const total = items.reduce((s,[,v]) => s + v.price * v.qty, 0);
-  const msg = `Please proceed to checkout for: ${summary}. Total: $${total.toFixed(2)}`;
+  const totalQty   = items.reduce((s,[,v]) => s + v.qty, 0);
+  const totalPrice = items.reduce((s,[,v]) => s + v.price * v.qty, 0);
+  document.getElementById("co-summary").innerHTML =
+    `<b>${totalQty} item${totalQty > 1 ? "s" : ""}</b> &middot; Total: <b>$${totalPrice.toFixed(2)}</b>`;
+  cartView.style.display = "none";
+  checkoutView.style.display = "flex";
+}
+
+function showCartView() {
+  checkoutView.style.display = "none";
+  cartView.style.display = "flex";
+}
+
+async function placeOrder() {
+  const items = Object.entries(cart);
+  if (!items.length) return;
+  const btn = document.getElementById("place-order-btn");
+  btn.disabled = true;
+  btn.textContent = "Placing order…";
+
+  const name    = document.getElementById("co-name").value.trim();
+  const email   = document.getElementById("co-email").value.trim();
+  const payment = document.getElementById("co-payment").value;
+  const summary = items.map(([,v]) => `${v.title} (qty: ${v.qty}, $${(v.price*v.qty).toFixed(2)})`).join("; ");
+  const total   = items.reduce((s,[,v]) => s + v.price * v.qty, 0);
+
+  let msg = `Please create a checkout session and place the order. Items: ${summary}. Total: $${total.toFixed(2)}. Payment method: ${payment}.`;
+  if (name)  msg += ` Customer name: ${name}.`;
+  if (email) msg += ` Email: ${email}.`;
+
+  // Switch back to chat view and send
+  showCartView();
   input.value = msg;
   await send();
+
+  // Clear cart after sending
+  Object.keys(cart).forEach(k => delete cart[k]);
+  renderCart();
+  btn.disabled = false;
+  btn.textContent = "&#x2713; Place Order";
 }
 
 async function send() {
@@ -656,6 +741,7 @@ async function resetConv() {
   toolsLog.textContent = "";
   Object.keys(cart).forEach(k => delete cart[k]);
   renderCart();
+  showCartView();
 }
 
 input.addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey) send(); });

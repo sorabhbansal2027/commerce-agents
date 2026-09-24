@@ -647,7 +647,7 @@ function addProductCards(products) {
     card.innerHTML = `${imgHtml}<div class="pcard-body">
       <div class="pcard-title">${(p.title||"").replace(/</g,"&lt;")}</div>
       <div class="pcard-price">${price}</div>
-      <button class="pcard-btn" onclick="cartAction('${pid}', this, decodeProduct(this))">Add to Cart</button>
+      <button class="pcard-btn" onclick="cartAction('${pid}', this)">Add to Cart</button>
     </div>`;
     card.querySelector(".pcard-btn").dataset.product = JSON.stringify(p);
     cardsRow.appendChild(card);

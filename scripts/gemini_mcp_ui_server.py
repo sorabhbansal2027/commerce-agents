@@ -667,7 +667,7 @@ function addProductCards(products) {
 function cartAction(productId, btn) {
   const p = JSON.parse(btn.dataset.product || "{}");
   cartAddItem(p);
-  btn.textContent = "Added ✓";
+  btn.innerHTML = "&#x2713; Added";
   btn.disabled = true;
   btn.style.background = "var(--ok)";
 }
@@ -679,6 +679,7 @@ function showCheckoutForm() {
   const totalPrice = items.reduce((s,[,v]) => s + v.price * v.qty, 0);
   document.getElementById("co-summary").innerHTML =
     `<b>${totalQty} item${totalQty > 1 ? "s" : ""}</b> &middot; Total: <b>$${totalPrice.toFixed(2)}</b>`;
+  document.getElementById("order-confirm")?.remove();
   cartView.style.display = "none";
   checkoutView.style.display = "flex";
 }
@@ -688,33 +689,96 @@ function showCartView() {
   cartView.style.display = "flex";
 }
 
+function showOrderConfirmation(itemsSnap, total, payment, name) {
+  const payLabel = payment === "purchase_order" ? "Purchase Order" : "Credit Card";
+  const itemsList = itemsSnap.map(v => `${v.title} &times;${v.qty}`).join("<br>");
+  const existing = document.getElementById("order-confirm");
+  if (existing) existing.remove();
+  const div = document.createElement("div");
+  div.id = "order-confirm";
+  div.style.cssText = "display:flex;flex-direction:column;flex:1;overflow:hidden";
+  div.innerHTML = `
+    <div style="flex:1;display:flex;flex-direction:column;align-items:center;
+                justify-content:center;padding:20px;gap:10px;text-align:center">
+      <div style="font-size:48px">&#x2705;</div>
+      <div style="font-size:15px;font-weight:800;color:var(--ok)">Order Confirmed!</div>
+      ${name ? `<div style="font-size:13px;font-weight:600">${name.replace(/</g,"&lt;")}</div>` : ""}
+      <div style="background:var(--bg);border:1px solid var(--line);border-radius:10px;
+                  padding:10px 14px;width:100%;font-size:11.5px;color:var(--ink);
+                  text-align:left;line-height:1.8">${itemsList}</div>
+      <div style="display:flex;justify-content:space-between;width:100%;font-size:12px;color:var(--ink2)">
+        <span>Payment</span><span style="font-weight:600;color:var(--ink)">${payLabel}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;width:100%;font-size:14px">
+        <span style="font-weight:600">Total</span>
+        <span style="font-weight:800;color:var(--ok)">$${total.toFixed(2)}</span>
+      </div>
+    </div>
+    <div style="border-top:1px solid var(--line);padding:12px 14px">
+      <button onclick="startNewOrder()"
+              style="width:100%;padding:10px;background:var(--brand);color:#fff;
+                     border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer">
+        + New Order
+      </button>
+    </div>`;
+  cartView.style.display = "none";
+  checkoutView.style.display = "none";
+  document.querySelector(".cart-panel").appendChild(div);
+}
+
+function startNewOrder() {
+  document.getElementById("order-confirm")?.remove();
+  Object.keys(cart).forEach(k => delete cart[k]);
+  renderCart();
+  showCartView();
+}
+
 async function placeOrder() {
   const items = Object.entries(cart);
   if (!items.length) return;
   const btn = document.getElementById("place-order-btn");
   btn.disabled = true;
-  btn.textContent = "Placing order…";
+  btn.innerHTML = "Placing order&#8230;";
 
-  const name    = document.getElementById("co-name").value.trim();
-  const email   = document.getElementById("co-email").value.trim();
-  const payment = document.getElementById("co-payment").value;
-  const summary = items.map(([,v]) => `${v.title} (qty: ${v.qty}, $${(v.price*v.qty).toFixed(2)})`).join("; ");
-  const total   = items.reduce((s,[,v]) => s + v.price * v.qty, 0);
+  const name     = document.getElementById("co-name").value.trim();
+  const email    = document.getElementById("co-email").value.trim();
+  const payment  = document.getElementById("co-payment").value;
+  const payLabel = payment === "purchase_order" ? "Purchase Order" : "Credit Card";
+  const itemsSnap= items.map(([,v]) => ({...v}));
+  const total    = items.reduce((s,[,v]) => s + v.price * v.qty, 0);
+  const summary  = items.map(([,v]) => `${v.title} (qty:${v.qty}, $${(v.price*v.qty).toFixed(2)})`).join("; ");
 
-  let msg = `Please create a checkout session and place the order. Items: ${summary}. Total: $${total.toFixed(2)}. Payment method: ${payment}.`;
-  if (name)  msg += ` Customer name: ${name}.`;
-  if (email) msg += ` Email: ${email}.`;
-
-  // Switch back to chat view and send
+  // Friendly user message in chat (not the raw API string)
+  const friendlyMsg = `Place my order — ${items.length} item${items.length>1?"s":""}, ` +
+    `$${total.toFixed(2)} via ${payLabel}`;
+  addUserMsg(friendlyMsg);
   showCartView();
-  input.value = msg;
-  await send();
+  setBusy(true);
+  showTyping();
 
-  // Clear cart after sending
-  Object.keys(cart).forEach(k => delete cart[k]);
-  renderCart();
-  btn.disabled = false;
-  btn.textContent = "&#x2713; Place Order";
+  // Build hidden API message with all details
+  let apiMsg = `Place the order for: ${summary}. Total: $${total.toFixed(2)}. Payment: ${payment}.`;
+  if (name)  apiMsg += ` Customer name: ${name}.`;
+  if (email) apiMsg += ` Email: ${email}.`;
+
+  try {
+    const res = await fetch("/api/chat", {
+      method: "POST", headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({ message: apiMsg })
+    });
+    const data = await res.json();
+    removeTyping();
+    logTools(data.tool_calls);
+    addAgentMsg(data.reply);
+    // Show confirmation panel — clear cart only on success
+    showOrderConfirmation(itemsSnap, total, payment, name);
+    Object.keys(cart).forEach(k => delete cart[k]);
+  } catch(e) {
+    removeTyping();
+    addAgentMsg("Sorry, there was an issue placing your order. Please try again.");
+    btn.disabled = false;
+    btn.innerHTML = "&#x2713; Place Order";
+  } finally { setBusy(false); }
 }
 
 async function send() {
@@ -737,11 +801,30 @@ async function send() {
       addProductCards(data.products);
     } else {
       addAgentMsg(data.reply);
+      // No-results hint when it looks like a search that came up empty
+      if (data.tool_calls && data.tool_calls.some(c => c.tool === "search_products") &&
+          !data.products?.length) {
+        addNoResultsCard();
+      }
     }
   } catch(e) {
     removeTyping();
-    addAgentMsg("Something went wrong: " + e.message);
+    addAgentMsg("Something went wrong — please try again.");
   } finally { setBusy(false); }
+}
+
+function addNoResultsCard() {
+  const el = document.createElement("div");
+  el.style.cssText = `margin-left:40px;padding:14px 18px;background:var(--card);
+    border:1px solid var(--line);border-radius:14px;max-width:calc(var(--max-w) - 40px);
+    display:flex;align-items:center;gap:12px;`;
+  el.innerHTML = `<div style="font-size:28px">&#x1F50D;</div>
+    <div>
+      <div style="font-size:13px;font-weight:600;color:var(--ink);margin-bottom:2px">No products found</div>
+      <div style="font-size:12px;color:var(--ink2)">Try different keywords or a broader search</div>
+    </div>`;
+  getThread().appendChild(el);
+  messages.scrollTop = messages.scrollHeight;
 }
 
 async function resetConv() {
@@ -749,7 +832,10 @@ async function resetConv() {
   const t = messages.querySelector(".thread");
   if (t) t.innerHTML = `<div class="row"><div class="avatar avatar-agent">&#10024;</div>
     <div class="bubble bubble-agent">Hi! I&rsquo;m your shopping assistant. Tell me what you&rsquo;re looking for.</div></div>`;
+  // Remove any non-thread nodes (product grids, no-results cards)
+  Array.from(messages.children).forEach(c => { if (!c.classList.contains("thread")) c.remove(); });
   toolsLog.textContent = "";
+  document.getElementById("order-confirm")?.remove();
   Object.keys(cart).forEach(k => delete cart[k]);
   renderCart();
   showCartView();

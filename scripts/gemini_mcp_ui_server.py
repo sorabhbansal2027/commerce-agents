@@ -460,4 +460,4 @@ if __name__ == "__main__":
     print(f"Storefront : {UCP_BASE}")
     print(f"MCP server : {STOREFRONT_MCP_URL}  (STOREFRONT_MCP_URL)")
     print(f"{'='*60}")
-    uvicorn.run(app, host="127.0.0.1", port=PORT, log_level="warning")
+    uvicorn.run(app, host="0.0.0.0", port=PORT, log_level="warning")

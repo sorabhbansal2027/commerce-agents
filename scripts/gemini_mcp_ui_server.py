@@ -277,25 +277,32 @@ _DEMO_HTML = """<!DOCTYPE html>
   .typing span:nth-child(3) { animation-delay: .4s; }
   @keyframes blink { 0%,60%,100%{opacity:.15} 30%{opacity:1} }
 
-  /* Product cards */
-  .cards-row { display: flex; gap: 10px; overflow-x: auto; padding: 2px 0 6px;
-               scrollbar-width: thin; max-width: calc(var(--max-w) - 40px); }
-  .cards-row::-webkit-scrollbar { height: 4px; }
-  .cards-row::-webkit-scrollbar-thumb { background: var(--line); border-radius: 2px; }
-  .pcard { flex-shrink: 0; width: 152px; border: 1px solid var(--line);
-           border-radius: 12px; background: var(--card); overflow: hidden;
-           box-shadow: 0 1px 3px rgba(0,0,0,.06); }
-  .pcard img { width: 100%; height: 90px; object-fit: cover; display: block; }
-  .pcard-body { padding: 8px 10px; }
-  .pcard-title { font-weight: 600; font-size: 11px; color: var(--ink); line-height: 1.4;
-                 margin-bottom: 4px; display: -webkit-box; -webkit-line-clamp: 2;
+  /* Product grid */
+  .product-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;
+                  margin-left: 40px; max-width: calc(var(--max-w) - 40px); }
+  .pcard { border: 1px solid var(--line); border-radius: 14px; background: var(--card);
+           overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,.07);
+           transition: transform .15s, box-shadow .15s; cursor: default; }
+  .pcard:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,.11); }
+  .pcard-img-wrap { position: relative; height: 130px; overflow: hidden; background: #f1f5f9; }
+  .pcard-img-wrap img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .pcard-img-placeholder { width: 100%; height: 100%; display: flex; align-items: center;
+                            justify-content: center; font-size: 36px; background: linear-gradient(135deg,#f1f5f9,#e2e8f0); }
+  .pcard-badge { position: absolute; top: 8px; left: 8px; background: rgba(22,163,74,.9);
+                 color: #fff; font-size: 9px; font-weight: 700; padding: 2px 7px;
+                 border-radius: 20px; text-transform: uppercase; letter-spacing: .04em; }
+  .pcard-body { padding: 12px 12px 10px; }
+  .pcard-category { font-size: 10px; color: var(--ink2); font-weight: 600;
+                    text-transform: uppercase; letter-spacing: .05em; margin-bottom: 4px; }
+  .pcard-title { font-weight: 700; font-size: 13px; color: var(--ink); line-height: 1.35;
+                 margin-bottom: 6px; display: -webkit-box; -webkit-line-clamp: 2;
                  -webkit-box-orient: vertical; overflow: hidden; }
-  .pcard-price { color: var(--ok); font-weight: 700; font-size: 12px; margin-bottom: 7px; }
-  .pcard-btn { width: 100%; padding: 5px 0; background: var(--brand); color: #fff;
-               border: none; border-radius: 7px; font-size: 11px; font-weight: 600;
-               cursor: pointer; transition: opacity .15s; }
-  .pcard-btn:hover { opacity: .88; }
-  .pcard-btn:disabled { opacity: .45; cursor: not-allowed; }
+  .pcard-price { color: var(--ok); font-weight: 800; font-size: 16px; margin-bottom: 10px; }
+  .pcard-btn { width: 100%; padding: 8px 0; background: var(--brand); color: #fff;
+               border: none; border-radius: 9px; font-size: 12px; font-weight: 700;
+               cursor: pointer; transition: background .15s, opacity .15s; letter-spacing: .02em; }
+  .pcard-btn:hover { background: var(--brand2); }
+  .pcard-btn:disabled { opacity: .5; cursor: not-allowed; background: var(--ok); }
 
   /* Tool trace */
   #tools-log { font-size: 10.5px; color: var(--ink2); background: var(--bg);
@@ -630,30 +637,30 @@ function logTools(calls) {
 
 function addProductCards(products) {
   if (!products || !products.length) return;
-  const row = document.createElement("div");
-  row.className = "row";
-  const cardsRow = document.createElement("div");
-  cardsRow.className = "cards-row";
-  cardsRow.style.marginLeft = "40px";
+  const grid = document.createElement("div");
+  grid.className = "product-grid";
   products.forEach(p => {
     const card = document.createElement("div");
     card.className = "pcard";
-    const imgHtml = p.image_url
-      ? `<img src="${p.image_url}" alt="" onerror="this.style.display='none'">`
-      : "";
     const price = p.price != null ? `$${Number(p.price).toFixed(2)}` : "";
     const pid = (p.product_id || "").replace(/'/g,"\\'");
-    const pData = encodeURIComponent(JSON.stringify(p));
-    card.innerHTML = `${imgHtml}<div class="pcard-body">
-      <div class="pcard-title">${(p.title||"").replace(/</g,"&lt;")}</div>
-      <div class="pcard-price">${price}</div>
-      <button class="pcard-btn" onclick="cartAction('${pid}', this)">Add to Cart</button>
-    </div>`;
+    const imgSection = p.image_url
+      ? `<div class="pcard-img-wrap">
+           <img src="${p.image_url}" alt="" onerror="this.parentElement.innerHTML='<div class=pcard-img-placeholder>&#x1F4BB;</div>'">
+           ${p.in_stock !== false ? '<span class="pcard-badge">In Stock</span>' : ''}
+         </div>`
+      : `<div class="pcard-img-wrap"><div class="pcard-img-placeholder">&#x1F4BB;</div></div>`;
+    card.innerHTML = `${imgSection}
+      <div class="pcard-body">
+        ${p.category ? `<div class="pcard-category">${p.category.replace(/</g,"&lt;")}</div>` : ""}
+        <div class="pcard-title">${(p.title||"").replace(/</g,"&lt;")}</div>
+        <div class="pcard-price">${price}</div>
+        <button class="pcard-btn" onclick="cartAction('${pid}',this)">&#x1F6D2; Add to Cart</button>
+      </div>`;
     card.querySelector(".pcard-btn").dataset.product = JSON.stringify(p);
-    cardsRow.appendChild(card);
+    grid.appendChild(card);
   });
-  row.appendChild(cardsRow);
-  getThread().appendChild(row);
+  getThread().appendChild(grid);
   messages.scrollTop = messages.scrollHeight;
 }
 
@@ -725,8 +732,12 @@ async function send() {
     const data = await res.json();
     removeTyping();
     logTools(data.tool_calls);
-    addAgentMsg(data.reply);
-    if (data.products && data.products.length > 0) addProductCards(data.products);
+    if (data.products && data.products.length > 0) {
+      addAgentMsg(`Found ${data.products.length} result${data.products.length > 1 ? "s" : ""} for you:`);
+      addProductCards(data.products);
+    } else {
+      addAgentMsg(data.reply);
+    }
   } catch(e) {
     removeTyping();
     addAgentMsg("Something went wrong: " + e.message);

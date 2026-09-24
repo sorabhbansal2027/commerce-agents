@@ -211,8 +211,10 @@ _DEMO_HTML = """<!DOCTYPE html>
     --brand:  #4f46e5;
     --brand2: #6366f1;
     --ok:     #16a34a;
+    --danger: #ef4444;
     --radius: 16px;
-    --max-w:  720px;
+    --max-w:  680px;
+    --cart-w: 280px;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -235,6 +237,12 @@ _DEMO_HTML = """<!DOCTYPE html>
   #reset-btn { padding: 6px 12px; background: none; border: 1px solid var(--line);
                border-radius: 8px; font-size: 12px; cursor: pointer; color: var(--ink2); }
   #reset-btn:hover { background: var(--bg); }
+
+  /* Main area: chat + cart side by side */
+  .main { display: flex; flex: 1; overflow: hidden; }
+
+  /* Chat column */
+  .chat-col { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
 
   /* Messages */
   #messages { flex: 1; overflow-y: auto; padding: 24px 20px;
@@ -310,6 +318,49 @@ _DEMO_HTML = """<!DOCTYPE html>
               cursor: pointer; transition: opacity .15s; }
   #send-btn:hover { opacity: .88; }
   #send-btn:disabled { opacity: .45; cursor: not-allowed; }
+
+  /* Cart panel */
+  .cart-panel { width: var(--cart-w); border-left: 1px solid var(--line);
+                background: var(--card); display: flex; flex-direction: column;
+                flex-shrink: 0; overflow: hidden; }
+  .cart-header { padding: 14px 16px 10px; border-bottom: 1px solid var(--line);
+                 display: flex; align-items: center; justify-content: space-between; }
+  .cart-title { font-size: 13px; font-weight: 700; display: flex; align-items: center; gap: 6px; }
+  .cart-count { background: var(--brand); color: #fff; font-size: 10px; font-weight: 700;
+                border-radius: 20px; padding: 1px 7px; min-width: 20px; text-align: center; }
+  .cart-items { flex: 1; overflow-y: auto; padding: 10px 12px;
+                display: flex; flex-direction: column; gap: 8px; }
+  .cart-empty { flex: 1; display: flex; flex-direction: column; align-items: center;
+                justify-content: center; gap: 8px; color: var(--ink2);
+                font-size: 12px; padding: 20px; text-align: center; }
+  .cart-empty-icon { font-size: 32px; opacity: .4; }
+  .ci { display: flex; gap: 8px; align-items: flex-start; padding: 8px;
+        border: 1px solid var(--line); border-radius: 10px; background: var(--bg); }
+  .ci-img { width: 44px; height: 44px; border-radius: 7px; object-fit: cover; flex-shrink: 0;
+            background: var(--line); }
+  .ci-info { flex: 1; min-width: 0; }
+  .ci-name { font-size: 11px; font-weight: 600; line-height: 1.35;
+             white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ci-price { font-size: 11px; color: var(--ok); font-weight: 700; margin-top: 2px; }
+  .ci-qty { display: flex; align-items: center; gap: 4px; margin-top: 5px; }
+  .qty-btn { width: 20px; height: 20px; border-radius: 5px; border: 1px solid var(--line);
+             background: var(--card); font-size: 13px; cursor: pointer; display: flex;
+             align-items: center; justify-content: center; color: var(--ink2); flex-shrink: 0; }
+  .qty-btn:hover { background: var(--bg); }
+  .qty-val { font-size: 11px; font-weight: 600; min-width: 16px; text-align: center; }
+  .ci-remove { background: none; border: none; font-size: 14px; cursor: pointer;
+               color: var(--ink2); padding: 2px; flex-shrink: 0; line-height: 1; }
+  .ci-remove:hover { color: var(--danger); }
+  .cart-footer { border-top: 1px solid var(--line); padding: 12px 14px; }
+  .cart-total { display: flex; justify-content: space-between; align-items: center;
+                margin-bottom: 10px; }
+  .cart-total-label { font-size: 12px; color: var(--ink2); }
+  .cart-total-val { font-size: 15px; font-weight: 700; color: var(--ink); }
+  #checkout-btn { width: 100%; padding: 10px; background: var(--brand); color: #fff;
+                  border: none; border-radius: 10px; font-size: 13px; font-weight: 600;
+                  cursor: pointer; transition: opacity .15s; }
+  #checkout-btn:hover { opacity: .88; }
+  #checkout-btn:disabled { opacity: .4; cursor: not-allowed; }
 </style>
 </head>
 <body>
@@ -325,31 +376,123 @@ _DEMO_HTML = """<!DOCTYPE html>
   <button id="reset-btn" onclick="resetConv()">&#8635; New chat</button>
 </header>
 
-<div id="messages">
-  <div class="thread">
-    <div class="row">
-      <div class="avatar avatar-agent">&#10024;</div>
-      <div class="bubble bubble-agent">
-        Hi! I&rsquo;m your shopping assistant. Tell me what you&rsquo;re looking for and I&rsquo;ll find the best options for you.
+<div class="main">
+  <!-- Chat column -->
+  <div class="chat-col">
+    <div id="messages">
+      <div class="thread">
+        <div class="row">
+          <div class="avatar avatar-agent">&#10024;</div>
+          <div class="bubble bubble-agent">
+            Hi! I&rsquo;m your shopping assistant. Tell me what you&rsquo;re looking for and I&rsquo;ll find the best options for you.
+          </div>
+        </div>
       </div>
+    </div>
+    <div id="tools-log"></div>
+    <div class="input-bar">
+      <div class="input-wrap">
+        <input id="msg-input" type="text" placeholder='Try "show me laptops under $2000"' autocomplete="off"/>
+        <button id="send-btn" onclick="send()">Send</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Cart panel -->
+  <div class="cart-panel">
+    <div class="cart-header">
+      <div class="cart-title">
+        &#128;Cart
+        <span class="cart-count" id="cart-count">0</span>
+      </div>
+    </div>
+    <div class="cart-items" id="cart-items">
+      <div class="cart-empty">
+        <div class="cart-empty-icon">&#128;</div>
+        <div>Your cart is empty</div>
+        <div style="font-size:11px;opacity:.7">Add items from the chat</div>
+      </div>
+    </div>
+    <div class="cart-footer">
+      <div class="cart-total">
+        <span class="cart-total-label">Total</span>
+        <span class="cart-total-val" id="cart-total">$0.00</span>
+      </div>
+      <button id="checkout-btn" disabled onclick="checkout()">Checkout</button>
     </div>
   </div>
 </div>
 
-<div id="tools-log"></div>
-
-<div class="input-bar">
-  <div class="input-wrap">
-    <input id="msg-input" type="text" placeholder='Try "show me laptops under $2000"' autocomplete="off"/>
-    <button id="send-btn" onclick="send()">Send</button>
-  </div>
-</div>
-
 <script>
-const messages = document.getElementById("messages");
-const input    = document.getElementById("msg-input");
-const sendBtn  = document.getElementById("send-btn");
-const toolsLog = document.getElementById("tools-log");
+const messages   = document.getElementById("messages");
+const input      = document.getElementById("msg-input");
+const sendBtn    = document.getElementById("send-btn");
+const toolsLog   = document.getElementById("tools-log");
+const cartItems  = document.getElementById("cart-items");
+const cartCount  = document.getElementById("cart-count");
+const cartTotal  = document.getElementById("cart-total");
+const checkoutBtn= document.getElementById("checkout-btn");
+
+// Cart state: { product_id: {title, price, image_url, qty} }
+const cart = {};
+
+function cartAddItem(p) {
+  if (cart[p.product_id]) {
+    cart[p.product_id].qty++;
+  } else {
+    cart[p.product_id] = { title: p.title, price: p.price, image_url: p.image_url, qty: 1 };
+  }
+  renderCart();
+}
+
+function cartRemove(pid) {
+  delete cart[pid];
+  renderCart();
+}
+
+function cartSetQty(pid, qty) {
+  if (qty < 1) { cartRemove(pid); return; }
+  if (cart[pid]) { cart[pid].qty = qty; renderCart(); }
+}
+
+function renderCart() {
+  const items = Object.entries(cart);
+  const totalQty = items.reduce((s,[,v]) => s + v.qty, 0);
+  const totalPrice = items.reduce((s,[,v]) => s + v.price * v.qty, 0);
+  cartCount.textContent = totalQty;
+  cartTotal.textContent = "$" + totalPrice.toFixed(2);
+  checkoutBtn.disabled = items.length === 0;
+
+  if (items.length === 0) {
+    cartItems.innerHTML = `<div class="cart-empty">
+      <div class="cart-empty-icon">&#128764;</div>
+      <div>Your cart is empty</div>
+      <div style="font-size:11px;opacity:.7">Add items from the chat</div>
+    </div>`;
+    return;
+  }
+
+  cartItems.innerHTML = "";
+  items.forEach(([pid, item]) => {
+    const div = document.createElement("div");
+    div.className = "ci";
+    const imgHtml = item.image_url
+      ? `<img class="ci-img" src="${item.image_url}" alt="" onerror="this.style.background='#e2e8f0'">`
+      : `<div class="ci-img"></div>`;
+    div.innerHTML = `${imgHtml}
+      <div class="ci-info">
+        <div class="ci-name" title="${(item.title||"").replace(/"/g,"&quot;")}">${(item.title||"").replace(/</g,"&lt;")}</div>
+        <div class="ci-price">$${(item.price||0).toFixed(2)}</div>
+        <div class="ci-qty">
+          <button class="qty-btn" onclick="cartSetQty('${pid}', ${item.qty-1})">&#8722;</button>
+          <span class="qty-val">${item.qty}</span>
+          <button class="qty-btn" onclick="cartSetQty('${pid}', ${item.qty+1})">+</button>
+        </div>
+      </div>
+      <button class="ci-remove" onclick="cartRemove('${pid}')" title="Remove">&#10005;</button>`;
+    cartItems.appendChild(div);
+  });
+}
 
 function getThread() {
   let t = messages.querySelector(".thread");
@@ -433,14 +576,16 @@ function addProductCards(products) {
     card.className = "pcard";
     const imgHtml = p.image_url
       ? `<img src="${p.image_url}" alt="" onerror="this.style.display='none'">`
-      : `<div style="height:90px;background:#f1f5f9;display:flex;align-items:center;justify-content:center;font-size:28px">&#128Shopping</div>`;
+      : "";
     const price = p.price != null ? `$${Number(p.price).toFixed(2)}` : "";
     const pid = (p.product_id || "").replace(/'/g,"\\'");
+    const pData = encodeURIComponent(JSON.stringify(p));
     card.innerHTML = `${imgHtml}<div class="pcard-body">
       <div class="pcard-title">${(p.title||"").replace(/</g,"&lt;")}</div>
       <div class="pcard-price">${price}</div>
-      <button class="pcard-btn" onclick="cartAction('${pid}',this)">Add to Cart</button>
+      <button class="pcard-btn" onclick="cartAction('${pid}', this, decodeProduct(this))">Add to Cart</button>
     </div>`;
+    card.querySelector(".pcard-btn").dataset.product = JSON.stringify(p);
     cardsRow.appendChild(card);
   });
   row.appendChild(cardsRow);
@@ -449,6 +594,7 @@ function addProductCards(products) {
 }
 
 async function cartAction(productId, btn) {
+  const p = JSON.parse(btn.dataset.product || "{}");
   btn.disabled = true;
   btn.textContent = "Adding…";
   setBusy(true);
@@ -461,11 +607,22 @@ async function cartAction(productId, btn) {
     logTools(data.tool_calls);
     addAgentMsg(data.reply);
     btn.textContent = "Added ✓";
+    cartAddItem(p);
   } catch(e) {
     addAgentMsg("Sorry, couldn't add to cart: " + e.message);
     btn.disabled = false;
     btn.textContent = "Add to Cart";
   } finally { setBusy(false); }
+}
+
+async function checkout() {
+  const items = Object.entries(cart);
+  if (!items.length) return;
+  const summary = items.map(([,v]) => `${v.title} x${v.qty}`).join(", ");
+  const total = items.reduce((s,[,v]) => s + v.price * v.qty, 0);
+  const msg = `Please proceed to checkout for: ${summary}. Total: $${total.toFixed(2)}`;
+  input.value = msg;
+  await send();
 }
 
 async function send() {
@@ -497,6 +654,8 @@ async function resetConv() {
   if (t) t.innerHTML = `<div class="row"><div class="avatar avatar-agent">&#10024;</div>
     <div class="bubble bubble-agent">Hi! I&rsquo;m your shopping assistant. Tell me what you&rsquo;re looking for.</div></div>`;
   toolsLog.textContent = "";
+  Object.keys(cart).forEach(k => delete cart[k]);
+  renderCart();
 }
 
 input.addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey) send(); });

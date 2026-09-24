@@ -402,7 +402,7 @@ _DEMO_HTML = """<!DOCTYPE html>
   <div class="cart-panel">
     <div class="cart-header">
       <div class="cart-title">
-        &#128;Cart
+        🛒 Cart
         <span class="cart-count" id="cart-count">0</span>
       </div>
     </div>
@@ -465,7 +465,7 @@ function renderCart() {
 
   if (items.length === 0) {
     cartItems.innerHTML = `<div class="cart-empty">
-      <div class="cart-empty-icon">&#128764;</div>
+      <div class="cart-empty-icon">🛒</div>
       <div>Your cart is empty</div>
       <div style="font-size:11px;opacity:.7">Add items from the chat</div>
     </div>`;

@@ -272,6 +272,23 @@ _DEMO_HTML = """<!DOCTYPE html>
   @keyframes blink { 0%,60%,100%{opacity:.2} 30%{opacity:1} }
   .mcp-badge { background: rgba(22,163,74,.12); color: var(--ok); font-size: 9px;
                padding: 1px 6px; border-radius: 8px; margin-left: 4px; font-weight: 600; }
+  /* Inline product cards in chat */
+  .product-cards { display: flex; gap: 8px; overflow-x: auto; padding: 4px 0 6px;
+                   max-width: 100%; scrollbar-width: thin; }
+  .product-cards::-webkit-scrollbar { height: 4px; }
+  .product-cards::-webkit-scrollbar-thumb { background: var(--line); border-radius: 2px; }
+  .pcard { flex-shrink: 0; width: 128px; border: 1px solid var(--line);
+           border-radius: var(--radius); background: var(--card); overflow: hidden; }
+  .pcard img { width: 100%; height: 68px; object-fit: cover; display: block; }
+  .pcard-body { padding: 6px 8px; }
+  .pcard-title { font-weight: 600; font-size: 10.5px; color: var(--ink); line-height: 1.35;
+                 margin-bottom: 3px; display: -webkit-box; -webkit-line-clamp: 2;
+                 -webkit-box-orient: vertical; overflow: hidden; }
+  .pcard-price { color: var(--ok); font-weight: 700; font-size: 11px; margin-bottom: 5px; }
+  .pcard-btn { width: 100%; padding: 4px 0; background: var(--brand); color: #fff;
+               border: none; border-radius: 5px; font-size: 10px; font-weight: 600;
+               cursor: pointer; }
+  .pcard-btn:disabled { opacity: .5; cursor: not-allowed; }
 </style>
 </head>
 <body>
@@ -372,6 +389,7 @@ async function send() {
     logTools(data.tool_calls);
     addMsg("gemini", data.reply);
     if (data.products && data.products.length > 0) {
+      addProductCards(data.products);
       if (iframeReady) pushProducts(data.products);
       else { pendingProducts = data.products; iframe.src = "/ui/product-grid"; }
     }
@@ -435,6 +453,53 @@ function logTools(calls) {
       .join(", ");
     return "→ " + c.tool + "(" + args + ")";
   }).join("  |  ");
+}
+
+function addProductCards(products) {
+  if (!products || !products.length) return;
+  const wrap = document.createElement("div");
+  wrap.className = "msg msg-gemini";
+  const row = document.createElement("div");
+  row.className = "product-cards";
+  products.forEach(p => {
+    const card = document.createElement("div");
+    card.className = "pcard";
+    const imgHtml = p.image_url
+      ? `<img src="${p.image_url}" alt="" onerror="this.style.display='none'">`
+      : "";
+    const price = p.price != null ? `$${Number(p.price).toFixed(2)}` : "";
+    const pid = (p.product_id || "").replace(/'/g, "\\'");
+    card.innerHTML = `${imgHtml}<div class="pcard-body">
+      <div class="pcard-title">${p.title || ""}</div>
+      <div class="pcard-price">${price}</div>
+      <button class="pcard-btn" onclick="cartAction('${pid}', this)">Add to Cart</button>
+    </div>`;
+    row.appendChild(card);
+  });
+  wrap.appendChild(row);
+  messages.appendChild(wrap);
+  messages.scrollTop = messages.scrollHeight;
+}
+
+async function cartAction(productId, btn) {
+  btn.disabled = true;
+  btn.textContent = "Adding…";
+  setBusy(true);
+  try {
+    const res = await fetch("/api/cart", {
+      method: "POST", headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({ product_id: productId, quantity: 1 })
+    });
+    const data = await res.json();
+    logTools(data.tool_calls);
+    addMsg("gemini", data.reply);
+    btn.textContent = "Added ✓";
+    if (data.tool_calls) iframe.contentWindow.postMessage({ jsonrpc:"2.0", id: null, result:{} }, "*");
+  } catch(e) {
+    addMsg("system", "Cart error: " + e.message);
+    btn.disabled = false;
+    btn.textContent = "Add to Cart";
+  } finally { setBusy(false); }
 }
 
 input.addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey) send(); });

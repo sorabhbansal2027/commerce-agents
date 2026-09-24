@@ -200,284 +200,251 @@ _DEMO_HTML = """<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Gemini × UCP + MCP Apps UI</title>
+<title>Gemini Shopping Agent</title>
 <style>
   :root {
-    --ink:     #1a1f2e;
-    --ink2:    #6b7280;
-    --line:    #e5e7eb;
-    --bg:      #f9fafb;
-    --card:    #ffffff;
-    --brand:   #1e2c4f;
-    --ok:      #16a34a;
-    --warn:    #d97706;
-    --radius:  10px;
+    --ink:    #0f172a;
+    --ink2:   #64748b;
+    --line:   #e2e8f0;
+    --bg:     #f8fafc;
+    --card:   #ffffff;
+    --brand:  #4f46e5;
+    --brand2: #6366f1;
+    --ok:     #16a34a;
+    --radius: 16px;
+    --max-w:  720px;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-         background: var(--bg); color: var(--ink); height: 100vh; display: flex;
-         flex-direction: column; overflow: hidden; }
-  header { background: var(--brand); color: #fff; padding: 10px 20px;
-           display: flex; align-items: center; justify-content: space-between;
-           flex-shrink: 0; }
-  header h1 { font-size: 15px; font-weight: 600; letter-spacing: .01em; }
-  header .tags { display: flex; gap: 8px; }
-  .tag { font-size: 10px; padding: 2px 8px; border-radius: 20px; font-weight: 600; }
-  .tag-ucp { background: rgba(255,255,255,.15); }
-  .tag-mcp { background: rgba(22,163,74,.3); }
-  .panels { display: grid; grid-template-columns: 1fr 1fr; gap: 0; flex: 1; overflow: hidden; }
-  .panel { display: flex; flex-direction: column; overflow: hidden; }
-  .panel-head { font-size: 11px; font-weight: 600; color: var(--ink2);
-                padding: 8px 16px; border-bottom: 1px solid var(--line);
-                background: var(--card); text-transform: uppercase; letter-spacing: .06em;
-                display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
-  .dot { width: 8px; height: 8px; border-radius: 50%; }
-  .panel-chat { border-right: 1px solid var(--line); }
-  #messages { flex: 1; overflow-y: auto; padding: 14px 16px; display: flex;
-              flex-direction: column; gap: 10px; }
-  .msg { max-width: 88%; }
-  .msg-gemini { align-self: flex-start; }
-  .msg-user  { align-self: flex-end; }
-  .msg-system { align-self: center; }
-  .bubble { padding: 9px 13px; border-radius: var(--radius); font-size: 13px;
-            line-height: 1.55; white-space: pre-wrap; word-break: break-word; }
-  .msg-gemini .bubble { background: var(--card); border: 1px solid var(--line); }
-  .msg-user   .bubble { background: var(--brand); color: #fff; }
-  .msg-system .bubble { background: #fef9c3; border: 1px solid #fde047;
-                         font-size: 11.5px; color: #713f12; }
-  .msg-label { font-size: 10.5px; color: var(--ink2); margin-bottom: 3px; padding-left: 2px; }
-  .tools-log { padding: 6px 16px; border-top: 1px solid var(--line);
-               background: #f0fdf4; font-size: 10.5px; color: #15803d;
-               min-height: 26px; flex-shrink: 0; white-space: nowrap; overflow: hidden;
-               text-overflow: ellipsis; }
-  .input-row { display: flex; gap: 8px; padding: 12px 16px;
-               border-top: 1px solid var(--line); background: var(--card);
-               flex-shrink: 0; }
-  #msg-input { flex: 1; padding: 8px 12px; border: 1px solid var(--line);
-               border-radius: var(--radius); font-size: 13px; outline: none; }
-  #msg-input:focus { border-color: var(--brand); }
-  #send-btn { padding: 8px 16px; background: var(--brand); color: #fff;
-              border: none; border-radius: var(--radius); font-size: 13px;
-              font-weight: 600; cursor: pointer; white-space: nowrap; }
-  #send-btn:disabled { opacity: .5; cursor: not-allowed; }
-  #reset-btn { padding: 8px 10px; background: none; border: 1px solid var(--line);
-               border-radius: var(--radius); font-size: 12px; cursor: pointer;
-               color: var(--ink2); }
-  #grid-frame { flex: 1; width: 100%; border: none; background: var(--card); }
-  .typing { display: flex; gap: 4px; align-items: center; padding: 10px 13px; }
-  .typing span { width: 6px; height: 6px; background: var(--ink2); border-radius: 50%;
-                 animation: blink 1.2s infinite; }
+         background: var(--bg); color: var(--ink); height: 100vh;
+         display: flex; flex-direction: column; overflow: hidden; }
+
+  /* Header */
+  header { background: var(--card); border-bottom: 1px solid var(--line);
+           padding: 12px 20px; display: flex; align-items: center;
+           justify-content: space-between; flex-shrink: 0; }
+  .header-left { display: flex; align-items: center; gap: 10px; }
+  .agent-avatar { width: 34px; height: 34px; border-radius: 50%;
+                  background: linear-gradient(135deg, var(--brand), var(--brand2));
+                  display: flex; align-items: center; justify-content: center;
+                  color: #fff; font-size: 16px; flex-shrink: 0; }
+  .agent-name { font-size: 14px; font-weight: 700; color: var(--ink); }
+  .agent-sub  { font-size: 11px; color: var(--ink2); }
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #22c55e;
+                display: inline-block; margin-right: 4px; }
+  #reset-btn { padding: 6px 12px; background: none; border: 1px solid var(--line);
+               border-radius: 8px; font-size: 12px; cursor: pointer; color: var(--ink2); }
+  #reset-btn:hover { background: var(--bg); }
+
+  /* Messages */
+  #messages { flex: 1; overflow-y: auto; padding: 24px 20px;
+              display: flex; flex-direction: column; gap: 16px; }
+  .thread { display: flex; flex-direction: column; gap: 16px;
+            max-width: var(--max-w); width: 100%; margin: 0 auto; }
+
+  .row { display: flex; gap: 10px; align-items: flex-start; }
+  .row.user { flex-direction: row-reverse; }
+
+  .avatar { width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 13px; font-weight: 700; }
+  .avatar-agent { background: linear-gradient(135deg, var(--brand), var(--brand2)); color: #fff; }
+  .avatar-user  { background: var(--ink); color: #fff; font-size: 11px; }
+
+  .bubble { padding: 10px 14px; border-radius: 16px; font-size: 13.5px;
+            line-height: 1.6; word-break: break-word; max-width: calc(var(--max-w) - 80px); }
+  .bubble-agent { background: var(--card); border: 1px solid var(--line);
+                  border-top-left-radius: 4px; }
+  .bubble-user  { background: var(--brand); color: #fff;
+                  border-top-right-radius: 4px; }
+  .bubble b  { font-weight: 700; }
+  .bubble ul { padding-left: 18px; margin: 4px 0; }
+  .bubble li { margin: 2px 0; }
+
+  /* Typing indicator */
+  .typing { display: flex; gap: 5px; align-items: center; padding: 4px 2px; }
+  .typing span { width: 7px; height: 7px; background: var(--ink2); border-radius: 50%;
+                 animation: blink 1.3s infinite; }
   .typing span:nth-child(2) { animation-delay: .2s; }
   .typing span:nth-child(3) { animation-delay: .4s; }
-  @keyframes blink { 0%,60%,100%{opacity:.2} 30%{opacity:1} }
-  .mcp-badge { background: rgba(22,163,74,.12); color: var(--ok); font-size: 9px;
-               padding: 1px 6px; border-radius: 8px; margin-left: 4px; font-weight: 600; }
-  /* Inline product cards in chat */
-  .product-cards { display: flex; gap: 8px; overflow-x: auto; padding: 4px 0 6px;
-                   max-width: 100%; scrollbar-width: thin; }
-  .product-cards::-webkit-scrollbar { height: 4px; }
-  .product-cards::-webkit-scrollbar-thumb { background: var(--line); border-radius: 2px; }
-  .pcard { flex-shrink: 0; width: 128px; border: 1px solid var(--line);
-           border-radius: var(--radius); background: var(--card); overflow: hidden; }
-  .pcard img { width: 100%; height: 68px; object-fit: cover; display: block; }
-  .pcard-body { padding: 6px 8px; }
-  .pcard-title { font-weight: 600; font-size: 10.5px; color: var(--ink); line-height: 1.35;
-                 margin-bottom: 3px; display: -webkit-box; -webkit-line-clamp: 2;
+  @keyframes blink { 0%,60%,100%{opacity:.15} 30%{opacity:1} }
+
+  /* Product cards */
+  .cards-row { display: flex; gap: 10px; overflow-x: auto; padding: 2px 0 6px;
+               scrollbar-width: thin; max-width: calc(var(--max-w) - 40px); }
+  .cards-row::-webkit-scrollbar { height: 4px; }
+  .cards-row::-webkit-scrollbar-thumb { background: var(--line); border-radius: 2px; }
+  .pcard { flex-shrink: 0; width: 152px; border: 1px solid var(--line);
+           border-radius: 12px; background: var(--card); overflow: hidden;
+           box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+  .pcard img { width: 100%; height: 90px; object-fit: cover; display: block; }
+  .pcard-body { padding: 8px 10px; }
+  .pcard-title { font-weight: 600; font-size: 11px; color: var(--ink); line-height: 1.4;
+                 margin-bottom: 4px; display: -webkit-box; -webkit-line-clamp: 2;
                  -webkit-box-orient: vertical; overflow: hidden; }
-  .pcard-price { color: var(--ok); font-weight: 700; font-size: 11px; margin-bottom: 5px; }
-  .pcard-btn { width: 100%; padding: 4px 0; background: var(--brand); color: #fff;
-               border: none; border-radius: 5px; font-size: 10px; font-weight: 600;
-               cursor: pointer; }
-  .pcard-btn:disabled { opacity: .5; cursor: not-allowed; }
+  .pcard-price { color: var(--ok); font-weight: 700; font-size: 12px; margin-bottom: 7px; }
+  .pcard-btn { width: 100%; padding: 5px 0; background: var(--brand); color: #fff;
+               border: none; border-radius: 7px; font-size: 11px; font-weight: 600;
+               cursor: pointer; transition: opacity .15s; }
+  .pcard-btn:hover { opacity: .88; }
+  .pcard-btn:disabled { opacity: .45; cursor: not-allowed; }
+
+  /* Tool trace */
+  #tools-log { font-size: 10.5px; color: var(--ink2); background: var(--bg);
+               border-top: 1px solid var(--line); padding: 5px 20px;
+               min-height: 22px; flex-shrink: 0; white-space: nowrap;
+               overflow: hidden; text-overflow: ellipsis; }
+
+  /* Input bar */
+  .input-bar { display: flex; gap: 8px; padding: 12px 20px;
+               border-top: 1px solid var(--line); background: var(--card);
+               flex-shrink: 0; }
+  .input-wrap { flex: 1; max-width: var(--max-w); margin: 0 auto;
+                display: flex; gap: 8px; }
+  #msg-input { flex: 1; padding: 10px 14px; border: 1px solid var(--line);
+               border-radius: 12px; font-size: 14px; outline: none;
+               background: var(--bg); }
+  #msg-input:focus { border-color: var(--brand); background: var(--card); }
+  #send-btn { padding: 10px 20px; background: var(--brand); color: #fff;
+              border: none; border-radius: 12px; font-size: 14px; font-weight: 600;
+              cursor: pointer; transition: opacity .15s; }
+  #send-btn:hover { opacity: .88; }
+  #send-btn:disabled { opacity: .45; cursor: not-allowed; }
 </style>
 </head>
 <body>
+
 <header>
-  <h1>Gemini &times; UCP Commerce + MCP Apps UI</h1>
-  <div class="tags">
-    <span class="tag tag-ucp">UCP REST</span>
-    <span class="tag tag-mcp">MCP Apps SEP-1865</span>
+  <div class="header-left">
+    <div class="agent-avatar">&#10024;</div>
+    <div>
+      <div class="agent-name">Shopping Agent</div>
+      <div class="agent-sub"><span class="status-dot"></span>Gemini 2.0 Flash &middot; UCP Commerce</div>
+    </div>
   </div>
+  <button id="reset-btn" onclick="resetConv()">&#8635; New chat</button>
 </header>
 
-<div class="panels">
-  <!-- Left: Gemini chat -->
-  <div class="panel panel-chat">
-    <div class="panel-head">
-      <div class="dot" style="background:#4f90ea"></div>
-      Gemini 3.6 Flash &nbsp;&mdash;&nbsp; UCP shopping agent
-    </div>
-    <div id="messages">
-      <div class="msg msg-system">
-        <div class="bubble">Ask Gemini to find products. Results appear in the MCP Apps grid &rarr;</div>
+<div id="messages">
+  <div class="thread">
+    <div class="row">
+      <div class="avatar avatar-agent">&#10024;</div>
+      <div class="bubble bubble-agent">
+        Hi! I&rsquo;m your shopping assistant. Tell me what you&rsquo;re looking for and I&rsquo;ll find the best options for you.
       </div>
     </div>
-    <div class="tools-log" id="tools-log">Ready.</div>
-    <div class="input-row">
-      <input id="msg-input" type="text" placeholder='Try "show me laptops under $2000"' autocomplete="off"/>
-      <button id="reset-btn" title="Reset conversation" onclick="resetConv()">&#8635;</button>
-      <button id="send-btn" onclick="send()">Send</button>
-    </div>
   </div>
+</div>
 
-  <!-- Right: MCP Apps product grid iframe -->
-  <div class="panel">
-    <div class="panel-head">
-      <div class="dot" style="background:#16a34a"></div>
-      MCP Apps product grid
-      <span class="mcp-badge">ui://storefront/product-grid</span>
-    </div>
-    <iframe id="grid-frame" src="/ui/product-grid" sandbox="allow-scripts allow-same-origin"></iframe>
+<div id="tools-log"></div>
+
+<div class="input-bar">
+  <div class="input-wrap">
+    <input id="msg-input" type="text" placeholder='Try "show me laptops under $2000"' autocomplete="off"/>
+    <button id="send-btn" onclick="send()">Send</button>
   </div>
 </div>
 
 <script>
-const iframe = document.getElementById("grid-frame");
 const messages = document.getElementById("messages");
-const input = document.getElementById("msg-input");
-const sendBtn = document.getElementById("send-btn");
+const input    = document.getElementById("msg-input");
+const sendBtn  = document.getElementById("send-btn");
 const toolsLog = document.getElementById("tools-log");
-let iframeReady = false;
-let pendingProducts = null;
 
-// ── postMessage bridge from MCP Apps iframe ───────────────────────────────────
-window.addEventListener("message", async (evt) => {
-  const msg = evt.data;
-  if (!msg || msg.jsonrpc !== "2.0") return;
+function getThread() {
+  let t = messages.querySelector(".thread");
+  if (!t) { t = document.createElement("div"); t.className = "thread"; messages.appendChild(t); }
+  return t;
+}
 
-  if (msg.method === "mcp/ui_ready") {
-    iframeReady = true;
-    if (pendingProducts) { pushProducts(pendingProducts); pendingProducts = null; }
-    return;
-  }
-
-  if (msg.method === "mcp/call_tool") {
-    const { name, arguments: args } = msg.params;
-    if (name === "add_to_cart") {
-      addMsg("system", `Cart action: adding ${args.product_id} (qty ${args.quantity || 1})…`);
-      setBusy(true);
-      try {
-        const res = await fetch("/api/cart", {
-          method: "POST", headers: {"Content-Type":"application/json"},
-          body: JSON.stringify(args)
-        });
-        const data = await res.json();
-        // Respond to iframe so button state updates
-        iframe.contentWindow.postMessage({ jsonrpc:"2.0", id: msg.id, result:{} }, "*");
-        logTools(data.tool_calls);
-        addMsg("gemini", data.reply);
-      } finally { setBusy(false); }
+function renderMarkdown(text) {
+  const lines = text.split("\\n");
+  let html = "";
+  let inList = false;
+  for (const raw of lines) {
+    let line = raw
+      .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+      .replace(/\\*\\*(.+?)\\*\\*/g,"<b>$1</b>")
+      .replace(/`([^`]+)`/g,"<code>$1</code>");
+    const bullet = line.match(/^\\s*[\\*\\-]\\s+(.*)/);
+    if (bullet) {
+      if (!inList) { html += "<ul>"; inList = true; }
+      html += "<li>" + bullet[1] + "</li>";
+    } else {
+      if (inList) { html += "</ul>"; inList = false; }
+      if (line.trim()) html += "<p style='margin:2px 0'>" + line + "</p>";
     }
   }
-});
-
-// ── Send chat message ─────────────────────────────────────────────────────────
-async function send() {
-  const text = input.value.trim();
-  if (!text) return;
-  input.value = "";
-  addMsg("user", text);
-  setBusy(true);
-  showTyping();
-  try {
-    const res = await fetch("/api/chat", {
-      method: "POST", headers: {"Content-Type":"application/json"},
-      body: JSON.stringify({ message: text })
-    });
-    const data = await res.json();
-    removeTyping();
-    logTools(data.tool_calls);
-    addMsg("gemini", data.reply);
-    if (data.products && data.products.length > 0) {
-      addProductCards(data.products);
-      if (iframeReady) pushProducts(data.products);
-      else { pendingProducts = data.products; iframe.src = "/ui/product-grid"; }
-    }
-  } catch(e) {
-    removeTyping();
-    addMsg("system", "Error: " + e.message);
-  } finally { setBusy(false); }
+  if (inList) html += "</ul>";
+  return html;
 }
 
-function pushProducts(products) {
-  iframe.contentWindow.postMessage({ products }, "*");
+function addAgentMsg(text) {
+  const row = document.createElement("div");
+  row.className = "row";
+  row.innerHTML = `<div class="avatar avatar-agent">&#10024;</div>
+    <div class="bubble bubble-agent">${renderMarkdown(text)}</div>`;
+  getThread().appendChild(row);
+  messages.scrollTop = messages.scrollHeight;
 }
 
-async function resetConv() {
-  await fetch("/api/reset", { method: "POST" });
-  messages.innerHTML = '<div class="msg msg-system"><div class="bubble">Conversation reset. Ask Gemini to find products.</div></div>';
-  iframeReady = false;
-  iframe.src = "/ui/product-grid";
-  toolsLog.textContent = "Ready.";
-}
-
-// ── UI helpers ────────────────────────────────────────────────────────────────
-function addMsg(role, text) {
-  const wrap = document.createElement("div");
-  wrap.className = "msg msg-" + role;
-  if (role !== "system") {
-    const lbl = document.createElement("div");
-    lbl.className = "msg-label";
-    lbl.textContent = role === "gemini" ? "Gemini" : "You";
-    wrap.appendChild(lbl);
-  }
-  const b = document.createElement("div");
-  b.className = "bubble";
-  b.textContent = text;
-  wrap.appendChild(b);
-  messages.appendChild(wrap);
+function addUserMsg(text) {
+  const esc = text.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  const row = document.createElement("div");
+  row.className = "row user";
+  row.innerHTML = `<div class="avatar avatar-user">You</div>
+    <div class="bubble bubble-user">${esc}</div>`;
+  getThread().appendChild(row);
   messages.scrollTop = messages.scrollHeight;
 }
 
 function showTyping() {
-  const t = document.createElement("div");
-  t.id = "typing";
-  t.className = "msg msg-gemini";
-  t.innerHTML = '<div class="bubble"><div class="typing"><span></span><span></span><span></span></div></div>';
-  messages.appendChild(t);
+  const row = document.createElement("div");
+  row.id = "typing-row";
+  row.className = "row";
+  row.innerHTML = `<div class="avatar avatar-agent">&#10024;</div>
+    <div class="bubble bubble-agent"><div class="typing"><span></span><span></span><span></span></div></div>`;
+  getThread().appendChild(row);
   messages.scrollTop = messages.scrollHeight;
 }
-function removeTyping() { document.getElementById("typing")?.remove(); }
+function removeTyping() { document.getElementById("typing-row")?.remove(); }
 
-function setBusy(b) {
-  sendBtn.disabled = b;
-  input.disabled = b;
-}
+function setBusy(b) { sendBtn.disabled = b; input.disabled = b; }
 
 function logTools(calls) {
-  if (!calls || !calls.length) return;
+  if (!calls || !calls.length) { toolsLog.textContent = ""; return; }
   toolsLog.textContent = calls.map(c => {
     const args = Object.entries(c.args || {})
       .filter(([,v]) => v != null)
-      .map(([k,v]) => k + "=" + JSON.stringify(v))
-      .join(", ");
-    return "→ " + c.tool + "(" + args + ")";
-  }).join("  |  ");
+      .map(([k,v]) => k + "=" + JSON.stringify(v)).join(", ");
+    return "⚙ " + c.tool + "(" + args + ")";
+  }).join("  ·  ");
 }
 
 function addProductCards(products) {
   if (!products || !products.length) return;
-  const wrap = document.createElement("div");
-  wrap.className = "msg msg-gemini";
   const row = document.createElement("div");
-  row.className = "product-cards";
+  row.className = "row";
+  const cardsRow = document.createElement("div");
+  cardsRow.className = "cards-row";
+  cardsRow.style.marginLeft = "40px";
   products.forEach(p => {
     const card = document.createElement("div");
     card.className = "pcard";
     const imgHtml = p.image_url
       ? `<img src="${p.image_url}" alt="" onerror="this.style.display='none'">`
-      : "";
+      : `<div style="height:90px;background:#f1f5f9;display:flex;align-items:center;justify-content:center;font-size:28px">&#128Shopping</div>`;
     const price = p.price != null ? `$${Number(p.price).toFixed(2)}` : "";
-    const pid = (p.product_id || "").replace(/'/g, "\\'");
+    const pid = (p.product_id || "").replace(/'/g,"\\'");
     card.innerHTML = `${imgHtml}<div class="pcard-body">
-      <div class="pcard-title">${p.title || ""}</div>
+      <div class="pcard-title">${(p.title||"").replace(/</g,"&lt;")}</div>
       <div class="pcard-price">${price}</div>
-      <button class="pcard-btn" onclick="cartAction('${pid}', this)">Add to Cart</button>
+      <button class="pcard-btn" onclick="cartAction('${pid}',this)">Add to Cart</button>
     </div>`;
-    row.appendChild(card);
+    cardsRow.appendChild(card);
   });
-  wrap.appendChild(row);
-  messages.appendChild(wrap);
+  row.appendChild(cardsRow);
+  getThread().appendChild(row);
   messages.scrollTop = messages.scrollHeight;
 }
 
@@ -492,22 +459,47 @@ async function cartAction(productId, btn) {
     });
     const data = await res.json();
     logTools(data.tool_calls);
-    addMsg("gemini", data.reply);
+    addAgentMsg(data.reply);
     btn.textContent = "Added ✓";
-    if (data.tool_calls) iframe.contentWindow.postMessage({ jsonrpc:"2.0", id: null, result:{} }, "*");
   } catch(e) {
-    addMsg("system", "Cart error: " + e.message);
+    addAgentMsg("Sorry, couldn't add to cart: " + e.message);
     btn.disabled = false;
     btn.textContent = "Add to Cart";
   } finally { setBusy(false); }
 }
 
-input.addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey) send(); });
+async function send() {
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = "";
+  addUserMsg(text);
+  setBusy(true);
+  showTyping();
+  try {
+    const res = await fetch("/api/chat", {
+      method: "POST", headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({ message: text })
+    });
+    const data = await res.json();
+    removeTyping();
+    logTools(data.tool_calls);
+    addAgentMsg(data.reply);
+    if (data.products && data.products.length > 0) addProductCards(data.products);
+  } catch(e) {
+    removeTyping();
+    addAgentMsg("Something went wrong: " + e.message);
+  } finally { setBusy(false); }
+}
 
-// iframe ready on load
-iframe.addEventListener("load", () => {
-  iframeReady = false; // reset until mcp/ui_ready fires
-});
+async function resetConv() {
+  await fetch("/api/reset", { method: "POST" });
+  const t = messages.querySelector(".thread");
+  if (t) t.innerHTML = `<div class="row"><div class="avatar avatar-agent">&#10024;</div>
+    <div class="bubble bubble-agent">Hi! I&rsquo;m your shopping assistant. Tell me what you&rsquo;re looking for.</div></div>`;
+  toolsLog.textContent = "";
+}
+
+input.addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey) send(); });
 </script>
 </body>
 </html>"""

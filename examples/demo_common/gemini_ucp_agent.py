@@ -21,10 +21,20 @@ the environment.
 
 from __future__ import annotations
 
+import importlib.util as _ilu
 import os
+from pathlib import Path
 from typing import Any
 
 import httpx
+
+# Import ontology from the same package directory without requiring an installed package.
+_onto_path = Path(__file__).with_name("ontology.py")
+_onto_spec = _ilu.spec_from_file_location("_ontology", _onto_path)
+_onto_mod = _ilu.module_from_spec(_onto_spec)  # type: ignore[arg-type]
+_onto_spec.loader.exec_module(_onto_mod)  # type: ignore[union-attr]
+_expand_query = _onto_mod.expand_query
+_get_agent_hints = _onto_mod.get_agent_hints
 
 try:
     from google import genai
@@ -158,6 +168,7 @@ class GeminiUCPAgent:
 
     def _call_ucp(self, fn_name: str, args: dict[str, Any]) -> dict[str, Any]:
         """Route a Gemini function call to the appropriate UCP REST endpoint."""
+        args = _expand_query(fn_name, args)
         try:
             if fn_name == "search_products":
                 params: dict[str, Any] = {}
@@ -235,6 +246,7 @@ class GeminiUCPAgent:
             f"{cart_note} "
             f"{checkout_note} "
             f"{hints} "
+            f"{_get_agent_hints()} "
             "When creating a checkout session, always confirm the items and total with the user first. "
             "Format prices as currency. Keep responses concise and helpful."
         )

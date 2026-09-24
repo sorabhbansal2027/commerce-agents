@@ -1,53 +1,32 @@
-# Gemini Commerce — React frontend + FastAPI bridge, single Railway service.
-# The existing Dockerfile (Salesforce OMS API) is not changed.
+# Gemini × UCP + MCP Apps UI demo — Railway service.
 #
-# Build:  docker build -f Dockerfile.gemini -t gemini-commerce .
-# Run:    docker run -p 8090:8090 -e GEMINI_API_KEY=... gemini-commerce
+# Runs the split-screen demo: Gemini chat (left) + MCP Apps product-grid iframe (right).
+# At startup, fetches the product-grid HTML from the MCP server Railway service via
+# STOREFRONT_MCP_URL; falls back to the local file if the MCP server is unreachable.
 #
-# Railway env vars required:
-#   GEMINI_API_KEY   — Google AI Studio key
-# Optional:
-#   UCP_BASE         — defaults to the existing Railway UCP service
-#   GEMINI_MODEL     — defaults to gemini-3.6-flash
-
-FROM python:3.11-slim AS builder
-
-# ── Node.js 20 for Vite build ─────────────────────────────────────────────────
-RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates && \
-    curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
-    apt-get install -y --no-install-recommends nodejs && \
-    rm -rf /var/lib/apt/lists/*
-
-WORKDIR /build
-
-# Install npm deps (layer-cached until package-lock changes)
-COPY examples/gemini-storefront/package.json examples/gemini-storefront/package-lock.json ./storefront/
-RUN cd storefront && npm ci
-
-# Build React app
-COPY examples/gemini-storefront/ ./storefront/
-RUN cd storefront && npm run build
-
+# Required env vars (set in Railway service settings):
+#   GEMINI_API_KEY          Google AI Studio or Vertex AI key
+#   UCP_BASE                URL of the storefront UCP service
+#                           e.g. https://diligent-flow-production-afd7.up.railway.app
+#   STOREFRONT_MCP_URL      URL of the MCP server Railway service + /mcp path
+#                           e.g. https://<mcp-service>.up.railway.app/mcp
+#
+# Build:  docker build -f Dockerfile.gemini -t commerce-gemini-demo .
+# Run:    docker run -p 8099:8099 \
+#           -e GEMINI_API_KEY=... \
+#           -e UCP_BASE=https://... \
+#           -e STOREFRONT_MCP_URL=https://.../mcp \
+#           commerce-gemini-demo
 
 FROM python:3.11-slim
 
 WORKDIR /app
 
-# ── Python deps ───────────────────────────────────────────────────────────────
-COPY requirements-gemini.txt .
-RUN pip install --no-cache-dir fastapi uvicorn[standard] httpx google-genai aiofiles \
-    && pip install --no-cache-dir -r requirements-gemini.txt
+COPY . .
+RUN pip install --no-cache-dir -r requirements.txt && \
+    pip install --no-cache-dir "google-genai>=1.0"
 
-# ── Source files (mirror repo layout so path resolution in web server works) ──
-COPY scripts/gemini_web_server.py ./scripts/
-COPY examples/demo_common/gemini_ucp_agent.py ./examples/demo_common/
-
-# ── Built React app ───────────────────────────────────────────────────────────
-COPY --from=builder /build/storefront/dist ./examples/gemini-storefront/dist
-
-# Railway injects PORT automatically; GEMINI_WEB_PORT is the local fallback.
-ENV GEMINI_WEB_PORT=8090
-
-EXPOSE 8090
-
-CMD ["python", "scripts/gemini_web_server.py"]
+# Railway injects PORT; bridge it to the env var the demo server reads.
+CMD ["sh", "-c", \
+     "GEMINI_UI_PORT=${PORT:-8099} \
+      python3 scripts/gemini_mcp_ui_server.py"]

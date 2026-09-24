@@ -22,8 +22,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 EXPOSE 8000
 
-# --app-dir adds examples/ to sys.path so "salesforce.api.main" resolves correctly.
-CMD ["uvicorn", "salesforce.api.main_production:app", \
-     "--app-dir", "examples", \
-     "--host", "0.0.0.0", \
-     "--port", "8000"]
+# start.sh dispatches to the right process based on DEPLOY_MODE env var.
+# DEPLOY_MODE=mcp → MCP server, DEPLOY_MODE=gemini → Gemini demo, default → storefront API.
+RUN chmod +x start.sh
+CMD ["./start.sh"]

@@ -1,0 +1,36 @@
+# Railway multi-service deployment for commerce-agents.
+#
+# Three services, all built from the same repo root:
+#
+#   storefront-api   — UCP REST + Claude shopping agent (existing, port 8000)
+#   storefront-mcp   — MCP streamable-HTTP server (new, port assigned by Railway)
+#   gemini-demo      — Gemini × UCP + MCP Apps UI (new, port assigned by Railway)
+#
+# In the Railway dashboard:
+#   1. Create service "storefront-api"  → Dockerfile  (already deployed)
+#   2. Create service "storefront-mcp"  → Dockerfile.mcp
+#   3. Create service "gemini-demo"     → Dockerfile.gemini
+#
+# After deploying storefront-mcp, copy its Railway-assigned public URL and set:
+#   storefront-mcp  env: STOREFRONT_MCP_UNSAFE_ALLOW_NO_AUTH=1
+#   gemini-demo     env: STOREFRONT_MCP_URL=https://<mcp-service>.up.railway.app/mcp
+#                        UCP_BASE=https://diligent-flow-production-afd7.up.railway.app
+#                        GEMINI_API_KEY=<your-key>
+
+[build]
+  dockerfilePath = "Dockerfile"
+
+[[services]]
+  name = "storefront-api"
+  [services.build]
+    dockerfilePath = "Dockerfile"
+
+[[services]]
+  name = "storefront-mcp"
+  [services.build]
+    dockerfilePath = "Dockerfile.mcp"
+
+[[services]]
+  name = "gemini-demo"
+  [services.build]
+    dockerfilePath = "Dockerfile.gemini"

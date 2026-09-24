@@ -160,7 +160,12 @@ def build_ucp_manifest(backend: Any, base_url: str) -> dict[str, Any]:
         },
         "agent_hints": (
             "Prefer the MCP transport for complex shopping journeys. "
-            "Use REST for single-turn product lookups and checkout session creation."
+            "Use REST for single-turn product lookups and checkout session creation. "
+            "An ontology layer normalises synonyms and infers categories automatically: "
+            "terms such as 'notebook', 'ultrabook', 'smartphone', 'cell phone', 'headset', "
+            "'earbuds', 'SSD', 'hard drive', and 'DSLR' are resolved to their canonical "
+            "forms before each search, and a matching category filter is added when none "
+            "is supplied by the caller."
         ),
     }
 

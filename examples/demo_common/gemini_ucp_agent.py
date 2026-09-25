@@ -208,6 +208,8 @@ class GeminiUCPAgent:
                     }
                 if args.get("po_number"):
                     body["po_number"] = args["po_number"]
+                if args.get("buyer_user_id"):
+                    body["buyer_user_id"] = args["buyer_user_id"]
                 r = self._http.post(f"{self.base}/ucp/orders", json=body)
                 r.raise_for_status()
                 return r.json()

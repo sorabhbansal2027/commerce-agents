@@ -60,6 +60,9 @@ PORT = int(os.environ.get("GEMINI_UI_PORT", "8099"))
 # Populated at startup — either from the MCP server or the local file fallback.
 _product_grid_html: str = ""
 
+# Single-user demo session (name, email, resolved Salesforce User ID)
+_session: dict = {"name": "", "email": "", "sf_user_id": ""}
+
 
 async def _fetch_html_from_mcp() -> str:
     """Read ui://storefront/product-grid from the MCP server."""
@@ -99,8 +102,13 @@ class TrackedAgent(GeminiUCPAgent):
         self.last_products: list = []
         self.last_tool_calls: list = []
         self.last_order: dict = {}
+        self.buyer_user_id: str = ""
 
     def _call_ucp(self, fn_name: str, args: dict) -> dict:
+        # Inject the logged-in buyer's SF User ID into place_order so the backend
+        # can resolve effectiveAccountId without falling back to the env var default.
+        if fn_name == "place_order" and self.buyer_user_id:
+            args = {**args, "buyer_user_id": self.buyer_user_id}
         result = super()._call_ucp(fn_name, args)
         self.last_tool_calls.append({"tool": fn_name, "args": args})
         if fn_name == "search_products":
@@ -149,6 +157,32 @@ def _gemini_error_message(exc: Exception) -> str:
     return f"Gemini error: {msg[:120]}"
 
 
+@app.post("/api/login")
+async def login(request: Request) -> JSONResponse:
+    body = await request.json()
+    _session["name"] = (body.get("name") or "").strip()
+    _session["email"] = (body.get("email") or "").strip()
+    # Accept an explicit SF User ID from the request; fall back to the env var.
+    _session["sf_user_id"] = (
+        (body.get("sf_user_id") or "").strip()
+        or os.environ.get("SF_BUYER_USER_ID", "")
+    )
+    return JSONResponse({"ok": True, "session": _session})
+
+
+@app.get("/api/session")
+async def get_session_ep() -> JSONResponse:
+    return JSONResponse(_session)
+
+
+@app.post("/api/logout")
+async def logout() -> JSONResponse:
+    _session.update({"name": "", "email": "", "sf_user_id": ""})
+    if _agent:
+        _agent.reset()
+    return JSONResponse({"ok": True})
+
+
 @app.post("/api/chat")
 async def chat(request: Request) -> JSONResponse:
     body = await request.json()
@@ -156,6 +190,9 @@ async def chat(request: Request) -> JSONResponse:
     agent.last_products = []
     agent.last_tool_calls = []
     agent.last_order = {}
+    # Hydrate buyer identity from the active session so place_order
+    # can resolve effectiveAccountId for the correct buyer.
+    agent.buyer_user_id = _session.get("sf_user_id") or os.environ.get("SF_BUYER_USER_ID", "")
     try:
         reply = agent.send(body.get("message", ""))
     except Exception as exc:
@@ -500,9 +537,70 @@ _DEMO_HTML = """<!DOCTYPE html>
                 transition: opacity .15s, transform .1s;
                 box-shadow: 0 3px 10px rgba(79,70,229,.25); }
   .oc-new-btn:hover { opacity: .9; transform: translateY(-1px); }
+
+  /* ── Login overlay ── */
+  #login-overlay { position:fixed; inset:0; z-index:999;
+                   background:linear-gradient(135deg,#4f46e5 0%,#7c3aed 100%);
+                   display:flex; align-items:center; justify-content:center; }
+  .login-card { background:#fff; border-radius:20px; padding:36px 32px;
+                width:100%; max-width:380px;
+                box-shadow:0 20px 60px rgba(0,0,0,.28); }
+  .login-logo { width:52px; height:52px; border-radius:16px;
+                background:linear-gradient(135deg,#4f46e5,#7c3aed);
+                display:flex; align-items:center; justify-content:center;
+                font-size:24px; margin:0 auto 16px; }
+  .login-title { font-size:20px; font-weight:800; color:var(--ink);
+                 text-align:center; margin-bottom:4px; }
+  .login-sub { font-size:13px; color:var(--ink2); text-align:center; margin-bottom:24px; }
+  .login-field { margin-bottom:14px; }
+  .login-field label { display:block; font-size:11px; font-weight:700; color:var(--ink2);
+                       text-transform:uppercase; letter-spacing:.05em; margin-bottom:6px; }
+  .login-field input { width:100%; padding:11px 14px; border:1.5px solid var(--line);
+                       border-radius:11px; font-size:14px; outline:none;
+                       background:var(--bg); transition:border-color .15s, background .15s;
+                       color:var(--ink); }
+  .login-field input:focus { border-color:var(--brand); background:#fff; }
+  .login-btn { width:100%; padding:13px; margin-top:6px;
+               background:linear-gradient(135deg,var(--brand),var(--brand2));
+               color:#fff; border:none; border-radius:12px; font-size:15px;
+               font-weight:700; cursor:pointer; transition:opacity .15s, transform .1s;
+               box-shadow:0 4px 14px rgba(79,70,229,.4); letter-spacing:.01em; }
+  .login-btn:hover { opacity:.92; transform:translateY(-1px); }
+
+  /* ── User chip in header ── */
+  #user-chip { display:none; align-items:center; gap:10px; }
+  .user-avatar { width:34px; height:34px; border-radius:50%;
+                 background:rgba(255,255,255,.25); border:2px solid rgba(255,255,255,.4);
+                 display:flex; align-items:center; justify-content:center;
+                 font-size:13px; font-weight:700; color:#fff; flex-shrink:0; }
+  .user-name { font-size:13px; font-weight:600; color:#fff;
+               max-width:140px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  #logout-btn { padding:6px 13px; background:rgba(255,255,255,.15);
+                border:1px solid rgba(255,255,255,.25); border-radius:9px;
+                font-size:11px; font-weight:600; cursor:pointer; color:#fff;
+                transition:background .15s; }
+  #logout-btn:hover { background:rgba(255,255,255,.28); }
 </style>
 </head>
 <body>
+
+<!-- Login overlay — hidden once session is established -->
+<div id="login-overlay">
+  <div class="login-card">
+    <div class="login-logo">&#x2728;</div>
+    <div class="login-title">Shopping Agent</div>
+    <div class="login-sub">Powered by Gemini &middot; B2B Commerce</div>
+    <div class="login-field">
+      <label>Your Name <span style="text-transform:none;letter-spacing:0;font-weight:400;color:var(--danger)">*</span></label>
+      <input id="login-name" type="text" placeholder="e.g. Jane Smith" autocomplete="name"/>
+    </div>
+    <div class="login-field">
+      <label>Email <span style="text-transform:none;letter-spacing:0;font-weight:400">(optional)</span></label>
+      <input id="login-email" type="email" placeholder="you@company.com" autocomplete="email"/>
+    </div>
+    <button class="login-btn" onclick="doLogin()">Start Shopping &#x2192;</button>
+  </div>
+</div>
 
 <header>
   <div class="h-brand">
@@ -512,7 +610,14 @@ _DEMO_HTML = """<!DOCTYPE html>
       <div class="h-sub"><span class="h-dot"></span>Gemini 2.0 Flash &middot; UCP Commerce</div>
     </div>
   </div>
-  <button id="reset-btn" onclick="resetConv()">&#8635; New chat</button>
+  <div style="display:flex;align-items:center;gap:10px">
+    <div id="user-chip">
+      <div class="user-avatar" id="user-avatar-text"></div>
+      <span class="user-name" id="user-name-display"></span>
+      <button id="logout-btn" onclick="doLogout()">Sign out</button>
+    </div>
+    <button id="reset-btn" onclick="resetConv()">&#8635; New chat</button>
+  </div>
 </header>
 
 <div class="main">
@@ -967,6 +1072,76 @@ async function resetConv() {
   showCartView();
 }
 
+// ── Login / session ─────────────────────────────────────────────────────────
+async function initSession() {
+  // Try a previously-stored client-side session first (avoids a round-trip).
+  const ss = sessionStorage.getItem("shopping_session");
+  if (ss) { try { applySession(JSON.parse(ss)); return; } catch(_) {} }
+  // Fall back to the server session (survives page refreshes).
+  try {
+    const r = await fetch("/api/session");
+    const s = await r.json();
+    if (s.name) { applySession(s); return; }
+  } catch(_) {}
+  // Show login overlay if no active session.
+  document.getElementById("login-overlay").style.display = "flex";
+}
+
+function applySession(sess) {
+  sessionStorage.setItem("shopping_session", JSON.stringify(sess));
+  const overlay = document.getElementById("login-overlay");
+  if (overlay) overlay.style.display = "none";
+  const chip = document.getElementById("user-chip");
+  chip.style.display = "flex";
+  const displayName = sess.name || sess.email || "Guest";
+  document.getElementById("user-name-display").textContent = displayName;
+  const initials = displayName.split(" ").map(w => w[0] || "").join("").toUpperCase().slice(0, 2) || "?";
+  document.getElementById("user-avatar-text").textContent = initials;
+  // Pre-fill checkout name/email from session (only if fields are still blank).
+  const coName  = document.getElementById("co-name");
+  const coEmail = document.getElementById("co-email");
+  if (sess.name  && !coName.value)  coName.value  = sess.name;
+  if (sess.email && !coEmail.value) coEmail.value = sess.email;
+}
+
+async function doLogin() {
+  const nameEl = document.getElementById("login-name");
+  const name   = nameEl.value.trim();
+  if (!name) { nameEl.focus(); return; }
+  const email  = document.getElementById("login-email").value.trim();
+  try {
+    const r = await fetch("/api/login", {
+      method: "POST", headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({name, email}),
+    });
+    const d = await r.json();
+    if (d.ok) applySession(d.session);
+  } catch(e) { alert("Login failed — please try again."); }
+}
+
+async function doLogout() {
+  await fetch("/api/logout", {method:"POST"});
+  sessionStorage.removeItem("shopping_session");
+  document.getElementById("user-chip").style.display = "none";
+  document.getElementById("login-name").value  = "";
+  document.getElementById("login-email").value = "";
+  document.getElementById("login-overlay").style.display = "flex";
+  // Clear conversation and cart.
+  await fetch("/api/reset", {method:"POST"});
+  const t = messages.querySelector(".thread");
+  if (t) t.innerHTML = `<div class="row"><div class="avatar avatar-agent">&#x2728;</div>
+    <div class="bubble bubble-agent">Hi! I&rsquo;m your shopping assistant powered by Gemini. Tell me what you&rsquo;re looking for and I&rsquo;ll find the best options for you.</div></div>`;
+  Array.from(messages.children).forEach(c => { if (!c.classList.contains("thread")) c.remove(); });
+  toolsLog.textContent = "";
+  Object.keys(cart).forEach(k => delete cart[k]);
+  renderCart();
+  showCartView();
+}
+
+initSession();
+
+document.getElementById("login-name").addEventListener("keydown",  e => { if (e.key === "Enter") doLogin(); });
+document.getElementById("login-email").addEventListener("keydown", e => { if (e.key === "Enter") doLogin(); });
 input.addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey) send(); });
 </script>
 </body>

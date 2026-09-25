@@ -71,6 +71,13 @@ class _SFCCAdapter:
             log.warning("SFCC order_search unavailable for order issues (%s)", exc)
             return []
 
+    async def search_listings(self, session: MerchantSessionContext, query: str, filters: Any = None, limit: int = 8) -> list:
+        try:
+            return await self._sfcc.search_listings(session, query, filters, limit)
+        except (httpx.HTTPStatusError, httpx.ConnectError) as exc:
+            log.warning("SFCC product_search unavailable (%s)", exc)
+            return []
+
     async def get_pending_quote_approvals(self, session: MerchantSessionContext) -> list:
         return []  # SFCC BM does not support quote approvals
 

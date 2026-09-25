@@ -66,3 +66,17 @@
   name = "merchant-web-v2"
   [services.build]
     dockerfilePath = "Dockerfile.merchant-web"
+
+# ── LiteLLM proxy (Bedrock backend for all agents) ───────────────────────────
+#
+# Exposes an Anthropic-compatible API on port 4000, forwarding to AWS Bedrock.
+# Required env vars (set on the service in Railway dashboard):
+#   AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_DEFAULT_REGION
+# Consumers set:
+#   ANTHROPIC_BASE_URL=http://vivacious-mercy.railway.internal:4000
+#   ANTHROPIC_API_KEY=sk-litellm-key
+
+[[services]]
+  name = "vivacious-mercy"
+  [services.build]
+    dockerfilePath = "embed/Dockerfile.litellm"

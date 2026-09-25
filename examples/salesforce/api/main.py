@@ -27,7 +27,7 @@ from fastapi.staticfiles import StaticFiles
 from shopping_agent_runtime import ShoppingAgent
 
 from .agent_config import build_shopping_config
-from .merchant import create_merchant_router
+from .merchant import _build_merchant_backend, create_merchant_router
 from .sf_oms_backend import DATA_DIR, PRODUCT_IMAGES_DIR, _IMAGE_BASE, SalesforceOMSBackend
 
 log = logging.getLogger(__name__)
@@ -62,7 +62,8 @@ host = build_storefront_host(
     memory_seeder=MemorySeeder(DATA_DIR / "memory-seed.json"),
 )
 app = host.app
-app.include_router(create_merchant_router(backend, InMemoryMemoryStore()), prefix="/api/merchant")
+merchant_backend = _build_merchant_backend()
+app.include_router(create_merchant_router(merchant_backend, InMemoryMemoryStore()), prefix="/api/merchant")
 app.include_router(build_ucp_router(backend))  # UCP manifest at /.well-known/ucp
 app.mount("/products", StaticFiles(directory=PRODUCT_IMAGES_DIR, check_dir=False), name="products")
 

@@ -397,6 +397,8 @@ def build_ucp_router(backend: Any) -> APIRouter:
         # buyer_user_id comes from the logged-in user's Salesforce session (preferred);
         # fall back to the env var for backwards-compat / local dev
         buyer_uid = body.get("buyer_user_id") or _SF_BUYER_USER_ID
+        buyer_session_id   = (body.get("buyer_session_id")   or "").strip()
+        buyer_instance_url = (body.get("buyer_instance_url") or "").strip()
         if not buyer_uid:
             return Response(
                 status_code=501,
@@ -443,6 +445,17 @@ def build_ucp_router(backend: Any) -> APIRouter:
                 )
             eff_params = {"effectiveAccountId": account_id}
 
+            # When the buyer logged in via SOAP we have their session token and can
+            # call B2B Commerce APIs directly as that user — no effectiveAccountId needed.
+            # Fall back to admin client-credentials + effectiveAccountId when no session.
+            buyer_auth_kwargs: dict = {}
+            if buyer_session_id:
+                buyer_auth_kwargs = {
+                    "auth_token": buyer_session_id,
+                    **({"instance_url": buyer_instance_url} if buyer_instance_url else {}),
+                }
+            req_params = {} if buyer_session_id else eff_params
+
             # ── 1. Find or create an Active cart for this account ───────────────
             # Primary: look up by AccountId (OwnerId may differ for portal users).
             # If only Checkout-status carts exist they block new cart creation, so
@@ -468,13 +481,15 @@ def build_ucp_router(backend: Any) -> APIRouter:
                         await backend._b2b_request(
                             "PATCH",
                             f"/sobjects/WebCart/{old['Id']}",
+                            **buyer_auth_kwargs,
                             json={"Status": "Closed"},
                         )
                 # Create a new cart for the buyer account.
                 new_cart = await backend._b2b_request(
                     "POST",
                     f"/commerce/webstores/{webstore_id}/carts",
-                    params=eff_params,
+                    **buyer_auth_kwargs,
+                    params=req_params,
                     json={},
                 )
                 cart_id = new_cart.get("cartId") or new_cart.get("id") or new_cart.get("Id", "")
@@ -503,7 +518,8 @@ def build_ucp_router(backend: Any) -> APIRouter:
                     await backend._b2b_request(
                         "POST",
                         f"/commerce/webstores/{webstore_id}/carts/{cart_id}/cart-items",
-                        params=eff_params,
+                        **buyer_auth_kwargs,
+                        params=req_params,
                         json={"productId": pid, "quantity": qty, "type": "Product"},
                     )
                     added = True
@@ -538,19 +554,21 @@ def build_ucp_router(backend: Any) -> APIRouter:
                 )
 
             # ── 3. Initiate checkout via B2B Commerce checkout API ───────────────
-            # POST .../carts/{cartId}/checkout transitions the cart into Checkout
-            # status and returns the checkout session (checkoutId == cartId in B2B).
+            # POST /checkouts is the canonical B2B Commerce Checkout API endpoint.
+            # effectiveAccountId goes in the body (not query param) for this call.
             po_number = body.get("po_number", "")
+            checkout_body: dict = {"cartReference": {"id": cart_id}}
+            if not buyer_session_id and account_id:
+                checkout_body["effectiveAccountId"] = account_id
             checkout_resp = await backend._b2b_request(
                 "POST",
-                f"/commerce/webstores/{webstore_id}/carts/{cart_id}/checkout",
-                params=eff_params,
-                json={},
+                f"/commerce/webstores/{webstore_id}/checkouts",
+                **buyer_auth_kwargs,
+                json=checkout_body,
             )
-            # Salesforce returns cartId as the checkoutId for subsequent calls.
             checkout_id: str = (
-                checkout_resp.get("cartId")
-                or checkout_resp.get("checkoutId")
+                checkout_resp.get("checkoutId")
+                or checkout_resp.get("cartId")
                 or cart_id
             )
 
@@ -564,7 +582,8 @@ def build_ucp_router(backend: Any) -> APIRouter:
                     await backend._b2b_request(
                         "PATCH",
                         f"/commerce/webstores/{webstore_id}/checkouts/{checkout_id}",
-                        params=eff_params,
+                        **buyer_auth_kwargs,
+                        params=req_params,
                         json=patch_body,
                     )
                 except Exception as patch_exc:
@@ -576,7 +595,8 @@ def build_ucp_router(backend: Any) -> APIRouter:
             place_resp = await backend._b2b_request(
                 "POST",
                 f"/commerce/webstores/{webstore_id}/checkouts/{checkout_id}/actions/place-order",
-                params=eff_params,
+                **buyer_auth_kwargs,
+                params=req_params,
                 json={},
             )
             sf_order_id: str = (

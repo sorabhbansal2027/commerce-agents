@@ -618,11 +618,28 @@ class SalesforceOMSBackend(MerchantBackend):
         return account_id
 
     async def _b2b_request(
-        self, method: str, path: str, *, params: dict | None = None, json: dict | None = None
+        self,
+        method: str,
+        path: str,
+        *,
+        params: dict | None = None,
+        json: dict | None = None,
+        auth_token: str | None = None,
+        instance_url: str | None = None,
     ) -> dict[str, Any]:
-        """Make an authenticated B2B Commerce REST API call."""
-        headers = await self._token_headers()
-        url = f"{self._base}/services/data/v62.0{path}"
+        """Make an authenticated B2B Commerce REST API call.
+
+        Pass ``auth_token`` to use a buyer's SOAP session token instead of the
+        service account's client-credentials token.  Pass ``instance_url`` when
+        the buyer's org URL differs from the service's SF_INSTANCE_URL.
+        """
+        if auth_token:
+            headers = {"Authorization": f"Bearer {auth_token}"}
+            base = (instance_url or self._base).rstrip("/")
+        else:
+            headers = await self._token_headers()
+            base = self._base
+        url = f"{base}/services/data/v62.0{path}"
         async with httpx.AsyncClient(timeout=30) as client:
             resp = await client.request(method, url, headers=headers, params=params, json=json)
             if resp.is_error:

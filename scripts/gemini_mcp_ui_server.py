@@ -29,8 +29,6 @@ import importlib.util as _ilu
 import logging
 import os
 import sys
-import time
-import urllib.parse
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, AsyncIterator
@@ -69,60 +67,71 @@ _product_grid_html: str = ""
 # Single-user demo session (name, email, resolved Salesforce User ID)
 _session: dict = {"name": "", "email": "", "sf_user_id": ""}
 
-# ── Salesforce auth (client credentials) ─────────────────────────────────────
+_SF_SOAP_LOGIN_URL = os.environ.get(
+    "SF_SOAP_LOGIN_URL",
+    "https://test.salesforce.com/services/Soap/u/62.0",
+)
 
-_SF_BASE = os.environ.get("SF_INSTANCE_URL", "").rstrip("/")
-_SF_CLIENT_ID = os.environ.get("SF_CLIENT_ID", "")
-_SF_CLIENT_SECRET = os.environ.get("SF_CLIENT_SECRET", "")
-_sf_token: str = ""
-_sf_token_expires: float = 0.0
+async def _soap_login(username: str, password: str) -> dict:
+    """Authenticate via Salesforce SOAP Partner API.
 
+    Returns {"user_id": "005...", "session_id": "...", "instance_url": "...",
+             "display_name": "...", "email": "..."} on success.
+    Raises ValueError with a human-readable message on bad credentials.
+    """
+    import xml.etree.ElementTree as ET  # stdlib — safe for non-external data
 
-async def _sf_access_token() -> str:
-    """Return a valid Salesforce OAuth2 access token, refreshing when needed."""
-    global _sf_token, _sf_token_expires
-    if _sf_token and time.monotonic() < _sf_token_expires:
-        return _sf_token
-    if not all([_SF_BASE, _SF_CLIENT_ID, _SF_CLIENT_SECRET]):
-        raise RuntimeError("SF_INSTANCE_URL, SF_CLIENT_ID, SF_CLIENT_SECRET not configured")
-    async with httpx.AsyncClient(timeout=15) as client:
+    safe_u = username.replace("&", "&amp;").replace("<", "&lt;")
+    safe_p = password.replace("&", "&amp;").replace("<", "&lt;")
+    soap_body = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"'
+        ' xmlns:urn="urn:partner.soap.sforce.com">'
+        "<soapenv:Body>"
+        "<urn:login>"
+        f"<urn:username>{safe_u}</urn:username>"
+        f"<urn:password>{safe_p}</urn:password>"
+        "</urn:login>"
+        "</soapenv:Body>"
+        "</soapenv:Envelope>"
+    )
+    async with httpx.AsyncClient(timeout=20) as client:
         resp = await client.post(
-            f"{_SF_BASE}/services/oauth2/token",
-            data={
-                "grant_type": "client_credentials",
-                "client_id": _SF_CLIENT_ID,
-                "client_secret": _SF_CLIENT_SECRET,
-            },
+            _SF_SOAP_LOGIN_URL,
+            content=soap_body.encode(),
+            headers={"Content-Type": "text/xml; charset=UTF-8", "SOAPAction": "login"},
         )
-        resp.raise_for_status()
-        data = resp.json()
-    _sf_token = data["access_token"]
-    _sf_token_expires = time.monotonic() + data.get("expires_in", 3600) - 60
-    return _sf_token
 
+    root = ET.fromstring(resp.text)
+    # Check for SOAP Fault (bad credentials, locked out, etc.)
+    fault = root.find(".//{http://schemas.xmlsoap.org/soap/envelope/}Fault")
+    if fault is not None:
+        msg = fault.findtext("faultstring") or "Login failed"
+        raise ValueError(msg.split(":")[-1].strip())
 
-async def _sf_soql(query: str) -> list[dict[str, Any]]:
-    token = await _sf_access_token()
-    url = f"{_SF_BASE}/services/data/v62.0/query?q={urllib.parse.quote(query)}"
-    async with httpx.AsyncClient(timeout=15) as client:
-        resp = await client.get(url, headers={"Authorization": f"Bearer {token}"})
-        resp.raise_for_status()
-    return resp.json().get("records", [])
+    ns = "urn:partner.soap.sforce.com"
+    result = root.find(f".//{{{ns}}}result")
+    if result is None:
+        raise ValueError("Unexpected SOAP response — no result element")
 
+    session_id   = result.findtext(f"{{{ns}}}sessionId") or ""
+    user_id      = result.findtext(f"{{{ns}}}userId")    or ""
+    server_url   = result.findtext(f"{{{ns}}}serverUrl") or ""
+    display_name = result.findtext(f".//{{{ns}}}userFullName") or username
+    email        = result.findtext(f".//{{{ns}}}userEmail")    or username
 
-async def _resolve_sf_user_id(email: str) -> str:
-    """Return the Salesforce User Id (005…) for a given email, or '' if not found."""
-    if not email:
-        return ""
-    try:
-        safe = email.replace("'", "\\'")
-        rows = await _sf_soql(
-            f"SELECT Id FROM User WHERE Email = '{safe}' AND IsActive = true LIMIT 1"
-        )
-        return rows[0]["Id"] if rows else ""
-    except Exception as exc:
-        _log.warning("SF user lookup failed for %s: %s", email, exc)
-        return ""
+    # Derive instance URL from the SOAP server URL (strip the path).
+    import urllib.parse as _up
+    parsed = _up.urlparse(server_url)
+    instance_url = f"{parsed.scheme}://{parsed.netloc}" if server_url else ""
+
+    return {
+        "user_id": user_id,
+        "session_id": session_id,
+        "instance_url": instance_url,
+        "display_name": display_name,
+        "email": email,
+    }
 
 
 async def _fetch_html_from_mcp() -> str:
@@ -164,12 +173,20 @@ class TrackedAgent(GeminiUCPAgent):
         self.last_tool_calls: list = []
         self.last_order: dict = {}
         self.buyer_user_id: str = ""
+        self.buyer_session_id: str = ""
+        self.buyer_instance_url: str = ""
 
     def _call_ucp(self, fn_name: str, args: dict) -> dict:
-        # Inject the logged-in buyer's SF User ID into place_order so the backend
-        # can resolve effectiveAccountId without falling back to the env var default.
-        if fn_name == "place_order" and self.buyer_user_id:
-            args = {**args, "buyer_user_id": self.buyer_user_id}
+        if fn_name == "place_order":
+            extra: dict = {}
+            if self.buyer_user_id:
+                extra["buyer_user_id"] = self.buyer_user_id
+            if self.buyer_session_id:
+                extra["buyer_session_id"] = self.buyer_session_id
+            if self.buyer_instance_url:
+                extra["buyer_instance_url"] = self.buyer_instance_url
+            if extra:
+                args = {**args, **extra}
         result = super()._call_ucp(fn_name, args)
         self.last_tool_calls.append({"tool": fn_name, "args": args})
         if fn_name == "search_products":
@@ -221,19 +238,38 @@ def _gemini_error_message(exc: Exception) -> str:
 @app.post("/api/login")
 async def login(request: Request) -> JSONResponse:
     body = await request.json()
-    _session["name"]  = (body.get("name")  or "").strip()
-    _session["email"] = (body.get("email") or "").strip()
-    # Resolution priority:
-    # 1. Caller-supplied sf_user_id (direct embed / SSO scenarios)
-    # 2. SOQL lookup by email against the connected Salesforce org
-    # 3. SF_BUYER_USER_ID env var (static fallback for demos without email)
-    sf_uid = (body.get("sf_user_id") or "").strip()
-    if not sf_uid and _session["email"]:
-        sf_uid = await _resolve_sf_user_id(_session["email"])
-    if not sf_uid:
-        sf_uid = os.environ.get("SF_BUYER_USER_ID", "")
-    _session["sf_user_id"] = sf_uid
-    return JSONResponse({"ok": True, "session": _session})
+    username = (body.get("username") or body.get("email") or "").strip()
+    password = (body.get("password") or "").strip()
+
+    if not username:
+        return JSONResponse({"ok": False, "error": "Username is required."}, status_code=400)
+
+    if password:
+        # Full SOAP authentication — resolves User ID and session token dynamically.
+        try:
+            sf = await _soap_login(username, password)
+        except ValueError as exc:
+            return JSONResponse({"ok": False, "error": str(exc)}, status_code=401)
+        except Exception as exc:
+            _log.warning("SOAP login failed: %s", exc)
+            return JSONResponse(
+                {"ok": False, "error": "Could not reach Salesforce — check network and SF_SOAP_LOGIN_URL."},
+                status_code=502,
+            )
+        _session["name"]           = (body.get("name") or "").strip() or sf["display_name"]
+        _session["email"]          = sf["email"]
+        _session["sf_user_id"]     = sf["user_id"]
+        _session["sf_session_id"]  = sf["session_id"]
+        _session["sf_instance_url"]= sf["instance_url"]
+    else:
+        # Name-only mode (no password field) — no Salesforce auth, guest checkout.
+        _session["name"]           = (body.get("name") or "").strip()
+        _session["email"]          = username
+        _session["sf_user_id"]     = os.environ.get("SF_BUYER_USER_ID", "")
+        _session["sf_session_id"]  = ""
+        _session["sf_instance_url"]= ""
+
+    return JSONResponse({"ok": True, "session": {k: v for k, v in _session.items() if k != "sf_session_id"}})
 
 
 @app.get("/api/session")
@@ -258,7 +294,9 @@ async def chat(request: Request) -> JSONResponse:
     agent.last_order = {}
     # Hydrate buyer identity from the active session so place_order
     # can resolve effectiveAccountId for the correct buyer.
-    agent.buyer_user_id = _session.get("sf_user_id") or os.environ.get("SF_BUYER_USER_ID", "")
+    agent.buyer_user_id      = _session.get("sf_user_id")      or os.environ.get("SF_BUYER_USER_ID", "")
+    agent.buyer_session_id   = _session.get("sf_session_id",   "")
+    agent.buyer_instance_url = _session.get("sf_instance_url", "")
     try:
         reply = agent.send(body.get("message", ""))
     except Exception as exc:
@@ -674,14 +712,15 @@ _DEMO_HTML = """<!DOCTYPE html>
     <div class="login-title">Shopping Agent</div>
     <div class="login-sub">Powered by Gemini &middot; B2B Commerce</div>
     <div class="login-field">
-      <label>Your Name <span style="text-transform:none;letter-spacing:0;font-weight:400;color:var(--danger)">*</span></label>
-      <input id="login-name" type="text" placeholder="e.g. Jane Smith" autocomplete="name"/>
+      <label>Salesforce Username <span style="text-transform:none;letter-spacing:0;font-weight:400;color:var(--danger)">*</span></label>
+      <input id="login-username" type="email" placeholder="you@company.com.sandbox" autocomplete="username"/>
     </div>
     <div class="login-field">
-      <label>Email <span style="text-transform:none;letter-spacing:0;font-weight:400">(optional)</span></label>
-      <input id="login-email" type="email" placeholder="you@company.com" autocomplete="email"/>
+      <label>Password <span style="text-transform:none;letter-spacing:0;font-weight:400;color:var(--danger)">*</span></label>
+      <input id="login-password" type="password" placeholder="Your Salesforce password" autocomplete="current-password"/>
     </div>
-    <button class="login-btn" onclick="doLogin()">Start Shopping &#x2192;</button>
+    <div id="login-error" style="display:none;font-size:12px;color:var(--danger);text-align:center;margin-top:-4px"></div>
+    <button class="login-btn" id="login-submit-btn" onclick="doLogin()">Sign in &#x2192;</button>
   </div>
 </div>
 
@@ -1199,15 +1238,12 @@ async function initSession() {
 
 function applySession(sess) {
   sessionStorage.setItem("shopping_session", JSON.stringify(sess));
-  const overlay = document.getElementById("login-overlay");
-  if (overlay) overlay.style.display = "none";
-  const chip = document.getElementById("user-chip");
-  chip.style.display = "flex";
+  document.getElementById("login-overlay").style.display = "none";
+  document.getElementById("user-chip").style.display     = "flex";
   const displayName = sess.name || sess.email || "Guest";
   document.getElementById("user-name-display").textContent = displayName;
-  const initials = displayName.split(" ").map(w => w[0] || "").join("").toUpperCase().slice(0, 2) || "?";
-  document.getElementById("user-avatar-text").textContent = initials;
-  // Pre-fill checkout name/email from session (only if fields are still blank).
+  const initials = displayName.split(/\s+/).map(w => w[0] || "").join("").toUpperCase().slice(0, 2) || "?";
+  document.getElementById("user-avatar-text").textContent  = initials;
   const coName  = document.getElementById("co-name");
   const coEmail = document.getElementById("co-email");
   if (sess.name  && !coName.value)  coName.value  = sess.name;
@@ -1215,26 +1251,50 @@ function applySession(sess) {
 }
 
 async function doLogin() {
-  const nameEl = document.getElementById("login-name");
-  const name   = nameEl.value.trim();
-  if (!name) { nameEl.focus(); return; }
-  const email  = document.getElementById("login-email").value.trim();
+  const usernameEl = document.getElementById("login-username");
+  const passwordEl = document.getElementById("login-password");
+  const errorEl    = document.getElementById("login-error");
+  const submitBtn  = document.getElementById("login-submit-btn");
+
+  const username = usernameEl.value.trim();
+  const password = passwordEl.value;
+
+  if (!username) { usernameEl.focus(); return; }
+  if (!password) { passwordEl.focus(); return; }
+
+  errorEl.style.display = "none";
+  submitBtn.disabled    = true;
+  submitBtn.innerHTML   = "Signing in&#8230;";
+
   try {
     const r = await fetch("/api/login", {
       method: "POST", headers: {"Content-Type":"application/json"},
-      body: JSON.stringify({name, email}),
+      body: JSON.stringify({username, password}),
     });
     const d = await r.json();
-    if (d.ok) applySession(d.session);
-  } catch(e) { alert("Login failed — please try again."); }
+    if (d.ok) {
+      applySession(d.session);
+    } else {
+      errorEl.textContent    = d.error || "Login failed.";
+      errorEl.style.display  = "block";
+      submitBtn.disabled     = false;
+      submitBtn.innerHTML    = "Sign in &#x2192;";
+    }
+  } catch(e) {
+    errorEl.textContent   = "Network error — please try again.";
+    errorEl.style.display = "block";
+    submitBtn.disabled    = false;
+    submitBtn.innerHTML   = "Sign in &#x2192;";
+  }
 }
 
 async function doLogout() {
   await fetch("/api/logout", {method:"POST"});
   sessionStorage.removeItem("shopping_session");
   document.getElementById("user-chip").style.display = "none";
-  document.getElementById("login-name").value  = "";
-  document.getElementById("login-email").value = "";
+  document.getElementById("login-username").value = "";
+  document.getElementById("login-password").value = "";
+  document.getElementById("login-error").style.display = "none";
   document.getElementById("login-overlay").style.display = "flex";
   // Clear conversation and cart.
   await fetch("/api/reset", {method:"POST"});
@@ -1250,8 +1310,8 @@ async function doLogout() {
 
 initSession();
 
-document.getElementById("login-name").addEventListener("keydown",  e => { if (e.key === "Enter") doLogin(); });
-document.getElementById("login-email").addEventListener("keydown", e => { if (e.key === "Enter") doLogin(); });
+document.getElementById("login-username").addEventListener("keydown", e => { if (e.key === "Enter") document.getElementById("login-password").focus(); });
+document.getElementById("login-password").addEventListener("keydown", e => { if (e.key === "Enter") doLogin(); });
 input.addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey) send(); });
 </script>
 </body>

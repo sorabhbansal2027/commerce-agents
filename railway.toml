@@ -34,3 +34,30 @@
   name = "gemini-demo"
   [services.build]
     dockerfilePath = "Dockerfile.gemini"
+
+# ── Merchant portal (SFCC BM integration) ────────────────────────────────────
+#
+# Two new services for embedding the merchant agent in SFCC Business Manager:
+#
+#   merchant-api   — FastAPI backend (Anthropic + Salesforce OMS), port 8000
+#   merchant-web   — Next.js merchant portal, port 3105
+#
+# After deploying both:
+#   1. Set merchant-api env vars: SF_INSTANCE_URL, SF_CLIENT_ID, SF_CLIENT_SECRET, ANTHROPIC_API_KEY
+#   2. Set merchant-web env var:  NEXT_PUBLIC_API_URL=https://<merchant-api>.up.railway.app
+#   3. Set BM Custom Preference:  merchantAgentWebUrl=https://<merchant-web>.up.railway.app
+
+[[services]]
+  name = "merchant-api"
+  [services.build]
+    dockerfilePath = "Dockerfile"
+  [services.deploy]
+    startCommand = "uvicorn salesforce.api.main_production:app --app-dir examples --host 0.0.0.0 --port 8000"
+
+[[services]]
+  name = "merchant-web"
+  [services.build]
+    builder = "NIXPACKS"
+    buildCommand = "cd examples/salesforce/merchant-web && npm install && npm run build"
+  [services.deploy]
+    startCommand = "node examples/salesforce/merchant-web/.next/standalone/server.js"

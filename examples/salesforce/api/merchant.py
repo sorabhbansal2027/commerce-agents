@@ -43,7 +43,51 @@ class _SFCCAdapter:
         return {}
 
     def all_listings(self) -> list:
-        return []
+        try:
+            import base64, json as _json
+            from merchant_agent import Listing
+            # Sync HTTP — all_listings() is called without await by the router
+            creds = base64.b64encode(
+                f"{self._sfcc._client_id}:{self._sfcc._client_secret}".encode()
+            ).decode()
+            with httpx.Client(timeout=20) as c:
+                tok_r = c.post(
+                    "https://account.demandware.com/dwsso/oauth2/access_token",
+                    headers={"Authorization": f"Basic {creds}"},
+                    data={"grant_type": "client_credentials"},
+                )
+                tok_r.raise_for_status()
+                token = tok_r.json()["access_token"]
+                url = (f"{self._sfcc._instance}/s/{self._sfcc._site_id}"
+                       f"/dw/data/{self._sfcc._version}/product_search")
+                r = c.post(url, json={
+                    "query": {"match_all_query": {}},
+                    "select": "(**)", "count": 50,
+                }, headers={
+                    "Authorization": f"Bearer {token}",
+                    "x-dw-client-id": self._sfcc._client_id,
+                    "Content-Type": "application/json",
+                })
+                r.raise_for_status()
+                hits = r.json().get("hits", [])
+            listings = []
+            for h in hits:
+                raw_name = h.get("name", "")
+                title = raw_name.get("default", "") if isinstance(raw_name, dict) else raw_name
+                prices = h.get("prices", {})
+                price = next(iter(prices.values()), 0.0) if prices else 0.0
+                listings.append(Listing(
+                    listing_id=h.get("id", ""),
+                    title=title,
+                    status="active" if h.get("online_flag", {}).get("default", True) else "inactive",
+                    price=float(price) if price else 0.0,
+                    currency=self._sfcc._currency,
+                    category=h.get("primary_category_id"),
+                ))
+            return listings
+        except Exception as exc:
+            log.warning("SFCC all_listings unavailable (%s)", exc)
+            return []
 
     def recent_orders(self, n: int) -> list:
         return []

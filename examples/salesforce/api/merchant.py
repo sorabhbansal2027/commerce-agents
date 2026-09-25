@@ -71,6 +71,9 @@ class _SFCCAdapter:
             log.warning("SFCC order_search unavailable for order issues (%s)", exc)
             return []
 
+    async def get_pending_quote_approvals(self, session: MerchantSessionContext) -> list:
+        return []  # SFCC BM does not support quote approvals
+
     def __getattr__(self, name: str) -> Any:
         return getattr(self._sfcc, name)
 

@@ -20,6 +20,9 @@ case "${DEPLOY_MODE:-api}" in
       GEMINI_UI_PORT="$PORT" \
       python3 scripts/gemini_mcp_ui_server.py
     ;;
+  litellm)
+    exec litellm --config /app/embed/litellm-config.yaml --port "$PORT" --detailed_debug
+    ;;
   *)
     exec uvicorn salesforce.api.main_production:app \
       --app-dir examples \

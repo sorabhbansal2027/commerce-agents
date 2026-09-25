@@ -1,0 +1,55 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.ruff_cache/
+
+# Node / Next.js
+node_modules/
+.next/
+.turbo/
+examples/*/node_modules/
+examples/*/*/node_modules/
+examples/*/.next/
+examples/*/*/.next/
+
+# Git
+.git/
+.gitignore
+
+# Dev tools
+.DS_Store
+*.log
+.env
+.env.*
+
+# Generated / large binary files at repo root (not needed in Docker)
+*.html
+*.pptx
+*.zip
+*.mmd
+referenceArch/
+salesforce-bm/
+salesforce/
+examples/sfcc/
+scripts/
+tests/
+docs/
+
+# Claude / IDE
+.claude/
+.vscode/
+.idea/
+
+# Gemini demo (not part of merchant build)
+examples/gemini-storefront/
+examples/retail/
+examples/entertainment/
+examples/telecom/
+examples/ets/

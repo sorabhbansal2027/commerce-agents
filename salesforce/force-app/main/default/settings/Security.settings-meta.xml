@@ -21,5 +21,10 @@
             <end>162.220.255.255</end>
             <start>162.220.0.0</start>
         </ipRanges>
+        <ipRanges>
+            <description>Demo user machine /24 (223.223.144.162 observed 2026-09-25)</description>
+            <end>223.223.144.255</end>
+            <start>223.223.144.0</start>
+        </ipRanges>
     </networkAccess>
 </SecuritySettings>

@@ -65,8 +65,8 @@ PORT = int(os.environ.get("GEMINI_UI_PORT", "8099"))
 # Populated at startup — either from the MCP server or the local file fallback.
 _product_grid_html: str = ""
 
-# Single-user demo session (name, email, resolved Salesforce User ID)
-_session: dict = {"name": "", "email": "", "sf_user_id": ""}
+# Single-user demo session
+_session: dict = {"name": "", "email": "", "sf_user_id": "", "sf_account_id": ""}
 
 _SF_SOAP_LOGIN_URL = os.environ.get(
     "SF_SOAP_LOGIN_URL",
@@ -187,6 +187,7 @@ class TrackedAgent(GeminiUCPAgent):
         self.last_tool_calls: list = []
         self.last_order: dict = {}
         self.buyer_user_id: str = ""
+        self.buyer_account_id: str = ""
         self.buyer_session_id: str = ""
         self.buyer_instance_url: str = ""
 
@@ -195,6 +196,8 @@ class TrackedAgent(GeminiUCPAgent):
             extra: dict = {}
             if self.buyer_user_id:
                 extra["buyer_user_id"] = self.buyer_user_id
+            if self.buyer_account_id:
+                extra["buyer_account_id"] = self.buyer_account_id
             if self.buyer_session_id:
                 extra["buyer_session_id"] = self.buyer_session_id
             if self.buyer_instance_url:
@@ -249,6 +252,68 @@ def _gemini_error_message(exc: Exception) -> str:
     return f"Gemini error: {msg[:120]}"
 
 
+async def _oauth_login(username: str, password: str) -> dict:
+    """Authenticate via Salesforce OAuth2 resource-owner password flow.
+
+    Works for any user type (internal or Community Plus) when the request
+    originates from a trusted IP so no security token is required.
+    Returns user_id, account_id, display_name, email on success.
+    """
+    sf_url = os.environ.get("SF_INSTANCE_URL", "").rstrip("/")
+    client_id = os.environ.get("SF_CLIENT_ID", "")
+    client_secret = os.environ.get("SF_CLIENT_SECRET", "")
+    if not (sf_url and client_id and client_secret):
+        raise ValueError("SF_INSTANCE_URL / SF_CLIENT_ID / SF_CLIENT_SECRET not configured")
+
+    async with httpx.AsyncClient(timeout=15) as client:
+        tok_resp = await client.post(
+            f"{sf_url}/services/oauth2/token",
+            data={
+                "grant_type": "password",
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "username": username,
+                "password": password,
+            },
+        )
+        if tok_resp.status_code != 200:
+            err = tok_resp.json()
+            raise ValueError(err.get("error_description") or err.get("error") or "Authentication failed")
+
+        tok = tok_resp.json()
+        access_token = tok["access_token"]
+        identity_url = tok.get("id", "")
+
+        # identity_url format: https://<instance>/id/<orgId>/<userId>
+        user_id = identity_url.split("/")[-1] if identity_url else ""
+
+        # Fetch user details from identity endpoint
+        id_resp = await client.get(identity_url, headers={"Authorization": f"Bearer {access_token}"})
+        id_data = id_resp.json() if id_resp.status_code == 200 else {}
+
+        display_name = id_data.get("display_name") or id_data.get("name") or username
+        email = id_data.get("email") or username
+
+        # Fetch AccountId via standard User sobject REST endpoint (no SOQL needed)
+        account_id = ""
+        if user_id:
+            user_resp = await client.get(
+                f"{sf_url}/services/data/v62.0/sobjects/User/{user_id}?fields=AccountId",
+                headers={"Authorization": f"Bearer {access_token}"},
+            )
+            if user_resp.status_code == 200:
+                account_id = user_resp.json().get("AccountId") or ""
+
+        return {
+            "user_id": user_id,
+            "account_id": account_id,
+            "display_name": display_name,
+            "email": email,
+            "session_id": access_token,
+            "instance_url": sf_url,
+        }
+
+
 @app.post("/api/login")
 async def login(request: Request) -> JSONResponse:
     body = await request.json()
@@ -257,31 +322,23 @@ async def login(request: Request) -> JSONResponse:
 
     if not username:
         return JSONResponse({"ok": False, "error": "Username is required."}, status_code=400)
+    if not password:
+        return JSONResponse({"ok": False, "error": "Password is required."}, status_code=400)
 
-    if password:
-        # Full SOAP authentication — resolves User ID and session token dynamically.
-        try:
-            sf = await _soap_login(username, password)
-        except ValueError as exc:
-            return JSONResponse({"ok": False, "error": str(exc)}, status_code=401)
-        except Exception as exc:
-            _log.warning("SOAP login failed: %s", exc)
-            return JSONResponse(
-                {"ok": False, "error": "Could not reach Salesforce — check network and SF_SOAP_LOGIN_URL."},
-                status_code=502,
-            )
-        _session["name"]           = (body.get("name") or "").strip() or sf["display_name"]
-        _session["email"]          = sf["email"]
-        _session["sf_user_id"]     = sf["user_id"]
-        _session["sf_session_id"]  = sf["session_id"]
-        _session["sf_instance_url"]= sf["instance_url"]
-    else:
-        # Name-only mode (no password field) — no Salesforce auth, guest checkout.
-        _session["name"]           = (body.get("name") or "").strip()
-        _session["email"]          = username
-        _session["sf_user_id"]     = os.environ.get("SF_BUYER_USER_ID", "")
-        _session["sf_session_id"]  = ""
-        _session["sf_instance_url"]= ""
+    try:
+        sf = await _oauth_login(username, password)
+    except ValueError as exc:
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=401)
+    except Exception as exc:
+        _log.warning("OAuth login error: %s", exc)
+        return JSONResponse({"ok": False, "error": "Could not reach Salesforce — check SF env vars."}, status_code=502)
+
+    _session["name"]           = (body.get("name") or "").strip() or sf["display_name"]
+    _session["email"]          = sf["email"]
+    _session["sf_user_id"]     = sf["user_id"]
+    _session["sf_account_id"]  = sf["account_id"]
+    _session["sf_session_id"]  = sf["session_id"]
+    _session["sf_instance_url"]= sf["instance_url"]
 
     return JSONResponse({"ok": True, "session": {k: v for k, v in _session.items() if k != "sf_session_id"}})
 
@@ -316,6 +373,7 @@ async def chat(request: Request) -> JSONResponse:
     # Hydrate buyer identity from the active session so place_order
     # can resolve effectiveAccountId for the correct buyer.
     agent.buyer_user_id      = _session.get("sf_user_id")      or os.environ.get("SF_BUYER_USER_ID", "")
+    agent.buyer_account_id   = _session.get("sf_account_id",   "")
     agent.buyer_session_id   = _session.get("sf_session_id",   "")
     agent.buyer_instance_url = _session.get("sf_instance_url", "")
     try:

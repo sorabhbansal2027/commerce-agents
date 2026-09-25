@@ -54,7 +54,15 @@ class _SFCCAdapter:
             return await self._sfcc.get_business_snapshot(session, period)
         except (httpx.HTTPStatusError, httpx.ConnectError) as exc:
             log.warning("SFCC order_search unavailable (%s); returning empty snapshot", exc)
-            return BusinessSnapshot(store_name=self.store_name)
+            return BusinessSnapshot(period=period or "30d", sales=0.0, orders=0,
+                                   note="Order data unavailable — OCAPI order_search not configured")
+
+    async def get_inventory_alerts(self, session: MerchantSessionContext) -> list:
+        try:
+            return await self._sfcc.get_inventory_alerts(session)
+        except (httpx.HTTPStatusError, httpx.ConnectError) as exc:
+            log.warning("SFCC inventory OCAPI unavailable (%s)", exc)
+            return []
 
     async def get_order_issues(self, session: MerchantSessionContext) -> list:
         try:

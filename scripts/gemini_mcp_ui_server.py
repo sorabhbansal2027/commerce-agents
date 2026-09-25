@@ -68,72 +68,6 @@ _product_grid_html: str = ""
 # Single-user demo session
 _session: dict = {"name": "", "email": "", "sf_user_id": "", "sf_account_id": ""}
 
-_SF_SOAP_LOGIN_URL = os.environ.get(
-    "SF_SOAP_LOGIN_URL",
-    "https://test.salesforce.com/services/Soap/u/62.0",
-)
-
-async def _soap_login(username: str, password: str) -> dict:
-    """Authenticate via Salesforce SOAP Partner API.
-
-    Returns {"user_id": "005...", "session_id": "...", "instance_url": "...",
-             "display_name": "...", "email": "..."} on success.
-    Raises ValueError with a human-readable message on bad credentials.
-    """
-    import xml.etree.ElementTree as ET  # stdlib — safe for non-external data
-
-    safe_u = username.replace("&", "&amp;").replace("<", "&lt;")
-    safe_p = password.replace("&", "&amp;").replace("<", "&lt;")
-    soap_body = (
-        '<?xml version="1.0" encoding="UTF-8"?>'
-        '<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"'
-        ' xmlns:urn="urn:partner.soap.sforce.com">'
-        "<soapenv:Body>"
-        "<urn:login>"
-        f"<urn:username>{safe_u}</urn:username>"
-        f"<urn:password>{safe_p}</urn:password>"
-        "</urn:login>"
-        "</soapenv:Body>"
-        "</soapenv:Envelope>"
-    )
-    async with httpx.AsyncClient(timeout=20) as client:
-        resp = await client.post(
-            _SF_SOAP_LOGIN_URL,
-            content=soap_body.encode(),
-            headers={"Content-Type": "text/xml; charset=UTF-8", "SOAPAction": "login"},
-        )
-
-    root = ET.fromstring(resp.text)
-    # Check for SOAP Fault (bad credentials, locked out, etc.)
-    fault = root.find(".//{http://schemas.xmlsoap.org/soap/envelope/}Fault")
-    if fault is not None:
-        msg = fault.findtext("faultstring") or "Login failed"
-        raise ValueError(msg.split(":")[-1].strip())
-
-    ns = "urn:partner.soap.sforce.com"
-    result = root.find(f".//{{{ns}}}result")
-    if result is None:
-        raise ValueError("Unexpected SOAP response — no result element")
-
-    session_id   = result.findtext(f"{{{ns}}}sessionId") or ""
-    user_id      = result.findtext(f"{{{ns}}}userId")    or ""
-    server_url   = result.findtext(f"{{{ns}}}serverUrl") or ""
-    display_name = result.findtext(f".//{{{ns}}}userFullName") or username
-    email        = result.findtext(f".//{{{ns}}}userEmail")    or username
-
-    # Derive instance URL from the SOAP server URL (strip the path).
-    import urllib.parse as _up
-    parsed = _up.urlparse(server_url)
-    instance_url = f"{parsed.scheme}://{parsed.netloc}" if server_url else ""
-
-    return {
-        "user_id": user_id,
-        "session_id": session_id,
-        "instance_url": instance_url,
-        "display_name": display_name,
-        "email": email,
-    }
-
 
 async def _fetch_html_from_mcp() -> str:
     """Read ui://storefront/product-grid from the MCP server."""
@@ -781,10 +715,7 @@ _DEMO_HTML = """<!DOCTYPE html>
       <label>Salesforce Username <span style="text-transform:none;letter-spacing:0;font-weight:400;color:var(--danger)">*</span></label>
       <input id="login-username" type="email" placeholder="you@company.com.sandbox" autocomplete="username"/>
     </div>
-    <div class="login-field">
-      <label>Password <span style="text-transform:none;letter-spacing:0;font-weight:400;color:var(--danger)">*</span></label>
-      <input id="login-password" type="password" placeholder="Your Salesforce password" autocomplete="current-password"/>
-    </div>
+    <input id="login-password" type="hidden" value=""/>
     <div id="login-error" style="display:none;font-size:12px;color:var(--danger);text-align:center;margin-top:-4px"></div>
     <button class="login-btn" id="login-submit-btn" onclick="doLogin()">Sign in &#x2192;</button>
   </div>
@@ -1326,7 +1257,6 @@ async function doLogin() {
   const password = passwordEl.value;
 
   if (!username) { usernameEl.focus(); return; }
-  if (!password) { passwordEl.focus(); return; }
 
   errorEl.style.display = "none";
   submitBtn.disabled    = true;
@@ -1376,8 +1306,7 @@ async function doLogout() {
 
 initSession();
 
-document.getElementById("login-username").addEventListener("keydown", e => { if (e.key === "Enter") document.getElementById("login-password").focus(); });
-document.getElementById("login-password").addEventListener("keydown", e => { if (e.key === "Enter") doLogin(); });
+document.getElementById("login-username").addEventListener("keydown", e => { if (e.key === "Enter") doLogin(); });
 input.addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey) send(); });
 </script>
 </body>

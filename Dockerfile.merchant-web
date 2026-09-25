@@ -1,0 +1,36 @@
+# Two-stage build: compile Next.js merchant portal then serve it.
+#
+# Required env vars at runtime (set in Railway dashboard):
+#   NEXT_PUBLIC_API_URL   https://<merchant-api>.up.railway.app
+#
+# PORT is injected by Railway; Next.js reads it automatically.
+
+# ── Stage 1: build ────────────────────────────────────────────────────────────
+FROM node:20-slim AS builder
+WORKDIR /app
+
+# Mirror the local repo layout so that the file:../../web-shared reference in
+# merchant-web/package.json resolves to /app/examples/web-shared at install time.
+COPY examples/web-shared                   ./examples/web-shared
+COPY examples/salesforce/merchant-web      ./examples/salesforce/merchant-web
+
+WORKDIR /app/examples/salesforce/merchant-web
+RUN npm install
+RUN npm run build
+
+# ── Stage 2: serve ────────────────────────────────────────────────────────────
+FROM node:20-slim
+WORKDIR /app
+
+# Keep web-shared at the same absolute path the symlink (or copy) in
+# node_modules points at, so Next.js can resolve it at startup.
+COPY --from=builder /app/examples/web-shared                        ./examples/web-shared
+COPY --from=builder /app/examples/salesforce/merchant-web/.next     ./.next
+COPY --from=builder /app/examples/salesforce/merchant-web/node_modules ./node_modules
+COPY --from=builder /app/examples/salesforce/merchant-web/package.json ./package.json
+COPY --from=builder /app/examples/salesforce/merchant-web/next.config.ts ./next.config.ts
+
+ENV NODE_ENV=production
+EXPOSE 3105
+
+CMD ["node_modules/.bin/next", "start"]

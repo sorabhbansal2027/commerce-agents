@@ -17,6 +17,7 @@ WORKDIR /app
 
 # Copy everything first — local editable packages (commerce-common, etc.)
 # must exist on disk before pip can install them.
+# build: 2026-09-25
 COPY . .
 RUN pip install --no-cache-dir -r requirements.txt
 

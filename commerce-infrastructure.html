@@ -1,0 +1,836 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Commerce Agents — Infrastructure Overview</title>
+<style>
+  :root {
+    --bg: #07090f;
+    --surface: #0f1623;
+    --surface2: #161e2e;
+    --border: #1e2d45;
+    --green: #059669;
+    --green2: #34d399;
+    --blue: #3b82f6;
+    --blue2: #60a5fa;
+    --purple: #8b5cf6;
+    --purple2: #a78bfa;
+    --orange: #f97316;
+    --orange2: #fb923c;
+    --yellow: #f59e0b;
+    --red: #ef4444;
+    --text: #e2e8f0;
+    --muted: #64748b;
+    --code-bg: #0a1628;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 15px;
+    line-height: 1.65;
+  }
+
+  /* ── Hero ─────────────────────────────────────────────────────────── */
+  .hero {
+    background: linear-gradient(135deg, #0a1628 0%, #0d1f3c 50%, #0a1e10 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 52px 48px 44px;
+    text-align: center;
+  }
+  .hero-badge {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: rgba(59,130,246,.15); border: 1px solid rgba(59,130,246,.3);
+    color: var(--blue2); border-radius: 999px; padding: 6px 16px;
+    font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+    margin-bottom: 20px;
+  }
+  .hero h1 {
+    font-size: 40px; font-weight: 800; line-height: 1.15;
+    background: linear-gradient(135deg, #60a5fa, #a78bfa);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    margin-bottom: 14px;
+  }
+  .hero p { font-size: 17px; color: #94a3b8; max-width: 700px; margin: 0 auto 28px; }
+  .hero-pills { display: flex; justify-content: center; flex-wrap: wrap; gap: 10px; }
+  .pill {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: 5px 14px; font-size: 12px; color: #94a3b8;
+  }
+  .pill strong { color: var(--text); }
+
+  .main { max-width: 1160px; margin: 0 auto; padding: 48px 28px 80px; }
+
+  /* ── Section headings ──────────────────────────────────────────────── */
+  .section { margin-top: 60px; margin-bottom: 28px; }
+  .section h2 {
+    font-size: 22px; font-weight: 700; color: var(--text);
+    display: flex; align-items: center; gap: 12px;
+  }
+  .section h2 .icon { font-size: 24px; }
+  .section .sub { font-size: 13px; color: var(--muted); margin-top: 4px; padding-left: 36px; }
+
+  /* ── Arch diagram ──────────────────────────────────────────────────── */
+  .arch {
+    display: grid;
+    grid-template-columns: 1fr 24px 1fr 24px 1fr 24px 1fr;
+    gap: 0; align-items: start; margin-bottom: 32px;
+  }
+  .arch-col {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; overflow: hidden;
+  }
+  .arch-col-header {
+    padding: 12px 14px; font-size: 12px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .06em; display: flex; align-items: center; gap: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  .arch-col-header.blue   { background: rgba(59,130,246,.12); color: #93c5fd; }
+  .arch-col-header.green  { background: rgba(5,150,105,.12);  color: #6ee7b7; }
+  .arch-col-header.purple { background: rgba(139,92,246,.12); color: #c4b5fd; }
+  .arch-col-header.orange { background: rgba(249,115,22,.12); color: #fdba74; }
+  .arch-item {
+    padding: 10px 14px; border-bottom: 1px solid rgba(30,45,69,.5);
+    font-size: 12px;
+  }
+  .arch-item:last-child { border-bottom: none; }
+  .arch-item .label { font-weight: 600; color: var(--text); }
+  .arch-item .desc  { color: var(--muted); margin-top: 2px; font-size: 11px; }
+
+  .arch-arrow {
+    display: flex; align-items: center; justify-content: center;
+    color: var(--muted); font-size: 20px; padding-top: 24px;
+  }
+
+  /* ── Cards ─────────────────────────────────────────────────────────── */
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 14px; padding: 22px; margin-bottom: 16px;
+  }
+  .card h3 { font-size: 15px; font-weight: 700; margin-bottom: 8px; }
+  .card p  { font-size: 13px; color: #94a3b8; line-height: 1.7; }
+
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+  .grid-4 { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 14px; margin-bottom: 16px; }
+
+  .card.blue   { border-color: rgba(59,130,246,.35); background: rgba(59,130,246,.05); }
+  .card.green  { border-color: rgba(5,150,105,.35);  background: rgba(5,150,105,.05); }
+  .card.purple { border-color: rgba(139,92,246,.35); background: rgba(139,92,246,.05); }
+  .card.orange { border-color: rgba(249,115,22,.35); background: rgba(249,115,22,.05); }
+  .card.yellow { border-color: rgba(245,158,11,.35); background: rgba(245,158,11,.05); }
+
+  /* ── Big diagram box ───────────────────────────────────────────────── */
+  .diag {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 14px; padding: 28px; margin-bottom: 20px;
+  }
+  .diag-title {
+    font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
+    color: var(--muted); margin-bottom: 20px;
+  }
+
+  /* ── Layer stack ───────────────────────────────────────────────────── */
+  .layer-stack { display: flex; flex-direction: column; gap: 8px; margin-bottom: 24px; }
+  .layer {
+    border-radius: 10px; padding: 14px 18px;
+    display: flex; align-items: center; gap: 16px;
+  }
+  .layer .layer-icon { font-size: 22px; flex-shrink: 0; }
+  .layer .layer-name { font-size: 14px; font-weight: 700; color: var(--text); flex: 0 0 200px; }
+  .layer .layer-tech { font-size: 13px; color: #94a3b8; flex: 1; }
+  .layer .layer-note { font-size: 12px; font-family: monospace; color: #64748b; }
+
+  .layer.l1 { background: rgba(59,130,246,.08); border: 1px solid rgba(59,130,246,.2); }
+  .layer.l2 { background: rgba(139,92,246,.08); border: 1px solid rgba(139,92,246,.2); }
+  .layer.l3 { background: rgba(5,150,105,.08);  border: 1px solid rgba(5,150,105,.2); }
+  .layer.l4 { background: rgba(249,115,22,.08); border: 1px solid rgba(249,115,22,.2); }
+  .layer.l5 { background: rgba(245,158,11,.08); border: 1px solid rgba(245,158,11,.2); }
+  .layer.l6 { background: rgba(16,185,129,.08); border: 1px solid rgba(16,185,129,.2); }
+
+  /* ── Request flow ──────────────────────────────────────────────────── */
+  .req-flow { display: flex; flex-direction: column; gap: 0; margin-bottom: 24px; }
+  .req-step {
+    display: flex; align-items: flex-start; gap: 16px;
+    padding: 14px 0; border-bottom: 1px solid rgba(30,45,69,.4);
+  }
+  .req-step:last-child { border-bottom: none; }
+  .req-num {
+    width: 26px; height: 26px; border-radius: 50%;
+    background: var(--surface2); color: var(--muted);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 700; flex-shrink: 0;
+  }
+  .req-step.active .req-num { background: var(--blue); color: #fff; }
+  .req-step.agent  .req-num { background: rgba(139,92,246,.3); color: var(--purple2); }
+  .req-step.sf     .req-num { background: rgba(249,115,22,.3); color: var(--orange2); }
+  .req-body { flex: 1; }
+  .req-label { font-size: 13px; font-weight: 600; color: var(--text); }
+  .req-detail { font-size: 12px; color: var(--muted); margin-top: 2px; font-family: monospace; }
+
+  /* ── Env table ─────────────────────────────────────────────────────── */
+  table { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 16px; }
+  th {
+    background: var(--surface2); text-align: left; padding: 9px 12px;
+    font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
+    color: var(--muted); border-bottom: 1px solid var(--border);
+  }
+  td { padding: 9px 12px; border-bottom: 1px solid rgba(30,45,69,.4); vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  code { font-family: 'SF Mono', monospace; font-size: 12px; }
+  .tag {
+    display: inline-block; padding: 2px 7px; border-radius: 4px;
+    font-size: 11px; font-weight: 700;
+  }
+  .tag-req  { background: rgba(239,68,68,.2);  color: #fca5a5; }
+  .tag-opt  { background: rgba(100,116,139,.2); color: #94a3b8; }
+  .tag-auto { background: rgba(5,150,105,.2);  color: #6ee7b7; }
+
+  /* ── Docker stages ─────────────────────────────────────────────────── */
+  .docker-stages {
+    display: grid; grid-template-columns: 1fr 32px 1fr; gap: 0; margin-bottom: 20px;
+  }
+  .docker-stage {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; overflow: hidden;
+  }
+  .docker-stage-header {
+    padding: 12px 16px; font-size: 12px; font-weight: 700;
+    display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--border);
+  }
+  .docker-stage-header.node { background: rgba(139,92,246,.12); color: #c4b5fd; }
+  .docker-stage-header.python { background: rgba(59,130,246,.12); color: #93c5fd; }
+  .docker-cmd {
+    padding: 10px 16px; border-bottom: 1px solid rgba(30,45,69,.4);
+    font-size: 12px; font-family: monospace; color: #94a3b8;
+    display: flex; align-items: flex-start; gap: 8px;
+  }
+  .docker-cmd:last-child { border-bottom: none; }
+  .docker-cmd .kw { color: #c084fc; font-weight: 700; }
+  .docker-cmd .val { color: #4ade80; }
+  .docker-arrow { display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 22px; }
+
+  /* ── Info box ─────────────────────────────────────────────────────── */
+  .info-box {
+    border-radius: 10px; padding: 14px 18px; margin-bottom: 16px;
+    display: flex; gap: 12px; align-items: flex-start; font-size: 13px;
+  }
+  .info-box.blue   { background: rgba(59,130,246,.08);  border: 1px solid rgba(59,130,246,.25); }
+  .info-box.green  { background: rgba(5,150,105,.08);   border: 1px solid rgba(5,150,105,.25); }
+  .info-box.orange { background: rgba(249,115,22,.08);  border: 1px solid rgba(249,115,22,.25); }
+  .info-box .icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+  .info-box p { color: #94a3b8; }
+  .info-box p strong { color: var(--text); }
+
+  /* ── Port table ────────────────────────────────────────────────────── */
+  .port-row {
+    display: flex; align-items: center; gap: 12px; padding: 10px 0;
+    border-bottom: 1px solid rgba(30,45,69,.4); font-size: 13px;
+  }
+  .port-row:last-child { border-bottom: none; }
+  .port-num {
+    font-family: monospace; font-weight: 700; font-size: 14px;
+    color: var(--blue2); background: rgba(59,130,246,.12);
+    padding: 3px 10px; border-radius: 6px; flex-shrink: 0;
+  }
+  .port-name { font-weight: 600; flex: 0 0 220px; }
+  .port-desc { color: var(--muted); flex: 1; font-size: 12px; }
+
+  hr { border: none; border-top: 1px solid var(--border); margin: 48px 0; }
+
+  footer {
+    text-align: center; color: var(--muted); font-size: 12px;
+    padding: 28px; border-top: 1px solid var(--border);
+  }
+
+  @media (max-width: 900px) {
+    .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr 1fr; }
+    .arch { grid-template-columns: 1fr; }
+    .arch-arrow { transform: rotate(90deg); padding: 8px 0; }
+    .docker-stages { grid-template-columns: 1fr; }
+    .docker-arrow { transform: rotate(90deg); padding: 4px 0; }
+    .hero { padding: 36px 20px; }
+    .hero h1 { font-size: 28px; }
+    .main { padding: 28px 14px 60px; }
+  }
+  @media (max-width: 600px) {
+    .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="hero-badge">&#x1F3D7;&#xFE0F; Infrastructure</div>
+  <h1>Commerce Agents<br>Infrastructure Overview</h1>
+  <p>Every service, layer, and connection in the Gemini + Salesforce B2B commerce deployment — from browser to Salesforce org.</p>
+  <div class="hero-pills">
+    <div class="pill"><strong>Railway</strong> · PaaS hosting</div>
+    <div class="pill"><strong>Docker</strong> · 2-stage build</div>
+    <div class="pill"><strong>Google Gemini</strong> · gemini-3.6-flash</div>
+    <div class="pill"><strong>Salesforce B2B</strong> · Commerce REST v62</div>
+    <div class="pill"><strong>FastAPI + Vite</strong> · Python + React</div>
+    <div class="pill"><strong>UCP + MCP</strong> · dual transport</div>
+  </div>
+</div>
+
+<div class="main">
+
+  <!-- ─────────────────── HIGH-LEVEL ARCH ───────────────────────────────── -->
+  <div class="section">
+    <h2><span class="icon">&#x1F5FA;&#xFE0F;</span> High-Level Architecture</h2>
+    <div class="sub">Four tiers: Browser → Railway → Gemini API → Salesforce</div>
+  </div>
+
+  <div class="arch">
+    <!-- Browser -->
+    <div class="arch-col">
+      <div class="arch-col-header blue">&#x1F310; Browser</div>
+      <div class="arch-item">
+        <div class="label">React + Vite</div>
+        <div class="desc">TypeScript SPA — built at Docker build time, served as static files</div>
+      </div>
+      <div class="arch-item">
+        <div class="label">CartSidebar</div>
+        <div class="desc">Local React state synced from server tool calls</div>
+      </div>
+      <div class="arch-item">
+        <div class="label">ChatPanel</div>
+        <div class="desc">Message history, product cards, order confirmation</div>
+      </div>
+      <div class="arch-item">
+        <div class="label">LoginScreen</div>
+        <div class="desc">Salesforce user credentials — SOAP/OAuth via backend</div>
+      </div>
+    </div>
+
+    <div class="arch-arrow">→</div>
+
+    <!-- Railway -->
+    <div class="arch-col">
+      <div class="arch-col-header purple">&#x1F682; Railway (Python)</div>
+      <div class="arch-item">
+        <div class="label">FastAPI + Uvicorn</div>
+        <div class="desc">Serves static dist/ AND JSON API on same port (8090)</div>
+      </div>
+      <div class="arch-item">
+        <div class="label">TrackedAgent</div>
+        <div class="desc">Subclass of GeminiUCPAgent — cart state, tool recording, order flow</div>
+      </div>
+      <div class="arch-item">
+        <div class="label">In-memory store</div>
+        <div class="desc">Single agent instance, per-session quotes dict, cart list</div>
+      </div>
+      <div class="arch-item">
+        <div class="label">UCP router</div>
+        <div class="desc">Manifest + product + checkout endpoints for Gemini to call</div>
+      </div>
+    </div>
+
+    <div class="arch-arrow">→</div>
+
+    <!-- Gemini -->
+    <div class="arch-col">
+      <div class="arch-col-header green">&#x1F9E0; Google Gemini API</div>
+      <div class="arch-item">
+        <div class="label">gemini-3.6-flash</div>
+        <div class="desc">Hosted model; Railway calls it over HTTPS with function declarations</div>
+      </div>
+      <div class="arch-item">
+        <div class="label">Function calling</div>
+        <div class="desc">Gemini returns function_call parts; agent executes them as HTTP</div>
+      </div>
+      <div class="arch-item">
+        <div class="label">Stateful history</div>
+        <div class="desc">Full contents[] sent each turn; Railway holds conversation state</div>
+      </div>
+    </div>
+
+    <div class="arch-arrow">→</div>
+
+    <!-- Salesforce -->
+    <div class="arch-col">
+      <div class="arch-col-header orange">&#x2601;&#xFE0F; Salesforce B2B</div>
+      <div class="arch-item">
+        <div class="label">Experience Cloud</div>
+        <div class="desc">OAuth 2.0 via Community URL; SOAP login for buyer auth</div>
+      </div>
+      <div class="arch-item">
+        <div class="label">B2B Commerce REST v62</div>
+        <div class="desc">WebCart, CartItem, Cart Checkout, OrderSummary</div>
+      </div>
+      <div class="arch-item">
+        <div class="label">SObject API</div>
+        <div class="desc">Direct Order + OrderItem creation; Account lookup</div>
+      </div>
+      <div class="arch-item">
+        <div class="label">Product2 + Pricebook</div>
+        <div class="desc">Product catalog via UCP service (separate Railway instance)</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─────────────────── SERVICES ──────────────────────────────────────── -->
+  <div class="section">
+    <h2><span class="icon">&#x1F680;</span> Live Services</h2>
+    <div class="sub">Two Railway deployments + one Salesforce sandbox</div>
+  </div>
+
+  <div class="grid-3">
+    <div class="card blue">
+      <h3>&#x1F6D2; Gemini Web App</h3>
+      <p style="margin-bottom:10px">Serves the React storefront AND the FastAPI backend on one Railway service.</p>
+      <div style="font-family:monospace;font-size:11px;color:#60a5fa;background:rgba(59,130,246,.08);padding:8px 12px;border-radius:6px">
+        perfect-achievement-production-<br>83ee.up.railway.app
+      </div>
+      <div style="margin-top:10px;font-size:12px;color:#64748b">Port 8090 · Single Docker container</div>
+    </div>
+    <div class="card green">
+      <h3>&#x1F4E6; UCP / OMS Backend</h3>
+      <p style="margin-bottom:10px">Exposes the UCP manifest and product catalog. Gemini discovers and calls this at startup.</p>
+      <div style="font-family:monospace;font-size:11px;color:#34d399;background:rgba(5,150,105,.08);padding:8px 12px;border-radius:6px">
+        diligent-flow-production-<br>afd7.up.railway.app
+      </div>
+      <div style="margin-top:10px;font-size:12px;color:#64748b">Separate service · Claude shopping agent</div>
+    </div>
+    <div class="card orange">
+      <h3>&#x2601;&#xFE0F; Salesforce Sandbox</h3>
+      <p style="margin-bottom:10px">B2B Commerce org where real orders are placed.</p>
+      <div style="font-family:monospace;font-size:11px;color:#fb923c;background:rgba(249,115,22,.08);padding:8px 12px;border-radius:6px">
+        atci-b2b-lex--b2bpoc.sandbox<br>.my.salesforce.com
+      </div>
+      <div style="margin-top:10px;font-size:12px;color:#64748b">Data org · Orders + Accounts</div>
+    </div>
+  </div>
+
+  <div class="info-box orange">
+    <div class="icon">&#x26A0;&#xFE0F;</div>
+    <p><strong>Security rule:</strong> All Salesforce data (orders, cart items, accounts) must only be written to <code>atci-b2b-lex--b2bpoc.sandbox</code>. Never push data to <code>ets2-org--1storedpro.sandbox.lightning.force.com</code>.</p>
+  </div>
+
+  <!-- ─────────────────── DOCKER ────────────────────────────────────────── -->
+  <div class="section">
+    <h2><span class="icon">&#x1F433;</span> Docker Build (Dockerfile.gemini)</h2>
+    <div class="sub">Two-stage: Node.js builds React → Python serves everything</div>
+  </div>
+
+  <div class="docker-stages">
+    <div class="docker-stage">
+      <div class="docker-stage-header node">&#x1F9F1; Stage 1 — Builder (node:20-slim)</div>
+      <div class="docker-cmd"><span class="kw">FROM</span>&nbsp;<span class="val">python:3.11-slim AS builder</span></div>
+      <div class="docker-cmd"><span class="kw">RUN</span>&nbsp;install Node.js 20 via NodeSource</div>
+      <div class="docker-cmd"><span class="kw">COPY</span>&nbsp;examples/gemini-storefront/package*.json</div>
+      <div class="docker-cmd"><span class="kw">RUN</span>&nbsp;<span class="val">npm ci</span> &nbsp;← layer-cached by package-lock hash</div>
+      <div class="docker-cmd"><span class="kw">COPY</span>&nbsp;examples/gemini-storefront/</div>
+      <div class="docker-cmd"><span class="kw">RUN</span>&nbsp;<span class="val">npm run build</span> &nbsp;→ dist/ with hashed filenames</div>
+    </div>
+
+    <div class="docker-arrow">→</div>
+
+    <div class="docker-stage">
+      <div class="docker-stage-header python">&#x1F40D; Stage 2 — Runtime (python:3.11-slim)</div>
+      <div class="docker-cmd"><span class="kw">COPY</span>&nbsp;requirements-gemini.txt</div>
+      <div class="docker-cmd"><span class="kw">RUN</span>&nbsp;pip install fastapi uvicorn httpx google-genai</div>
+      <div class="docker-cmd"><span class="kw">COPY</span>&nbsp;scripts/gemini_web_server.py</div>
+      <div class="docker-cmd"><span class="kw">COPY</span>&nbsp;examples/demo_common/gemini_ucp_agent.py</div>
+      <div class="docker-cmd"><span class="kw">COPY --from=builder</span>&nbsp;<span class="val">/build/storefront/dist</span></div>
+      <div class="docker-cmd"><span class="kw">CMD</span>&nbsp;<span class="val">python scripts/gemini_web_server.py</span></div>
+    </div>
+  </div>
+
+  <div class="info-box blue">
+    <div class="icon">&#x26A1;</div>
+    <p><strong>Why one container?</strong> FastAPI mounts <code>dist/</code> as a static files route. Both the React app and the <code>/api/*</code> endpoints run on the same port (8090 → Railway's <code>PORT</code>), so no CORS configuration is needed in production and there's no separate web server (nginx) to maintain.</p>
+  </div>
+
+  <!-- ─────────────────── REQUEST FLOW ──────────────────────────────────── -->
+  <div class="section">
+    <h2><span class="icon">&#x1F504;</span> Request Flow — Place a Purchase Order</h2>
+    <div class="sub">Full trace from user click to Salesforce order number</div>
+  </div>
+
+  <div class="diag">
+    <div class="diag-title">Browser → Railway → Gemini → Salesforce (10 steps)</div>
+    <div class="req-flow">
+      <div class="req-step active">
+        <div class="req-num">1</div>
+        <div class="req-body">
+          <div class="req-label">User enters PO number and clicks "Place →"</div>
+          <div class="req-detail">CartSidebar.submitPO() → checkoutPO() → sendMessage(text)</div>
+        </div>
+      </div>
+      <div class="req-step active">
+        <div class="req-num">2</div>
+        <div class="req-body">
+          <div class="req-label">Browser: POST /api/chat</div>
+          <div class="req-detail">{ "message": "Please place a purchase order for: [items]. PO: XXXXX" }</div>
+        </div>
+      </div>
+      <div class="req-step active">
+        <div class="req-num">3</div>
+        <div class="req-body">
+          <div class="req-label">Railway resets per-turn state</div>
+          <div class="req-detail">agent.last_tool_calls = [] · agent.cart_additions = [] · agent.checkout_session = None</div>
+        </div>
+      </div>
+      <div class="req-step agent">
+        <div class="req-num">4</div>
+        <div class="req-body">
+          <div class="req-label">Railway → Google Gemini API: generate_content()</div>
+          <div class="req-detail">Sends full conversation history + tool declarations · Model: gemini-3.6-flash</div>
+        </div>
+      </div>
+      <div class="req-step agent">
+        <div class="req-num">5</div>
+        <div class="req-body">
+          <div class="req-label">Gemini returns function_call: place_b2b_order</div>
+          <div class="req-detail">{ "payment_handler": "purchase_order", "po_number": "XXXXX" }</div>
+        </div>
+      </div>
+      <div class="req-step sf">
+        <div class="req-num">6</div>
+        <div class="req-body">
+          <div class="req-label">Railway → Salesforce: OAuth token exchange</div>
+          <div class="req-detail">POST {SF_COMMUNITY_URL}/services/oauth2/token (Connected App credentials)</div>
+        </div>
+      </div>
+      <div class="req-step sf">
+        <div class="req-num">7</div>
+        <div class="req-body">
+          <div class="req-label">Railway → Salesforce: Create/get WebCart, add CartItems, set PO</div>
+          <div class="req-detail">B2B Commerce REST v62: /commerce/webstores/{id}/carts · /cartItems · PATCH cart</div>
+        </div>
+      </div>
+      <div class="req-step sf">
+        <div class="req-num">8</div>
+        <div class="req-body">
+          <div class="req-label">Railway → Salesforce: Create Order SObject + OrderItems</div>
+          <div class="req-detail">POST /services/data/v62.0/sobjects/Order · sobjects/OrderItem (batch)</div>
+        </div>
+      </div>
+      <div class="req-step sf">
+        <div class="req-num">9</div>
+        <div class="req-body">
+          <div class="req-label">Railway → Salesforce: Activate order, read OrderNumber</div>
+          <div class="req-detail">PATCH Order Status=Activated · GET Order.OrderNumber → e.g. "00000121"</div>
+        </div>
+      </div>
+      <div class="req-step active">
+        <div class="req-num">10</div>
+        <div class="req-body">
+          <div class="req-label">Railway → Browser: 200 response</div>
+          <div class="req-detail">{ reply, tool_calls: [{tool:"place_b2b_order"}], checkout_session: {status:"placed", order_id:"00000121"} }</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─────────────────── LAYER STACK ───────────────────────────────────── -->
+  <div class="section">
+    <h2><span class="icon">&#x1F5C3;&#xFE0F;</span> Technology Stack</h2>
+    <div class="sub">Every layer from user interface to data store</div>
+  </div>
+
+  <div class="layer-stack">
+    <div class="layer l1">
+      <div class="layer-icon">&#x1F310;</div>
+      <div class="layer-name">React 18 + TypeScript</div>
+      <div class="layer-tech">Vite SPA · useState/useCallback/useEffect hooks · CartSidebar, ChatPanel, LoginScreen</div>
+      <div class="layer-note">examples/gemini-storefront/src/</div>
+    </div>
+    <div class="layer l2">
+      <div class="layer-icon">&#x26A1;</div>
+      <div class="layer-name">FastAPI + Uvicorn</div>
+      <div class="layer-tech">Python 3.11 · async endpoints · StaticFiles mount for dist/ · CORSMiddleware for dev</div>
+      <div class="layer-note">scripts/gemini_web_server.py</div>
+    </div>
+    <div class="layer l3">
+      <div class="layer-icon">&#x1F9E9;</div>
+      <div class="layer-name">GeminiUCPAgent</div>
+      <div class="layer-tech">Auto-discovers UCP manifest · builds FunctionDeclaration from capabilities · runs agentic while-loop</div>
+      <div class="layer-note">examples/demo_common/gemini_ucp_agent.py</div>
+    </div>
+    <div class="layer l3">
+      <div class="layer-icon">&#x1F6D2;</div>
+      <div class="layer-name">TrackedAgent</div>
+      <div class="layer-tech">Subclass of GeminiUCPAgent · persistent cart list · cart_additions, last_tool_calls, checkout_session per turn</div>
+      <div class="layer-note">scripts/gemini_web_server.py</div>
+    </div>
+    <div class="layer l4">
+      <div class="layer-icon">&#x1F4E1;</div>
+      <div class="layer-name">UCP Router</div>
+      <div class="layer-tech">GET /.well-known/ucp · GET /ucp/products · POST /ucp/checkout-sessions · RFC 8615 compliant</div>
+      <div class="layer-note">examples/demo_common/ucp.py</div>
+    </div>
+    <div class="layer l5">
+      <div class="layer-icon">&#x1F9E0;</div>
+      <div class="layer-name">Google Gemini API</div>
+      <div class="layer-tech">google-genai SDK · gemini-3.6-flash model · function calling · stateful contents[] conversation</div>
+      <div class="layer-note">GEMINI_API_KEY env var · api.generativeai.googleapis.com</div>
+    </div>
+    <div class="layer l6">
+      <div class="layer-icon">&#x2601;&#xFE0F;</div>
+      <div class="layer-name">Salesforce B2B Commerce</div>
+      <div class="layer-tech">Experience Cloud OAuth · WebCart REST v62 · SObject API for Order/OrderItem · SOAP buyer login</div>
+      <div class="layer-note">atci-b2b-lex--b2bpoc.sandbox.my.salesforce.com</div>
+    </div>
+  </div>
+
+  <!-- ─────────────────── API SURFACE ───────────────────────────────────── -->
+  <div class="section">
+    <h2><span class="icon">&#x1F50C;</span> API Surface</h2>
+    <div class="sub">All endpoints served by the Railway Gemini web server</div>
+  </div>
+
+  <div class="grid-2">
+    <div>
+      <table>
+        <thead><tr><th>Endpoint</th><th>Purpose</th></tr></thead>
+        <tbody>
+          <tr><td><code>POST /api/login</code></td><td>Salesforce SOAP auth → sets buyer session</td></tr>
+          <tr><td><code>POST /api/chat</code></td><td>Main chat — runs full Gemini agentic loop</td></tr>
+          <tr><td><code>POST /api/cart</code></td><td>Direct add-to-cart bypass (product cards)</td></tr>
+          <tr><td><code>GET  /api/active-cart</code></td><td>Load server cart on page load</td></tr>
+          <tr><td><code>POST /api/reset</code></td><td>Clear conversation + cart state</td></tr>
+          <tr><td><code>GET  /api/session</code></td><td>Check if buyer session still valid</td></tr>
+          <tr><td><code>GET  /api/health</code></td><td>Liveness check — store + model info</td></tr>
+          <tr><td><code>POST /api/quotes</code></td><td>Save cart as named quote</td></tr>
+          <tr><td><code>GET  /api/quotes</code></td><td>List all saved quotes</td></tr>
+          <tr><td><code>GET  /api/quotes/{id}</code></td><td>Fetch a specific quote</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div>
+      <table>
+        <thead><tr><th>UCP Endpoint</th><th>Purpose</th></tr></thead>
+        <tbody>
+          <tr><td><code>GET  /.well-known/ucp</code></td><td>Capability manifest — Gemini discovery</td></tr>
+          <tr><td><code>GET  /ucp/products</code></td><td>Product search (q, category, price range)</td></tr>
+          <tr><td><code>GET  /ucp/products/{id}</code></td><td>Product detail</td></tr>
+          <tr><td><code>POST /ucp/checkout-sessions</code></td><td>Create pending checkout session</td></tr>
+          <tr><td><code>GET  /ucp/checkout-sessions/{id}</code></td><td>Session status</td></tr>
+        </tbody>
+      </table>
+      <div class="info-box green" style="margin-top:0">
+        <div class="icon">&#x1F4A1;</div>
+        <p>Both <strong>REST (UCP)</strong> and <strong>MCP transport</strong> are declared in the manifest, so Claude-based agents can use MCP while Gemini uses the REST endpoints — same storefront serves both.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─────────────────── ENV VARS ──────────────────────────────────────── -->
+  <div class="section">
+    <h2><span class="icon">&#x1F511;</span> Environment Variables</h2>
+    <div class="sub">Set in Railway service settings</div>
+  </div>
+
+  <table>
+    <thead><tr><th>Variable</th><th>Required</th><th>Value / Default</th><th>Used for</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><code>GEMINI_API_KEY</code></td>
+        <td><span class="tag tag-req">Required</span></td>
+        <td>Google AI Studio key</td>
+        <td>Gemini model API calls</td>
+      </tr>
+      <tr>
+        <td><code>UCP_BASE</code></td>
+        <td><span class="tag tag-opt">Optional</span></td>
+        <td><code>diligent-flow-...railway.app</code></td>
+        <td>Where agent fetches the UCP manifest at startup</td>
+      </tr>
+      <tr>
+        <td><code>GEMINI_MODEL</code></td>
+        <td><span class="tag tag-opt">Optional</span></td>
+        <td><code>gemini-3.6-flash</code></td>
+        <td>Model name passed to Gemini SDK</td>
+      </tr>
+      <tr>
+        <td><code>SF_INSTANCE_URL</code></td>
+        <td><span class="tag tag-req">Orders</span></td>
+        <td>Salesforce org base URL</td>
+        <td>All Salesforce REST API calls</td>
+      </tr>
+      <tr>
+        <td><code>SF_COMMUNITY_URL</code></td>
+        <td><span class="tag tag-req">Orders</span></td>
+        <td>Experience Cloud site URL</td>
+        <td>OAuth token endpoint (must match Connected App)</td>
+      </tr>
+      <tr>
+        <td><code>SF_CLIENT_ID</code></td>
+        <td><span class="tag tag-req">Orders</span></td>
+        <td>Connected App consumer key</td>
+        <td>OAuth 2.0 authentication</td>
+      </tr>
+      <tr>
+        <td><code>SF_CLIENT_SECRET</code></td>
+        <td><span class="tag tag-req">Orders</span></td>
+        <td>Connected App secret</td>
+        <td>OAuth 2.0 authentication</td>
+      </tr>
+      <tr>
+        <td><code>SF_CALLBACK_URL</code></td>
+        <td><span class="tag tag-opt">Optional</span></td>
+        <td>Railway app /api/oauth/callback</td>
+        <td>Must match Connected App redirect URI exactly</td>
+      </tr>
+      <tr>
+        <td><code>SF_BUYER_USER_ID</code></td>
+        <td><span class="tag tag-opt">Optional</span></td>
+        <td>Salesforce User ID</td>
+        <td>Locate buyer's active WebCart for B2B orders</td>
+      </tr>
+      <tr>
+        <td><code>PORT</code></td>
+        <td><span class="tag tag-auto">Auto (Railway)</span></td>
+        <td>Injected by Railway</td>
+        <td>Uvicorn listen port · fallback: <code>GEMINI_WEB_PORT=8090</code></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- ─────────────────── SALESFORCE FLOW ──────────────────────────────── -->
+  <div class="section">
+    <h2><span class="icon">&#x2601;&#xFE0F;</span> Salesforce B2B Order Flow</h2>
+    <div class="sub">9-step process inside place_b2b_order tool</div>
+  </div>
+
+  <div class="grid-3">
+    <div class="card orange">
+      <h3>1. Auth &amp; Session</h3>
+      <p>Buyer logs in via Salesforce SOAP (<code>login()</code>). Connected App OAuth token is fetched for B2B Commerce REST calls. Both credentials stored in server session.</p>
+    </div>
+    <div class="card orange">
+      <h3>2. Get / Create WebCart</h3>
+      <p><code>GET /commerce/webstores/{id}/carts?status=Active</code> — reuses an existing active cart or creates one if none found.</p>
+    </div>
+    <div class="card orange">
+      <h3>3. Add CartItems</h3>
+      <p><code>POST /carts/{id}/cartItems</code> — adds each item from <code>self.cart</code> with quantity. Existing items are updated in place.</p>
+    </div>
+    <div class="card orange">
+      <h3>4. Set PO Number</h3>
+      <p><code>PATCH /carts/{id}</code> with <code>poNumber</code>. Non-fatal — if the PATCH fails, order proceeds without PO reference.</p>
+    </div>
+    <div class="card orange">
+      <h3>5. Create Order SObject</h3>
+      <p><code>POST /sobjects/Order</code> with AccountId (from buyer's account), EffectiveDate, Status=Draft, BillingAddress from account.</p>
+    </div>
+    <div class="card orange">
+      <h3>6. Create OrderItems</h3>
+      <p><code>POST /sobjects/OrderItem</code> for each line — links to Order, Product2, Pricebook2Entry, quantity, unit price.</p>
+    </div>
+    <div class="card orange">
+      <h3>7. Activate Order</h3>
+      <p><code>PATCH /sobjects/Order/{id}</code> with <code>Status=Activated</code>. This triggers Salesforce order processing workflows.</p>
+    </div>
+    <div class="card orange">
+      <h3>8. Read OrderNumber</h3>
+      <p><code>GET /sobjects/Order/{id}?fields=OrderNumber,Status,TotalAmount</code> → returns the human-readable order number (e.g. <code>00000121</code>).</p>
+    </div>
+    <div class="card orange">
+      <h3>9. Close Cart</h3>
+      <p>Server clears <code>self.cart</code>. Optionally closes the WebCart. <code>checkout_session.status = "placed"</code> signals the React frontend to clear the cart sidebar.</p>
+    </div>
+  </div>
+
+  <!-- ─────────────────── PORT MAP ──────────────────────────────────────── -->
+  <div class="section">
+    <h2><span class="icon">&#x1F517;</span> Ports &amp; URLs</h2>
+    <div class="sub">Local development vs. Railway production</div>
+  </div>
+
+  <div class="grid-2">
+    <div class="diag">
+      <div class="diag-title">Local Development</div>
+      <div class="port-row">
+        <div class="port-num">5173</div>
+        <div class="port-name">Vite Dev Server</div>
+        <div class="port-desc">React HMR · proxies /api/* to :8090</div>
+      </div>
+      <div class="port-row">
+        <div class="port-num">8090</div>
+        <div class="port-name">Gemini FastAPI</div>
+        <div class="port-desc">Python backend · /api/* + UCP endpoints</div>
+      </div>
+      <div class="port-row">
+        <div class="port-num" style="color:#34d399;background:rgba(5,150,105,.12)">ext</div>
+        <div class="port-name">UCP backend</div>
+        <div class="port-desc">diligent-flow-*.railway.app (remote, not local)</div>
+      </div>
+      <div class="port-row">
+        <div class="port-num" style="color:#fb923c;background:rgba(249,115,22,.12)">443</div>
+        <div class="port-name">Gemini API</div>
+        <div class="port-desc">api.generativeai.googleapis.com (HTTPS)</div>
+      </div>
+      <div class="port-row">
+        <div class="port-num" style="color:#fb923c;background:rgba(249,115,22,.12)">443</div>
+        <div class="port-name">Salesforce</div>
+        <div class="port-desc">atci-b2b-lex--b2bpoc.sandbox... (HTTPS)</div>
+      </div>
+    </div>
+    <div class="diag">
+      <div class="diag-title">Railway Production (single container)</div>
+      <div class="port-row">
+        <div class="port-num" style="color:#a78bfa;background:rgba(139,92,246,.12)">443</div>
+        <div class="port-name">HTTPS (Railway TLS)</div>
+        <div class="port-desc">Railway terminates TLS, forwards to container PORT</div>
+      </div>
+      <div class="port-row">
+        <div class="port-num">$PORT</div>
+        <div class="port-name">Uvicorn (Python)</div>
+        <div class="port-desc">Serves React dist/ AND /api/* from single process</div>
+      </div>
+      <div class="port-row">
+        <div class="port-num" style="color:#34d399;background:rgba(5,150,105,.12)">443</div>
+        <div class="port-name">UCP backend</div>
+        <div class="port-desc">diligent-flow-*.railway.app (HTTPS, separate service)</div>
+      </div>
+      <div class="port-row">
+        <div class="port-num" style="color:#fb923c;background:rgba(249,115,22,.12)">443</div>
+        <div class="port-name">Gemini API</div>
+        <div class="port-desc">Outbound HTTPS from Railway container</div>
+      </div>
+      <div class="port-row">
+        <div class="port-num" style="color:#fb923c;background:rgba(249,115,22,.12)">443</div>
+        <div class="port-name">Salesforce</div>
+        <div class="port-desc">Outbound HTTPS · IP range may need Salesforce trusted IP allowlist</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─────────────────── KNOWN LIMITS ──────────────────────────────────── -->
+  <div class="section">
+    <h2><span class="icon">&#x26A0;&#xFE0F;</span> Known Architectural Constraints</h2>
+  </div>
+
+  <div class="grid-2">
+    <div class="card yellow">
+      <h3>In-Memory State Only</h3>
+      <p>The agent instance, cart, quotes, and conversation history live in Railway process memory. A Railway redeploy or service restart wipes all state. Users must log in again after a deploy.</p>
+    </div>
+    <div class="card yellow">
+      <h3>Single Agent Instance</h3>
+      <p>One <code>TrackedAgent</code> object is shared across all HTTP requests. A single-user demo. For multi-user production: session isolation per user ID would be required.</p>
+    </div>
+    <div class="card yellow">
+      <h3>Salesforce IP Allowlist</h3>
+      <p>Railway's egress IPs must be added to Salesforce Trusted IP Ranges for the Connected App, or OAuth will be blocked. Railway IPs change with deploys.</p>
+    </div>
+    <div class="card yellow">
+      <h3>Full History Each Turn</h3>
+      <p>Gemini receives the full <code>contents[]</code> on every turn (no server-side pruning). Long sessions increase token usage and latency linearly.</p>
+    </div>
+  </div>
+
+</div><!-- /main -->
+
+<footer>
+  Source: <code>scripts/gemini_web_server.py</code> · <code>examples/demo_common/gemini_ucp_agent.py</code> · <code>examples/demo_common/ucp.py</code> · <code>Dockerfile.gemini</code>
+</footer>
+
+</body>
+</html>

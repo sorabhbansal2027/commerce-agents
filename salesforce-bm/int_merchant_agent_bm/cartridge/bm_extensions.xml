@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<extensions xmlns="http://www.demandware.com/xml/bmmodule/1.0">
+    <!--
+        Adds "Merchant AI Agent" to the Merchant Tools left navigation.
+        Install: Administration > Sites > Manage Sites > Business Manager > Cartridges
+        Add "int_merchant_agent_bm" to the cartridge path, then reimport or
+        use Site Development > Import & Export to upload this cartridge zip.
+    -->
+    <menuaction
+        name="Merchant AI Agent"
+        id="merchant-ai-agent-launch"
+        site="true">
+        <description>AI-powered merchant analytics and commerce assistant</description>
+        <class>MerchantAgent-Launch</class>
+        <icon>icon_catalog.gif</icon>
+    </menuaction>
+</extensions>

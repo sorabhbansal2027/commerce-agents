@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sequence Diagrams — Flow 1 & Flow 2</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0d1117; color: #e6edf3; }
+  .page { max-width: 1200px; margin: 0 auto; padding: 36px 24px 64px; }
+
+  .hero { text-align: center; margin-bottom: 40px; }
+  .hero h1 { font-size: 21px; font-weight: 700; }
+  .hero p  { font-size: 13px; color: #8b949e; margin-top: 6px; }
+
+  /* ── hosting key ── */
+  .hosting-key {
+    display: flex; flex-wrap: wrap; justify-content: center; gap: 10px 20px;
+    background: #161b22; border: 1px solid #30363d; border-radius: 10px;
+    padding: 12px 20px; margin-bottom: 36px;
+  }
+  .hk-item { display: flex; align-items: center; gap: 6px; font-size: 11px; }
+  .hk-dot  { width: 10px; height: 10px; border-radius: 3px; }
+
+  /* ── flow sections ── */
+  .flow-section { margin-bottom: 52px; }
+  .flow-header {
+    display: flex; align-items: center; gap: 12px;
+    margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid #21262d;
+  }
+  .flow-num {
+    width: 32px; height: 32px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; font-weight: 700; flex-shrink: 0;
+  }
+  .flow-title  { font-size: 16px; font-weight: 700; }
+  .flow-phrase {
+    font-size: 12px; font-style: italic; color: #8b949e; margin-top: 2px;
+  }
+
+  /* ── participant legend ── */
+  .participant-legend {
+    display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 18px;
+  }
+  .p-chip {
+    display: flex; align-items: center; gap: 6px;
+    border: 1px solid; border-radius: 8px; padding: 5px 10px;
+    font-size: 11px;
+  }
+  .p-chip-icon { font-size: 14px; }
+  .p-chip-name { font-weight: 700; }
+  .p-chip-sub  { color: #8b949e; font-size: 10px; }
+
+  /* railway */
+  .c-railway { background:#0d1f33; border-color:#1e4976; color:#79c0ff; }
+  .c-railway .p-chip-name { color:#79c0ff; }
+  /* google */
+  .c-google  { background:#1a1000; border-color:#4a3800; color:#e3b341; }
+  .c-google  .p-chip-name { color:#e3b341; }
+  /* external */
+  .c-ext     { background:#1a0d1a; border-color:#4a1a4a; color:#d2a8ff; }
+  .c-ext     .p-chip-name { color:#d2a8ff; }
+  /* browser */
+  .c-browser { background:#161b22; border-color:#30363d; color:#8b949e; }
+  .c-browser .p-chip-name { color:#e6edf3; }
+
+  /* ── mermaid wrapper ── */
+  .diagram-wrap {
+    background: #0d1117; border: 1px solid #21262d; border-radius: 12px;
+    padding: 24px 16px; overflow-x: auto;
+  }
+  .diagram-wrap .mermaid { min-width: 900px; }
+
+  /* ── zone banner ── */
+  .zone-bar {
+    display: flex; gap: 0; margin-bottom: 14px; border-radius: 8px; overflow: hidden;
+    border: 1px solid #21262d; font-size: 10px; font-weight: 700;
+    letter-spacing: .07em; text-transform: uppercase;
+  }
+  .zone-seg { padding: 5px 12px; flex: 1; text-align: center; }
+  .zone-seg.browser { background:#1c2128; color:#8b949e; }
+  .zone-seg.railway { background:#0d1f33; color:#79c0ff; }
+  .zone-seg.google  { background:#1a1000; color:#e3b341; }
+  .zone-seg.sf      { background:#1a0d1a; color:#d2a8ff; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- HERO -->
+  <div class="hero">
+    <h1>Sequence Diagrams — Flow 1 &amp; Flow 2</h1>
+    <p>Hosted server · SDK · participant for each step</p>
+  </div>
+
+  <!-- HOSTING KEY -->
+  <div class="hosting-key">
+    <div class="hk-item"><div class="hk-dot" style="background:#1e4976;"></div><strong style="color:#79c0ff;">Railway</strong> — single Docker container (FastAPI + React SPA + UCP + TrackedAgent)</div>
+    <div class="hk-item"><div class="hk-dot" style="background:#4a3800;"></div><strong style="color:#e3b341;">Google Cloud</strong> — Gemini API (gemini-2.0-flash, external)</div>
+    <div class="hk-item"><div class="hk-dot" style="background:#4a1a4a;"></div><strong style="color:#d2a8ff;">Salesforce B2B</strong> — external org (REST + SOQL)</div>
+    <div class="hk-item"><div class="hk-dot" style="background:#30363d;"></div><strong style="color:#e6edf3;">Browser</strong> — user's device</div>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       FLOW 1
+       ══════════════════════════════════════════ -->
+  <div class="flow-section">
+    <div class="flow-header">
+      <div class="flow-num" style="background:#0d1f33;border:2px solid #1e4976;color:#79c0ff;">1</div>
+      <div>
+        <div class="flow-title">Product Discovery</div>
+        <div class="flow-phrase">"Show me laptops under $1,200"</div>
+      </div>
+    </div>
+
+    <!-- participant chips -->
+    <div class="participant-legend">
+      <div class="p-chip c-browser">
+        <span class="p-chip-icon">👤</span>
+        <div><div class="p-chip-name">User</div><div class="p-chip-sub">Browser</div></div>
+      </div>
+      <div class="p-chip c-railway">
+        <span class="p-chip-icon">⚛️</span>
+        <div><div class="p-chip-name">React SPA</div><div class="p-chip-sub">Railway · react 18 · vite 5 · fetch API</div></div>
+      </div>
+      <div class="p-chip c-railway">
+        <span class="p-chip-icon">⚡</span>
+        <div><div class="p-chip-name">FastAPI</div><div class="p-chip-sub">Railway · uvicorn · port 8090 · pydantic</div></div>
+      </div>
+      <div class="p-chip c-railway">
+        <span class="p-chip-icon">🔄</span>
+        <div><div class="p-chip-name">TrackedAgent</div><div class="p-chip-sub">Railway · google-genai SDK · httpx</div></div>
+      </div>
+      <div class="p-chip c-google">
+        <span class="p-chip-icon">🤖</span>
+        <div><div class="p-chip-name">Gemini API</div><div class="p-chip-sub">Google Cloud · gemini-2.0-flash</div></div>
+      </div>
+      <div class="p-chip c-railway">
+        <span class="p-chip-icon">🔗</span>
+        <div><div class="p-chip-name">UCP Endpoints</div><div class="p-chip-sub">Railway · FastAPI router · ucp.py</div></div>
+      </div>
+      <div class="p-chip c-ext">
+        <span class="p-chip-icon">☁️</span>
+        <div><div class="p-chip-name">Salesforce B2B</div><div class="p-chip-sub">External · REST API · SOQL</div></div>
+      </div>
+    </div>
+
+    <div class="zone-bar">
+      <div class="zone-seg browser">Browser</div>
+      <div class="zone-seg railway">Railway (Docker container)</div>
+      <div class="zone-seg google">Google Cloud</div>
+      <div class="zone-seg railway">Railway</div>
+      <div class="zone-seg sf">Salesforce</div>
+    </div>
+
+    <div class="diagram-wrap">
+      <div class="mermaid">
+%%{init: {'theme': 'dark'}}%%
+sequenceDiagram
+    autonumber
+    actor User as User
+    participant React as React SPA
+    participant FastAPI as FastAPI
+    participant Agent as TrackedAgent
+    participant Gemini as Gemini API
+    participant UCP as UCP Endpoints
+    participant SF as Salesforce B2B
+
+    Note over React,UCP: Railway - Docker container - port 8090
+    Note over React: react 18 + vite 5 + fetch API
+    Note over FastAPI: uvicorn + pydantic
+    Note over Agent: google-genai SDK + httpx
+    Note over Gemini: Google Cloud - gemini-2.0-flash
+    Note over UCP: FastAPI router - ucp.py
+    Note over SF: External - REST API + SOQL
+
+    User->>React: Show me laptops under $1,200
+    React->>FastAPI: POST /api/chat - fetch API
+    Note over FastAPI: pydantic validates ChatRequest
+
+    FastAPI->>Agent: reset last_products and last_tool_calls
+    Agent->>Gemini: genai.Client generate_content
+    Note over Agent,Gemini: google-genai SDK - GenerateContentConfig with FunctionDeclarations built from UCP manifest
+    Note over Gemini: Reads tool definitions and decides to call search_products
+
+    Gemini-->>Agent: FunctionCall - search_products - query laptop - max_price 1200
+
+    Agent->>Agent: record in last_tool_calls - call _call_ucp
+    Agent->>UCP: httpx GET /ucp/products?q=laptop&max_price=1200
+
+    UCP->>SF: OAuth Bearer JWT token - cached
+    UCP->>SF: SOQL SELECT from ProductCatalog WHERE UnitPrice < 1200
+    SF-->>UCP: product list - id title price currency image_url in_stock
+
+    UCP-->>Agent: products - ProBook 440 - EliteBook 640
+    Agent->>Agent: store in last_products
+
+    Agent->>Gemini: FunctionResponse role user - search_products result
+    Note over Gemini: No more tool calls needed - generates reply
+
+    Gemini-->>Agent: Here are laptops under $1,200 - ProBook 440 G11 $1,099
+
+    Agent-->>FastAPI: reply + last_products + last_tool_calls
+    FastAPI-->>React: HTTP 200 - reply products tool_calls cart_additions
+    Note over React: useState updates messages and cartItems
+
+    React-->>User: Chat reply + product cards with Add to Cart buttons
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       FLOW 2
+       ══════════════════════════════════════════ -->
+  <div class="flow-section">
+    <div class="flow-header">
+      <div class="flow-num" style="background:#0d1f0d;border:2px solid #1e4a1e;color:#56d364;">2</div>
+      <div>
+        <div class="flow-title">Add to Cart</div>
+        <div class="flow-phrase">"Add 2 ProBook to my cart"</div>
+      </div>
+    </div>
+
+    <!-- participant chips -->
+    <div class="participant-legend">
+      <div class="p-chip c-browser">
+        <span class="p-chip-icon">👤</span>
+        <div><div class="p-chip-name">User</div><div class="p-chip-sub">Browser</div></div>
+      </div>
+      <div class="p-chip c-railway">
+        <span class="p-chip-icon">⚛️</span>
+        <div><div class="p-chip-name">React SPA</div><div class="p-chip-sub">Railway · react 18 · useCallback · fetch API</div></div>
+      </div>
+      <div class="p-chip c-railway">
+        <span class="p-chip-icon">⚡</span>
+        <div><div class="p-chip-name">FastAPI</div><div class="p-chip-sub">Railway · uvicorn · port 8090 · pydantic</div></div>
+      </div>
+      <div class="p-chip c-railway">
+        <span class="p-chip-icon">🔄</span>
+        <div><div class="p-chip-name">TrackedAgent</div><div class="p-chip-sub">Railway · google-genai SDK · self.cart[] in-memory</div></div>
+      </div>
+      <div class="p-chip c-google">
+        <span class="p-chip-icon">🤖</span>
+        <div><div class="p-chip-name">Gemini API</div><div class="p-chip-sub">Google Cloud · gemini-2.0-flash</div></div>
+      </div>
+      <div class="p-chip c-railway">
+        <span class="p-chip-icon">🔗</span>
+        <div><div class="p-chip-name">UCP Endpoints</div><div class="p-chip-sub">Railway · FastAPI router · ucp.py</div></div>
+      </div>
+      <div class="p-chip c-ext">
+        <span class="p-chip-icon">☁️</span>
+        <div><div class="p-chip-name">Salesforce B2B</div><div class="p-chip-sub">External · SObject REST API</div></div>
+      </div>
+    </div>
+
+    <div class="zone-bar">
+      <div class="zone-seg browser">Browser</div>
+      <div class="zone-seg railway">Railway (Docker container)</div>
+      <div class="zone-seg google">Google Cloud</div>
+      <div class="zone-seg railway">Railway</div>
+      <div class="zone-seg sf">Salesforce</div>
+    </div>
+
+    <div class="diagram-wrap">
+      <div class="mermaid">
+%%{init: {'theme': 'dark'}}%%
+sequenceDiagram
+    autonumber
+    actor User as User
+    participant React as React SPA
+    participant FastAPI as FastAPI
+    participant Agent as TrackedAgent
+    participant Gemini as Gemini API
+    participant UCP as UCP Endpoints
+    participant SF as Salesforce B2B
+
+    Note over React,UCP: Railway - Docker container - port 8090
+    Note over React: react 18 + useCallback + useEffect + fetch API
+    Note over FastAPI: uvicorn + pydantic
+    Note over Agent: google-genai SDK + in-memory self.cart
+    Note over Gemini: Google Cloud - gemini-2.0-flash
+    Note over UCP: FastAPI router - ucp.py
+    Note over SF: External - SObject REST API
+
+    alt User types message
+        User->>React: Add 2 ProBook to my cart
+        React->>FastAPI: POST /api/chat via fetch API
+    else User clicks Add to Cart button on card
+        User->>React: Click Add to Cart button
+        React->>FastAPI: POST /api/cart via fetch API
+    end
+
+    FastAPI->>Agent: reset cart_additions and last_tool_calls
+    Agent->>Gemini: genai.Client generate_content
+    Note over Agent,Gemini: google-genai SDK - history includes prior search - no re-search needed
+    Note over Gemini: Resolves ProBook from conversation history - decides add_to_cart
+
+    Gemini-->>Agent: FunctionCall - add_to_cart - product_id P-001 - quantity 2
+
+    Agent->>Agent: append to self.cart and self.cart_additions - record last_tool_calls
+    Agent->>UCP: httpx POST /ucp/checkout-sessions - items product_id P-001 qty 2
+
+    UCP->>SF: OAuth Bearer JWT token - cached
+    UCP->>SF: POST sobjects/WebCart - AccountId and EffectiveAccountId
+    SF-->>UCP: WebCart id 0a8xx - status Active
+
+    UCP->>SF: POST sobjects/CartItem - CartId 0a8xx - Product2Id P-001 - Quantity 2
+    SF-->>UCP: CartItem id 0a9xx - Quantity 2 - TotalPrice 2198.00
+
+    UCP-->>Agent: session_id 0a8xx - status active - total 2198.00
+
+    Agent->>Gemini: FunctionResponse role user - add_to_cart result session active
+    Note over Gemini: Agentic loop ends - generates confirmation reply
+
+    Gemini-->>Agent: Added 2 HP ProBook 440 G11 to your cart. Total $2198.00
+
+    Agent-->>FastAPI: reply + cart_additions + last_tool_calls
+    FastAPI-->>React: HTTP 200 - reply tool_calls cart_additions checkout_session
+    Note over React: useCallback detects cart_additions - setCartItems updates state
+    Note over React: useEffect watchdog monitors checkout_session status
+
+    React-->>User: Cart sidebar shows ProBook x2 - confirmation reply in chat
+      </div>
+    </div>
+  </div>
+
+  <div style="text-align:center; color:#586069; font-size:11px; margin-top:8px;">
+    commerce-agents · Gemini UCP · Railway single-container deployment · google-genai SDK
+  </div>
+
+</div>
+
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    securityLevel: 'loose',
+    sequence: {
+      actorMargin: 40,
+      width: 155,
+      height: 60,
+      boxMargin: 10,
+      messageMargin: 30,
+      mirrorActors: false,
+      useMaxWidth: true,
+      wrap: true,
+      wrapPadding: 10
+    }
+  });
+</script>
+</body>
+</html>

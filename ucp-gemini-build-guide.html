@@ -1,0 +1,850 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>How to Build a UCP Integration with Google Gemini</title>
+<style>
+  :root {
+    --bg: #07090f;
+    --surface: #0f1623;
+    --surface2: #161e2e;
+    --border: #1e2d45;
+    --accent: #059669;
+    --accent2: #34d399;
+    --blue: #3b82f6;
+    --purple: #8b5cf6;
+    --yellow: #f59e0b;
+    --red: #ef4444;
+    --text: #e2e8f0;
+    --muted: #64748b;
+    --code-bg: #0a1628;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 15px;
+    line-height: 1.65;
+  }
+
+  /* ── Layout ────────────────────────────────────────────────────────── */
+  .hero {
+    background: linear-gradient(135deg, #0a1628 0%, #0d2040 50%, #0a1e10 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 56px 48px 48px;
+    text-align: center;
+  }
+  .hero-badge {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: rgba(5,150,105,.15); border: 1px solid rgba(5,150,105,.3);
+    color: var(--accent2); border-radius: 999px; padding: 6px 16px;
+    font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+    margin-bottom: 20px;
+  }
+  .hero h1 {
+    font-size: 42px; font-weight: 800; line-height: 1.15;
+    background: linear-gradient(135deg, #34d399, #3b82f6);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    margin-bottom: 16px;
+  }
+  .hero p { font-size: 18px; color: #94a3b8; max-width: 700px; margin: 0 auto 28px; }
+  .hero-pills { display: flex; justify-content: center; flex-wrap: wrap; gap: 10px; }
+  .pill {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: 6px 14px; font-size: 13px; color: #94a3b8;
+  }
+  .pill strong { color: var(--text); }
+
+  .main { max-width: 1100px; margin: 0 auto; padding: 48px 32px 80px; }
+
+  /* ── Section headings ──────────────────────────────────────────────── */
+  .section-label {
+    display: flex; align-items: center; gap: 12px;
+    margin-bottom: 32px; margin-top: 64px;
+  }
+  .section-label:first-child { margin-top: 0; }
+  .step-num {
+    width: 36px; height: 36px; border-radius: 50%;
+    background: var(--accent); color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 800; font-size: 15px; flex-shrink: 0;
+  }
+  .step-num.blue { background: var(--blue); }
+  .step-num.purple { background: var(--purple); }
+  .step-num.yellow { background: var(--yellow); color: #000; }
+  .section-label h2 {
+    font-size: 24px; font-weight: 700; color: var(--text);
+  }
+  .section-label .sub { font-size: 14px; color: var(--muted); margin-top: 2px; }
+
+  /* ── Cards ─────────────────────────────────────────────────────────── */
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 14px; padding: 24px; margin-bottom: 20px;
+  }
+  .card h3 { font-size: 16px; font-weight: 700; color: var(--text); margin-bottom: 10px; }
+  .card p { color: #94a3b8; font-size: 14px; line-height: 1.7; }
+
+  .card-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+  .card-grid.three { grid-template-columns: 1fr 1fr 1fr; }
+
+  .card.accent-green { border-color: rgba(5,150,105,.4); background: rgba(5,150,105,.05); }
+  .card.accent-blue  { border-color: rgba(59,130,246,.4); background: rgba(59,130,246,.05); }
+  .card.accent-purple{ border-color: rgba(139,92,246,.4); background: rgba(139,92,246,.05); }
+  .card.accent-yellow{ border-color: rgba(245,158,11,.4); background: rgba(245,158,11,.05); }
+
+  /* ── Code blocks ────────────────────────────────────────────────────── */
+  .code-block {
+    background: var(--code-bg); border: 1px solid #1a2d4a;
+    border-radius: 10px; overflow: hidden; margin-bottom: 20px;
+  }
+  .code-header {
+    background: #0d2040; border-bottom: 1px solid #1a2d4a;
+    padding: 10px 16px; display: flex; align-items: center; justify-content: space-between;
+  }
+  .code-header .lang {
+    font-size: 11px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .06em; color: #64748b;
+  }
+  .code-header .filename { font-size: 12px; color: #94a3b8; font-family: monospace; }
+  pre {
+    padding: 20px; overflow-x: auto;
+    font-family: 'SF Mono', 'Fira Code', monospace; font-size: 13px; line-height: 1.7;
+  }
+  .kw   { color: #c084fc; }  /* keyword */
+  .fn   { color: #60a5fa; }  /* function */
+  .str  { color: #4ade80; }  /* string */
+  .cm   { color: #475569; font-style: italic; }  /* comment */
+  .num  { color: #fb923c; }  /* number */
+  .cls  { color: #f9a8d4; }  /* class */
+  .var  { color: #e2e8f0; }  /* default */
+  .dec  { color: #a5b4fc; }  /* decorator/special */
+
+  /* ── Flow diagram ─────────────────────────────────────────────────── */
+  .flow {
+    display: flex; align-items: stretch; gap: 0; margin-bottom: 32px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+    overflow: hidden;
+  }
+  .flow-step {
+    flex: 1; padding: 20px 16px; text-align: center; position: relative;
+    border-right: 1px solid var(--border);
+  }
+  .flow-step:last-child { border-right: none; }
+  .flow-step .icon { font-size: 28px; margin-bottom: 8px; }
+  .flow-step .label { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+  .flow-step .desc { font-size: 11px; color: var(--muted); line-height: 1.4; }
+  .flow-arrow {
+    position: absolute; right: -10px; top: 50%; transform: translateY(-50%);
+    color: var(--accent); font-size: 18px; z-index: 2;
+    background: var(--surface); padding: 0 2px;
+  }
+
+  /* ── Endpoint table ────────────────────────────────────────────────── */
+  table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 13px; }
+  th {
+    background: var(--surface2); text-align: left; padding: 10px 14px;
+    font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
+    color: var(--muted); border-bottom: 1px solid var(--border);
+  }
+  td { padding: 10px 14px; border-bottom: 1px solid rgba(30,45,69,.5); vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  .method {
+    display: inline-block; padding: 2px 8px; border-radius: 5px;
+    font-size: 11px; font-weight: 700; font-family: monospace;
+  }
+  .GET  { background: rgba(5,150,105,.2);  color: #34d399; }
+  .POST { background: rgba(59,130,246,.2); color: #60a5fa; }
+  .path { font-family: monospace; color: #a5b4fc; }
+
+  /* ── Checklist ─────────────────────────────────────────────────────── */
+  .checklist { list-style: none; margin-bottom: 20px; }
+  .checklist li {
+    display: flex; align-items: flex-start; gap: 12px;
+    padding: 10px 0; border-bottom: 1px solid rgba(30,45,69,.5);
+    font-size: 14px;
+  }
+  .checklist li:last-child { border-bottom: none; }
+  .checklist .check { color: var(--accent); font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+  .checklist .check.opt { color: var(--yellow); }
+
+  /* ── Info box ─────────────────────────────────────────────────────── */
+  .info-box {
+    border-radius: 10px; padding: 16px 20px; margin-bottom: 20px;
+    display: flex; gap: 14px; align-items: flex-start; font-size: 14px;
+  }
+  .info-box.green { background: rgba(5,150,105,.1); border: 1px solid rgba(5,150,105,.3); }
+  .info-box.blue  { background: rgba(59,130,246,.1); border: 1px solid rgba(59,130,246,.3); }
+  .info-box.yellow{ background: rgba(245,158,11,.1); border: 1px solid rgba(245,158,11,.3); }
+  .info-box .icon { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
+  .info-box p { color: #94a3b8; }
+  .info-box strong { color: var(--text); }
+
+  /* ── Separator ─────────────────────────────────────────────────────── */
+  hr { border: none; border-top: 1px solid var(--border); margin: 48px 0; }
+
+  /* ── Loop diagram ──────────────────────────────────────────────────── */
+  .loop-box {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 14px; padding: 28px; margin-bottom: 20px;
+  }
+  .loop-row {
+    display: flex; align-items: center; gap: 12px; margin-bottom: 12px;
+  }
+  .loop-row:last-child { margin-bottom: 0; }
+  .loop-node {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 8px; padding: 8px 14px;
+    font-size: 13px; font-weight: 600; white-space: nowrap;
+  }
+  .loop-node.gemini { border-color: #1d4ed8; background: rgba(59,130,246,.1); color: #93c5fd; }
+  .loop-node.ucp    { border-color: rgba(5,150,105,.4); background: rgba(5,150,105,.1); color: #6ee7b7; }
+  .loop-node.done   { border-color: #374151; background: #111827; color: #9ca3af; }
+  .loop-arrow { color: var(--muted); font-size: 20px; }
+  .loop-label { font-size: 12px; color: var(--muted); flex: 1; }
+
+  /* ── Footer ────────────────────────────────────────────────────────── */
+  footer {
+    text-align: center; color: var(--muted); font-size: 13px;
+    padding: 32px; border-top: 1px solid var(--border);
+  }
+  footer code { color: var(--accent2); background: rgba(52,211,153,.1); padding: 2px 6px; border-radius: 4px; }
+
+  @media (max-width: 768px) {
+    .card-grid, .card-grid.three { grid-template-columns: 1fr; }
+    .hero { padding: 36px 20px; }
+    .hero h1 { font-size: 28px; }
+    .main { padding: 32px 16px 60px; }
+    .flow { flex-direction: column; }
+    .flow-step { border-right: none; border-bottom: 1px solid var(--border); }
+    .flow-arrow { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="hero-badge">&#x1F9E9; Build Guide</div>
+  <h1>Building a UCP Storefront<br>for Google Gemini</h1>
+  <p>A step-by-step walkthrough of how this codebase implements the Universal Commerce Protocol so Gemini auto-discovers the storefront and shops through standard REST endpoints — no store-specific code on the agent side.</p>
+  <div class="hero-pills">
+    <div class="pill"><strong>Python 3.11+</strong> · FastAPI</div>
+    <div class="pill"><strong>google-genai</strong> · Gemini SDK</div>
+    <div class="pill"><strong>RFC 8615</strong> · /.well-known/ucp</div>
+    <div class="pill"><strong>Agentic loop</strong> · function calling</div>
+    <div class="pill"><strong>TrackedAgent</strong> · cart + orders</div>
+  </div>
+</div>
+
+<div class="main">
+
+  <!-- ─────────────── CONCEPT ─────────────────────────────────────────────── -->
+  <div class="section-label">
+    <div class="step-num">&#x2605;</div>
+    <div>
+      <h2>What is UCP?</h2>
+      <div class="sub">Universal Commerce Protocol — RFC 8615 manifest + REST endpoints</div>
+    </div>
+  </div>
+
+  <div class="info-box green">
+    <div class="icon">&#x1F4A1;</div>
+    <p><strong>The core idea:</strong> Publish a manifest at <code>GET /.well-known/ucp</code> describing your store's capabilities. Any UCP-aware AI agent (Gemini, Claude, or any LLM) fetches it at startup, reads which endpoints exist, and builds its own tool declarations dynamically — <strong>no store-specific code on the agent side</strong>.</p>
+  </div>
+
+  <div class="card-grid three">
+    <div class="card accent-green">
+      <h3>&#x1F4C4; Manifest</h3>
+      <p>Served at <code>/.well-known/ucp</code>. Declares capabilities (search, cart, checkout), endpoints, payment handlers, and transport options.</p>
+    </div>
+    <div class="card accent-blue">
+      <h3>&#x1F527; Agent Auto-Discovery</h3>
+      <p>Gemini fetches the manifest once at startup. <code>GeminiUCPAgent._build_tools()</code> turns each capability into a <code>FunctionDeclaration</code>.</p>
+    </div>
+    <div class="card accent-purple">
+      <h3>&#x1F504; Agentic Loop</h3>
+      <p>Gemini decides which UCP endpoints to call. The agent executes them as HTTP requests and feeds results back. Repeats until Gemini stops calling functions.</p>
+    </div>
+  </div>
+
+  <!-- ─────────────── STEP 1 ─────────────────────────────────────────────── -->
+  <div class="section-label">
+    <div class="step-num">1</div>
+    <div>
+      <h2>Publish the UCP Manifest</h2>
+      <div class="sub">examples/demo_common/ucp.py · build_ucp_manifest()</div>
+    </div>
+  </div>
+
+  <p style="color:#94a3b8;margin-bottom:20px">The manifest is the contract. Mount it at <code>GET /.well-known/ucp</code> (domain root per RFC 8615). Gemini reads it once and never needs updating unless your capabilities change.</p>
+
+  <div class="code-block">
+    <div class="code-header">
+      <span class="lang">Python</span>
+      <span class="filename">examples/demo_common/ucp.py — build_ucp_manifest()</span>
+    </div>
+    <pre><span class="kw">def</span> <span class="fn">build_ucp_manifest</span>(<span class="var">backend</span>, <span class="var">base_url</span>: <span class="cls">str</span>) <span class="kw">-&gt;</span> <span class="cls">dict</span>:
+    <span class="kw">return</span> {
+        <span class="str">"schema_version"</span>: <span class="str">"1.0"</span>,
+        <span class="str">"business"</span>: {
+            <span class="str">"name"</span>: backend.store_name,
+            <span class="str">"description"</span>: <span class="str">"B2B commerce storefront with product search and checkout."</span>,
+        },
+        <span class="str">"capabilities"</span>: {
+            <span class="str">"product_discovery"</span>: {
+                <span class="str">"supported"</span>: <span class="kw">True</span>,
+                <span class="str">"endpoints"</span>: {
+                    <span class="str">"search"</span>: <span class="str">f"</span><span class="var">{base_url}</span><span class="str">/ucp/products"</span>,
+                    <span class="str">"detail"</span>: <span class="str">f"</span><span class="var">{base_url}</span><span class="str">/ucp/products/{product_id}"</span>,
+                },
+                <span class="str">"features"</span>: [<span class="str">"full_text_search"</span>, <span class="str">"category_filter"</span>, <span class="str">"price_range_filter"</span>],
+            },
+            <span class="str">"checkout"</span>: {
+                <span class="str">"supported"</span>: <span class="kw">True</span>,
+                <span class="str">"endpoints"</span>: {
+                    <span class="str">"create_session"</span>: <span class="str">f"</span><span class="var">{base_url}</span><span class="str">/ucp/checkout-sessions"</span>,
+                },
+                <span class="str">"note"</span>: <span class="str">"Sessions are pending — no charge is made here."</span>,
+            },
+        },
+        <span class="str">"payment_handlers"</span>: [
+            {<span class="str">"id"</span>: <span class="str">"credit_card"</span>, <span class="str">"name"</span>: <span class="str">"Credit Card"</span>},
+            {<span class="str">"id"</span>: <span class="str">"purchase_order"</span>, <span class="str">"name"</span>: <span class="str">"Purchase Order (B2B)"</span>},
+        ],
+        <span class="str">"transport"</span>: {
+            <span class="str">"rest"</span>: {<span class="str">"base_url"</span>: <span class="var">base_url</span>, <span class="str">"auth"</span>: <span class="str">"UCP-Agent"</span>},
+            <span class="str">"mcp"</span>: {<span class="str">"description"</span>: <span class="str">"Richer Claude agent available over MCP."</span>},
+        },
+        <span class="str">"agent_hints"</span>: <span class="str">"Prefer MCP for complex journeys; REST for single-turn lookups."</span>,
+    }</pre>
+  </div>
+
+  <div class="info-box blue">
+    <div class="icon">&#x26A1;</div>
+    <p><strong>Key field: <code>capabilities</code></strong> — Gemini reads <code>product_discovery.supported</code> and <code>checkout.supported</code> to decide which tools to build. Add <code>cart_management.supported: true</code> if you expose cart endpoints. Add <code>features</code> arrays to make tool descriptions more precise.</p>
+  </div>
+
+  <!-- ─────────────── STEP 2 ─────────────────────────────────────────────── -->
+  <div class="section-label">
+    <div class="step-num">2</div>
+    <div>
+      <h2>Implement the REST Endpoints</h2>
+      <div class="sub">examples/demo_common/ucp.py — build_ucp_router()</div>
+    </div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Method</th><th>Path</th><th>Purpose</th><th>Auth</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="method GET">GET</span></td>
+        <td><span class="path">/.well-known/ucp</span></td>
+        <td>Capability manifest — Gemini fetches this once at startup</td>
+        <td>None (public)</td>
+      </tr>
+      <tr>
+        <td><span class="method GET">GET</span></td>
+        <td><span class="path">/ucp/products</span></td>
+        <td>Product search — supports <code>q</code>, <code>category</code>, <code>min_price</code>, <code>max_price</code>, <code>limit</code></td>
+        <td>None (public)</td>
+      </tr>
+      <tr>
+        <td><span class="method GET">GET</span></td>
+        <td><span class="path">/ucp/products/{id}</span></td>
+        <td>Product detail — Gemini calls this when it needs full specs</td>
+        <td>None (public)</td>
+      </tr>
+      <tr>
+        <td><span class="method POST">POST</span></td>
+        <td><span class="path">/ucp/checkout-sessions</span></td>
+        <td>Create pending checkout session — returns <code>status: "pending"</code>, no charge</td>
+        <td>UCP-Agent header</td>
+      </tr>
+      <tr>
+        <td><span class="method GET">GET</span></td>
+        <td><span class="path">/ucp/checkout-sessions/{id}</span></td>
+        <td>Retrieve session status</td>
+        <td>UCP-Agent header</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="code-block">
+    <div class="code-header">
+      <span class="lang">Python</span>
+      <span class="filename">examples/demo_common/ucp.py — product search endpoint</span>
+    </div>
+    <pre><span class="dec">@router.get</span>(<span class="str">"/ucp/products"</span>)
+<span class="kw">async def</span> <span class="fn">ucp_search_products</span>(
+    <span class="var">q</span>: <span class="cls">str</span> = <span class="str">""</span>,
+    <span class="var">category</span>: <span class="cls">str</span> | <span class="kw">None</span> = <span class="kw">None</span>,
+    <span class="var">min_price</span>: <span class="cls">float</span> | <span class="kw">None</span> = <span class="kw">None</span>,
+    <span class="var">max_price</span>: <span class="cls">float</span> | <span class="kw">None</span> = <span class="kw">None</span>,
+    <span class="var">limit</span>: <span class="cls">int</span> = <span class="num">10</span>,
+) -&gt; <span class="cls">Response</span>:
+    <span class="var">results</span> = [
+        <span class="fn">_listing_to_ucp</span>(<span class="var">p</span>)                     <span class="cm"># normalize to UCP schema</span>
+        <span class="kw">for</span> <span class="var">p</span> <span class="kw">in</span> <span class="var">backend</span>.<span class="var">products</span>.<span class="fn">values</span>()
+        <span class="kw">if</span> <span class="fn">_matches</span>(<span class="var">p</span>, <span class="var">q</span>, <span class="var">category</span>, <span class="var">min_price</span>, <span class="var">max_price</span>)
+    ][:<span class="var">limit</span>]
+    <span class="kw">return</span> <span class="cls">Response</span>(<span class="fn">json.dumps</span>({<span class="str">"products"</span>: <span class="var">results</span>, <span class="str">"total"</span>: <span class="fn">len</span>(<span class="var">results</span>)}))
+
+<span class="cm"># Each product must have: product_id, title, price, currency, in_stock</span>
+<span class="kw">def</span> <span class="fn">_listing_to_ucp</span>(<span class="var">p</span>) -&gt; <span class="cls">dict</span>:
+    <span class="kw">return</span> {
+        <span class="str">"product_id"</span>: <span class="var">p</span>.<span class="var">product_id</span>,
+        <span class="str">"title"</span>:      <span class="var">p</span>.<span class="var">title</span>,
+        <span class="str">"price"</span>:      <span class="var">p</span>.<span class="var">price</span>,
+        <span class="str">"currency"</span>:   <span class="var">p</span>.<span class="var">currency</span>,
+        <span class="str">"in_stock"</span>:   <span class="var">p</span>.<span class="var">in_stock</span>,
+        <span class="cm"># optional extras Gemini will use if present:</span>
+        <span class="str">"image_url"</span>:  <span class="var">p</span>.<span class="var">image_url</span>,
+        <span class="str">"category"</span>:   <span class="var">p</span>.<span class="var">category</span>,
+        <span class="str">"brand"</span>:      <span class="var">p</span>.<span class="var">brand</span>,
+    }</pre>
+  </div>
+
+  <!-- ─────────────── STEP 3 ─────────────────────────────────────────────── -->
+  <div class="section-label">
+    <div class="step-num">3</div>
+    <div>
+      <h2>Build the GeminiUCPAgent</h2>
+      <div class="sub">examples/demo_common/gemini_ucp_agent.py</div>
+    </div>
+  </div>
+
+  <p style="color:#94a3b8;margin-bottom:20px">The agent class has two jobs: (1) fetch the manifest and auto-build Gemini <code>FunctionDeclaration</code> objects, and (2) run the agentic loop — execute HTTP calls for each function Gemini requests, feed results back, repeat until Gemini stops calling functions.</p>
+
+  <div class="code-block">
+    <div class="code-header">
+      <span class="lang">Python</span>
+      <span class="filename">examples/demo_common/gemini_ucp_agent.py — __init__ and manifest discovery</span>
+    </div>
+    <pre><span class="kw">from</span> <span class="var">google</span> <span class="kw">import</span> <span class="var">genai</span>
+<span class="kw">from</span> <span class="var">google.genai</span> <span class="kw">import</span> <span class="var">types as gtypes</span>
+
+<span class="kw">class</span> <span class="cls">GeminiUCPAgent</span>:
+    <span class="kw">def</span> <span class="fn">__init__</span>(<span class="kw">self</span>, <span class="var">ucp_base</span>: <span class="cls">str</span>, *, <span class="var">model</span>=<span class="str">"gemini-3.6-flash"</span>, <span class="var">api_key</span>=<span class="kw">None</span>):
+        <span class="kw">self</span>.<span class="var">base</span> = <span class="var">ucp_base</span>.<span class="fn">rstrip</span>(<span class="str">"/"</span>)
+        <span class="kw">self</span>.<span class="var">_http</span> = <span class="var">httpx</span>.<span class="cls">Client</span>(<span class="var">timeout</span>=<span class="num">15.0</span>)
+        <span class="kw">self</span>.<span class="var">_client</span> = <span class="var">genai</span>.<span class="cls">Client</span>(<span class="var">api_key</span>=<span class="var">api_key</span> <span class="kw">or</span> <span class="var">os</span>.<span class="var">environ</span>[<span class="str">"GEMINI_API_KEY"</span>])
+
+        <span class="cm"># ① Fetch manifest from storefront</span>
+        <span class="var">resp</span> = <span class="kw">self</span>.<span class="var">_http</span>.<span class="fn">get</span>(<span class="str">f"</span><span class="var">{self.base}</span><span class="str">/.well-known/ucp"</span>)
+        <span class="kw">self</span>.<span class="var">manifest</span> = <span class="var">resp</span>.<span class="fn">json</span>()
+
+        <span class="cm"># ② Auto-build tool declarations from manifest capabilities</span>
+        <span class="kw">self</span>.<span class="var">_tools</span> = <span class="kw">self</span>.<span class="fn">_build_tools</span>()
+
+        <span class="cm"># ③ Build system prompt from manifest business info</span>
+        <span class="kw">self</span>.<span class="var">_config</span> = <span class="var">gtypes</span>.<span class="cls">GenerateContentConfig</span>(
+            <span class="var">tools</span>=<span class="kw">self</span>.<span class="var">_tools</span>,
+            <span class="var">system_instruction</span>=<span class="kw">self</span>.<span class="fn">_system_prompt</span>(),
+        )
+        <span class="kw">self</span>.<span class="var">_contents</span>: <span class="cls">list</span>[<span class="var">gtypes</span>.<span class="cls">Content</span>] = []   <span class="cm"># stateful history</span></pre>
+  </div>
+
+  <div class="code-block">
+    <div class="code-header">
+      <span class="lang">Python</span>
+      <span class="filename">examples/demo_common/gemini_ucp_agent.py — _build_tools() from manifest</span>
+    </div>
+    <pre><span class="kw">def</span> <span class="fn">_build_tools</span>(<span class="kw">self</span>) -&gt; <span class="cls">list</span>[<span class="var">gtypes</span>.<span class="cls">Tool</span>]:
+    <span class="var">caps</span> = <span class="kw">self</span>.<span class="var">manifest</span>.<span class="fn">get</span>(<span class="str">"capabilities"</span>, {})
+
+    <span class="cm"># ── Product search tool ───────────────────────────────────────────</span>
+    <span class="kw">if</span> <span class="var">caps</span>.<span class="fn">get</span>(<span class="str">"product_discovery"</span>, {}).<span class="fn">get</span>(<span class="str">"supported"</span>):
+        <span class="var">features</span> = <span class="var">caps</span>[<span class="str">"product_discovery"</span>].<span class="fn">get</span>(<span class="str">"features"</span>, [])
+        <span class="cm"># Tool description is built from manifest features — no hardcoding</span>
+        <span class="var">search_desc</span> = <span class="str">"Search the catalog."</span>
+        <span class="kw">if</span> <span class="str">"price_range_filter"</span> <span class="kw">in</span> <span class="var">features</span>:
+            <span class="var">search_desc</span> += <span class="str">" Supports price range filter."</span>
+
+    <span class="cm"># ── Checkout tool ────────────────────────────────────────────────</span>
+    <span class="kw">if</span> <span class="var">caps</span>.<span class="fn">get</span>(<span class="str">"checkout"</span>, {}).<span class="fn">get</span>(<span class="str">"supported"</span>):
+        <span class="var">payment_ids</span> = [
+            <span class="var">p</span>[<span class="str">"id"</span>] <span class="kw">for</span> <span class="var">p</span> <span class="kw">in</span> <span class="kw">self</span>.<span class="var">manifest</span>.<span class="fn">get</span>(<span class="str">"payment_handlers"</span>, [])
+        ]
+        <span class="cm"># Payment options come from manifest — works with any store</span>
+        <span class="var">ph_desc</span> = <span class="str">f"Options: </span><span class="var">{', '.join(payment_ids)}</span><span class="str">."</span>
+
+    <span class="cm"># Returns list[gtypes.Tool] with FunctionDeclaration objects</span>
+    <span class="cm"># Gemini uses these to decide when/how to call each endpoint</span></pre>
+  </div>
+
+  <!-- ─────────────── STEP 4 ─────────────────────────────────────────────── -->
+  <div class="section-label">
+    <div class="step-num">4</div>
+    <div>
+      <h2>Implement the Agentic Loop</h2>
+      <div class="sub">examples/demo_common/gemini_ucp_agent.py — send()</div>
+    </div>
+  </div>
+
+  <div class="loop-box">
+    <div class="loop-row">
+      <div class="loop-node gemini">User message</div>
+      <div class="loop-arrow">→</div>
+      <div class="loop-node gemini">Gemini<br><small style="color:#60a5fa">generate_content()</small></div>
+      <div class="loop-arrow">→</div>
+      <div class="loop-label">Has function_calls?</div>
+    </div>
+    <div class="loop-row" style="padding-left:40px">
+      <div class="loop-node ucp">YES → execute HTTP call<br><small style="color:#6ee7b7">_call_ucp(fn_name, args)</small></div>
+      <div class="loop-arrow">→</div>
+      <div class="loop-node ucp">Feed back as<br>function_response</div>
+      <div class="loop-arrow">→</div>
+      <div class="loop-node gemini" style="font-size:12px">Back to<br>Gemini ↑</div>
+    </div>
+    <div class="loop-row" style="padding-left:40px">
+      <div class="loop-node done">NO function_calls → collect text parts → return to user</div>
+    </div>
+  </div>
+
+  <div class="code-block">
+    <div class="code-header">
+      <span class="lang">Python</span>
+      <span class="filename">examples/demo_common/gemini_ucp_agent.py — send() agentic loop</span>
+    </div>
+    <pre><span class="kw">def</span> <span class="fn">send</span>(<span class="kw">self</span>, <span class="var">message</span>: <span class="cls">str</span>) -&gt; <span class="cls">str</span>:
+    <span class="kw">self</span>.<span class="var">_contents</span>.<span class="fn">append</span>(
+        <span class="var">gtypes</span>.<span class="cls">Content</span>(<span class="var">role</span>=<span class="str">"user"</span>, <span class="var">parts</span>=[<span class="var">gtypes</span>.<span class="cls">Part</span>(<span class="var">text</span>=<span class="var">message</span>)])
+    )
+
+    <span class="kw">while True</span>:                                         <span class="cm"># ← agentic loop</span>
+        <span class="var">response</span> = <span class="kw">self</span>.<span class="var">_client</span>.<span class="var">models</span>.<span class="fn">generate_content</span>(
+            <span class="var">model</span>=<span class="kw">self</span>.<span class="var">_model_name</span>,
+            <span class="var">contents</span>=<span class="kw">self</span>.<span class="var">_contents</span>,
+            <span class="var">config</span>=<span class="kw">self</span>.<span class="var">_config</span>,
+        )
+        <span class="var">candidate</span> = <span class="var">response</span>.<span class="var">candidates</span>[<span class="num">0</span>]
+        <span class="kw">self</span>.<span class="var">_contents</span>.<span class="fn">append</span>(<span class="var">candidate</span>.<span class="var">content</span>)    <span class="cm"># keep history</span>
+
+        <span class="var">fn_calls</span> = [
+            <span class="var">part</span>.<span class="var">function_call</span>
+            <span class="kw">for</span> <span class="var">part</span> <span class="kw">in</span> <span class="var">candidate</span>.<span class="var">content</span>.<span class="var">parts</span>
+            <span class="kw">if</span> <span class="var">part</span>.<span class="var">function_call</span>
+        ]
+
+        <span class="kw">if not</span> <span class="var">fn_calls</span>:                              <span class="cm"># ← done</span>
+            <span class="kw">return</span> <span class="str">"\n"</span>.<span class="fn">join</span>(<span class="var">p</span>.<span class="var">text</span> <span class="kw">for</span> <span class="var">p</span> <span class="kw">in</span> <span class="var">candidate</span>.<span class="var">content</span>.<span class="var">parts</span> <span class="kw">if</span> <span class="var">p</span>.<span class="var">text</span>)
+
+        <span class="cm"># Execute each function call and collect responses</span>
+        <span class="var">fn_resp_parts</span> = []
+        <span class="kw">for</span> <span class="var">fc</span> <span class="kw">in</span> <span class="var">fn_calls</span>:
+            <span class="var">result</span> = <span class="kw">self</span>.<span class="fn">_call_ucp</span>(<span class="var">fc</span>.<span class="var">name</span>, <span class="fn">dict</span>(<span class="var">fc</span>.<span class="var">args</span>))
+            <span class="var">fn_resp_parts</span>.<span class="fn">append</span>(<span class="var">gtypes</span>.<span class="cls">Part</span>(
+                <span class="var">function_response</span>=<span class="var">gtypes</span>.<span class="cls">FunctionResponse</span>(
+                    <span class="var">name</span>=<span class="var">fc</span>.<span class="var">name</span>, <span class="var">response</span>={<span class="str">"result"</span>: <span class="var">result</span>}
+                )
+            ))
+
+        <span class="cm"># google-genai requires role="user" for function_response parts</span>
+        <span class="kw">self</span>.<span class="var">_contents</span>.<span class="fn">append</span>(
+            <span class="var">gtypes</span>.<span class="cls">Content</span>(<span class="var">role</span>=<span class="str">"user"</span>, <span class="var">parts</span>=<span class="var">fn_resp_parts</span>)
+        )</pre>
+  </div>
+
+  <div class="info-box yellow">
+    <div class="icon">&#x26A0;&#xFE0F;</div>
+    <p><strong>google-genai quirk:</strong> Function response parts must use <code>role="user"</code> in the contents list. This differs from how Anthropic's Messages API handles tool results. The loop above is correct for <code>google-genai</code> 1.x.</p>
+  </div>
+
+  <!-- ─────────────── STEP 5 ─────────────────────────────────────────────── -->
+  <div class="section-label">
+    <div class="step-num">5</div>
+    <div>
+      <h2>Extend with TrackedAgent (Cart + Orders)</h2>
+      <div class="sub">scripts/gemini_web_server.py — TrackedAgent</div>
+    </div>
+  </div>
+
+  <p style="color:#94a3b8;margin-bottom:20px">The base <code>GeminiUCPAgent</code> only knows about UCP endpoints. For a full shopping app you need server-side cart state, order placement, and frontend signals. <code>TrackedAgent</code> subclasses it and injects extra tools.</p>
+
+  <div class="card-grid">
+    <div class="card">
+      <h3>&#x1F6D2; Server-side cart (<code>self.cart</code>)</h3>
+      <p>A persistent Python list that survives across chat turns in the same process. <code>add_to_cart</code> appends to it; <code>place_b2b_order</code> clears it after a successful order.</p>
+    </div>
+    <div class="card">
+      <h3>&#x1F4E1; Frontend signals (<code>last_tool_calls</code>)</h3>
+      <p>Each HTTP request resets <code>last_tool_calls = []</code>. As tools execute, they append <code>{"tool": name, "args": ...}</code>. The <code>/api/chat</code> response returns this list so React can sync state.</p>
+    </div>
+    <div class="card">
+      <h3>&#x1F4B3; <code>cart_additions</code></h3>
+      <p>Only the items added <em>this turn</em>. The React frontend iterates this array to display newly added products — separate from the full persistent cart.</p>
+    </div>
+    <div class="card">
+      <h3>&#x1F4CB; <code>checkout_session</code></h3>
+      <p>Set to the order result on success (<code>status: "placed"</code>). The React frontend reads <code>checkout_session.status === 'placed'</code> to clear the cart UI after order placement.</p>
+    </div>
+  </div>
+
+  <div class="code-block">
+    <div class="code-header">
+      <span class="lang">Python</span>
+      <span class="filename">scripts/gemini_web_server.py — TrackedAgent (condensed)</span>
+    </div>
+    <pre><span class="kw">class</span> <span class="cls">TrackedAgent</span>(<span class="cls">GeminiUCPAgent</span>):
+    <span class="kw">def</span> <span class="fn">__init__</span>(<span class="kw">self</span>, *<span class="var">args</span>, **<span class="var">kwargs</span>):
+        <span class="fn">super().__init__</span>(*<span class="var">args</span>, **<span class="var">kwargs</span>)
+        <span class="kw">self</span>.<span class="var">cart</span>: <span class="cls">list</span>[<span class="cls">dict</span>] = []             <span class="cm"># persistent across turns</span>
+        <span class="kw">self</span>.<span class="var">cart_additions</span>: <span class="cls">list</span>[<span class="cls">dict</span>] = []    <span class="cm"># this-turn additions for React</span>
+        <span class="kw">self</span>.<span class="var">last_tool_calls</span>: <span class="cls">list</span>[<span class="cls">dict</span>] = []   <span class="cm"># all tool calls this turn</span>
+        <span class="kw">self</span>.<span class="var">checkout_session</span>: <span class="cls">dict</span> | <span class="kw">None</span> = <span class="kw">None</span>
+
+        <span class="cm"># Inject extra FunctionDeclarations beyond what manifest provides</span>
+        <span class="kw">self</span>.<span class="var">_tools</span>.<span class="fn">append</span>(<span class="var">gtypes</span>.<span class="cls">Tool</span>(<span class="var">function_declarations</span>=[
+            <span class="var">add_to_cart_decl</span>,     <span class="cm"># adds product to self.cart</span>
+            <span class="var">place_b2b_order_decl</span>, <span class="cm"># places Salesforce order, clears cart</span>
+            <span class="var">save_quote_decl</span>,      <span class="cm"># saves cart as draft quote</span>
+            <span class="var">load_quote_decl</span>,      <span class="cm"># loads quote items into cart</span>
+        ]))
+
+    <span class="kw">async def</span> <span class="fn">execute_tool</span>(<span class="kw">self</span>, <span class="var">fn_name</span>: <span class="cls">str</span>, <span class="var">args</span>: <span class="cls">dict</span>) -&gt; <span class="cls">dict</span>:
+        <span class="kw">if</span> <span class="var">fn_name</span> == <span class="str">"add_to_cart"</span>:
+            <span class="kw">self</span>.<span class="var">last_tool_calls</span>.<span class="fn">append</span>({<span class="str">"tool"</span>: <span class="var">fn_name</span>, <span class="str">"args"</span>: <span class="var">args</span>})
+            <span class="var">product</span> = <span class="fn">fetch_product</span>(<span class="var">args</span>[<span class="str">"product_id"</span>])
+            <span class="kw">self</span>.<span class="var">cart</span>.<span class="fn">append</span>({<span class="str">"product"</span>: <span class="var">product</span>, <span class="str">"quantity"</span>: <span class="var">args</span>.<span class="fn">get</span>(<span class="str">"quantity"</span>, <span class="num">1</span>)})
+            <span class="kw">self</span>.<span class="var">cart_additions</span>.<span class="fn">append</span>({<span class="str">"product"</span>: <span class="var">product</span>, <span class="str">"quantity"</span>: <span class="var">args</span>.<span class="fn">get</span>(<span class="str">"quantity"</span>, <span class="num">1</span>)})
+            <span class="kw">return</span> {<span class="str">"ok"</span>: <span class="kw">True</span>, <span class="str">"cart_count"</span>: <span class="fn">len</span>(<span class="kw">self</span>.<span class="var">cart</span>)}
+
+        <span class="kw">if</span> <span class="var">fn_name</span> == <span class="str">"place_b2b_order"</span>:
+            <span class="kw">self</span>.<span class="var">last_tool_calls</span>.<span class="fn">append</span>({<span class="str">"tool"</span>: <span class="var">fn_name</span>, <span class="str">"args"</span>: <span class="var">args</span>})
+            <span class="var">result</span> = <span class="kw">await</span> <span class="fn">place_salesforce_order</span>(<span class="kw">self</span>.<span class="var">cart</span>, <span class="var">args</span>)
+            <span class="kw">self</span>.<span class="var">checkout_session</span> = <span class="var">result</span>   <span class="cm"># status: "placed"</span>
+            <span class="kw">self</span>.<span class="var">cart</span>.<span class="fn">clear</span>()                  <span class="cm"># cart closed after order</span>
+            <span class="kw">return</span> <span class="var">result</span></pre>
+  </div>
+
+  <!-- ─────────────── STEP 6 ─────────────────────────────────────────────── -->
+  <div class="section-label">
+    <div class="step-num">6</div>
+    <div>
+      <h2>Wire Up the FastAPI + React Server</h2>
+      <div class="sub">scripts/gemini_web_server.py — API endpoints</div>
+    </div>
+  </div>
+
+  <div class="card-grid">
+    <div class="card accent-green">
+      <h3><code>POST /api/chat</code></h3>
+      <p>Resets <code>last_tool_calls</code> and <code>cart_additions</code>, calls <code>agent.send(message)</code>, returns <code>reply + tool_calls + cart_additions + checkout_session</code>.</p>
+    </div>
+    <div class="card accent-blue">
+      <h3><code>POST /api/cart</code></h3>
+      <p>Shortcut for "add to cart" via the chat interface without going through a full conversational turn. Appends the item and returns a brief acknowledgement.</p>
+    </div>
+    <div class="card accent-purple">
+      <h3><code>GET /api/active-cart</code></h3>
+      <p>Returns the current <code>agent.cart</code> list. React fetches this on login to pre-populate the cart sidebar from the server's in-memory state.</p>
+    </div>
+    <div class="card">
+      <h3><code>POST /api/reset</code></h3>
+      <p>Clears conversation history (<code>agent.reset()</code>), cart, and checkout session. "New conversation" button in the UI calls this.</p>
+    </div>
+  </div>
+
+  <div class="code-block">
+    <div class="code-header">
+      <span class="lang">Python</span>
+      <span class="filename">scripts/gemini_web_server.py — /api/chat</span>
+    </div>
+    <pre><span class="dec">@app.post</span>(<span class="str">"/api/chat"</span>)
+<span class="kw">async def</span> <span class="fn">chat</span>(<span class="var">body</span>: <span class="cls">ChatBody</span>):
+    <span class="cm"># Reset per-turn state</span>
+    <span class="var">agent</span>.<span class="var">last_tool_calls</span> = []
+    <span class="var">agent</span>.<span class="var">cart_additions</span>  = []
+    <span class="var">agent</span>.<span class="var">checkout_session</span> = <span class="kw">None</span>
+
+    <span class="var">reply</span> = <span class="kw">await</span> <span class="var">agent</span>.<span class="fn">send</span>(<span class="var">body</span>.<span class="var">message</span>)   <span class="cm"># runs the agentic loop</span>
+
+    <span class="kw">return</span> {
+        <span class="str">"reply"</span>:            <span class="var">reply</span>,
+        <span class="str">"tool_calls"</span>:       <span class="var">agent</span>.<span class="var">last_tool_calls</span>,   <span class="cm"># React: detect place_b2b_order</span>
+        <span class="str">"cart_additions"</span>:  <span class="var">agent</span>.<span class="var">cart_additions</span>,     <span class="cm"># React: add new items to sidebar</span>
+        <span class="str">"checkout_session"</span>: <span class="var">agent</span>.<span class="var">checkout_session</span>,   <span class="cm"># React: status === 'placed'</span>
+        <span class="str">"products"</span>:         <span class="var">agent</span>.<span class="var">last_products</span>,       <span class="cm"># React: render product cards</span>
+    }</pre>
+  </div>
+
+  <!-- ─────────────── STEP 7 ─────────────────────────────────────────────── -->
+  <div class="section-label">
+    <div class="step-num">7</div>
+    <div>
+      <h2>Connect the React Frontend</h2>
+      <div class="sub">examples/gemini-storefront/src/App.tsx</div>
+    </div>
+  </div>
+
+  <div class="flow">
+    <div class="flow-step">
+      <div class="icon">&#x1F4AC;</div>
+      <div class="label">User types</div>
+      <div class="desc">Chat input or cart button</div>
+      <div class="flow-arrow">›</div>
+    </div>
+    <div class="flow-step">
+      <div class="icon">&#x1F310;</div>
+      <div class="label">POST /api/chat</div>
+      <div class="desc">{ message }</div>
+      <div class="flow-arrow">›</div>
+    </div>
+    <div class="flow-step">
+      <div class="icon">&#x1F9E0;</div>
+      <div class="label">Gemini loop</div>
+      <div class="desc">Calls UCP endpoints, places order</div>
+      <div class="flow-arrow">›</div>
+    </div>
+    <div class="flow-step">
+      <div class="icon">&#x1F4E6;</div>
+      <div class="label">Response</div>
+      <div class="desc">reply + tool_calls + checkout_session</div>
+      <div class="flow-arrow">›</div>
+    </div>
+    <div class="flow-step">
+      <div class="icon">&#x1F5BC;&#xFE0F;</div>
+      <div class="label">React update</div>
+      <div class="desc">Cart sync, order clear, UI refresh</div>
+    </div>
+  </div>
+
+  <div class="code-block">
+    <div class="code-header">
+      <span class="lang">TypeScript</span>
+      <span class="filename">examples/gemini-storefront/src/App.tsx — cart sync after chat response</span>
+    </div>
+    <pre><span class="kw">const</span> <span class="var">data</span> = <span class="kw">await</span> <span class="fn">fetch</span>(<span class="str">'/api/chat'</span>, { <span class="var">method</span>: <span class="str">'POST'</span>, <span class="var">body</span>: ... }).<span class="fn">json</span>()
+
+<span class="cm">// Detect order placement — two independent signals</span>
+<span class="kw">const</span> <span class="var">orderPlaced</span> =
+  (<span class="var">data</span>.<span class="var">tool_calls</span> ?? []).<span class="fn">some</span>(<span class="var">tc</span> =&gt;
+    <span class="var">tc</span>.<span class="var">tool</span> === <span class="str">'place_b2b_order'</span> || <span class="var">tc</span>.<span class="var">tool</span> === <span class="str">'place_order'</span>
+  ) || <span class="var">data</span>.<span class="var">checkout_session</span>?.<span class="var">status</span> === <span class="str">'placed'</span>
+
+<span class="kw">if</span> (<span class="var">orderPlaced</span>) {
+  <span class="fn">setCartItems</span>([])           <span class="cm">// clear sidebar</span>
+  <span class="fn">setAddedIds</span>(<span class="kw">new</span> <span class="cls">Set</span>())
+}
+
+<span class="cm">// Sync new items from cart_additions</span>
+<span class="kw">if</span> (!<span class="var">orderPlaced</span> && <span class="var">data</span>.<span class="var">cart_additions</span>?.<span class="var">length</span>) {
+  <span class="kw">for</span> (<span class="kw">const</span> { <span class="var">product</span>, <span class="var">quantity</span> } <span class="kw">of</span> <span class="var">data</span>.<span class="var">cart_additions</span>) {
+    <span class="fn">setCartItems</span>(<span class="var">prev</span> =&gt; [...<span class="var">prev</span>, { <span class="var">product</span>, <span class="var">quantity</span> }])
+  }
+}</pre>
+  </div>
+
+  <!-- ─────────────── STEP 8 ─────────────────────────────────────────────── -->
+  <div class="section-label">
+    <div class="step-num blue">8</div>
+    <div>
+      <h2>Environment Variables</h2>
+      <div class="sub">Required and optional configuration</div>
+    </div>
+  </div>
+
+  <table>
+    <thead>
+      <tr><th>Variable</th><th>Required</th><th>Default</th><th>Purpose</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>GEMINI_API_KEY</code></td><td>&#x2705; Yes</td><td>—</td><td>Google AI Studio API key</td></tr>
+      <tr><td><code>UCP_BASE</code></td><td>Optional</td><td>Railway UCP service URL</td><td>Where to discover the UCP manifest</td></tr>
+      <tr><td><code>GEMINI_MODEL</code></td><td>Optional</td><td><code>gemini-3.6-flash</code></td><td>Model to use</td></tr>
+      <tr><td><code>SF_INSTANCE_URL</code></td><td>For orders</td><td>—</td><td>Salesforce org base URL</td></tr>
+      <tr><td><code>SF_CLIENT_ID</code></td><td>For orders</td><td>—</td><td>Connected App client ID</td></tr>
+      <tr><td><code>SF_CLIENT_SECRET</code></td><td>For orders</td><td>—</td><td>Connected App client secret</td></tr>
+      <tr><td><code>SF_BUYER_USER_ID</code></td><td>For orders</td><td>—</td><td>Salesforce buyer user ID for WebCart</td></tr>
+      <tr><td><code>PORT</code></td><td>Optional</td><td><code>8090</code></td><td>Railway injects this automatically</td></tr>
+    </tbody>
+  </table>
+
+  <!-- ─────────────── STEP 9 ─────────────────────────────────────────────── -->
+  <div class="section-label">
+    <div class="step-num blue">9</div>
+    <div>
+      <h2>Run Locally</h2>
+      <div class="sub">Quick start commands</div>
+    </div>
+  </div>
+
+  <div class="code-block">
+    <div class="code-header">
+      <span class="lang">Shell</span>
+      <span class="filename">Local development</span>
+    </div>
+    <pre><span class="cm"># 1. Install Python deps</span>
+pip install fastapi uvicorn httpx google-genai aiofiles
+
+<span class="cm"># 2. Set required env vars</span>
+<span class="kw">export</span> <span class="var">GEMINI_API_KEY</span>=<span class="str">"your-google-ai-studio-key"</span>
+<span class="kw">export</span> <span class="var">UCP_BASE</span>=<span class="str">"https://your-storefront.example.com"</span>
+
+<span class="cm"># 3. Start the Python server (serves API + static files)</span>
+python scripts/gemini_web_server.py
+<span class="cm"># → Listening on http://0.0.0.0:8090</span>
+
+<span class="cm"># 4. In a separate terminal, run the React dev server</span>
+<span class="kw">cd</span> examples/gemini-storefront
+npm install && npm run dev
+<span class="cm"># → http://localhost:5173 (proxies /api/* to :8090)</span>
+
+<span class="cm"># 5. Test the UCP manifest</span>
+curl <span class="var">$UCP_BASE</span>/.well-known/ucp | python -m json.tool</pre>
+  </div>
+
+  <div class="code-block">
+    <div class="code-header">
+      <span class="lang">Shell</span>
+      <span class="filename">Docker build (same as Railway)</span>
+    </div>
+    <pre><span class="cm"># Build the same image Railway builds</span>
+docker build -f Dockerfile.gemini -t gemini-commerce .
+
+<span class="cm"># Run it locally</span>
+docker run -p 8090:8090 \
+  -e GEMINI_API_KEY=your-key \
+  -e UCP_BASE=https://your-store.example.com \
+  gemini-commerce
+
+<span class="cm"># Open http://localhost:8090</span></pre>
+  </div>
+
+  <!-- ─────────────── SUMMARY ─────────────────────────────────────────────── -->
+  <hr>
+
+  <div class="section-label">
+    <div class="step-num purple">&#x2714;</div>
+    <div>
+      <h2>Checklist: Full UCP + Gemini Integration</h2>
+    </div>
+  </div>
+
+  <ul class="checklist">
+    <li><span class="check">✓</span><div><strong>Manifest at <code>GET /.well-known/ucp</code></strong> — must be domain root per RFC 8615; returns JSON with <code>capabilities</code>, <code>payment_handlers</code>, <code>transport</code> blocks</div></li>
+    <li><span class="check">✓</span><div><strong>Product search endpoint</strong> — <code>GET /ucp/products?q=&amp;category=&amp;min_price=&amp;max_price=&amp;limit=</code>; response has <code>products[].{product_id, title, price, currency, in_stock}</code></div></li>
+    <li><span class="check">✓</span><div><strong>Product detail endpoint</strong> — <code>GET /ucp/products/{id}</code>; same schema as search item</div></li>
+    <li><span class="check">✓</span><div><strong>Checkout session endpoint</strong> — <code>POST /ucp/checkout-sessions</code> with <code>line_items[], payment_handler</code>; returns <code>{status: "pending", ...}</code></div></li>
+    <li><span class="check">✓</span><div><strong><code>GeminiUCPAgent</code></strong> — fetches manifest, builds <code>FunctionDeclaration</code> from capabilities, runs agentic loop with <code>while True</code> until no more function calls</div></li>
+    <li><span class="check">✓</span><div><strong>Subclass <code>TrackedAgent</code></strong> for stateful cart — persistent <code>self.cart</code>, per-turn <code>cart_additions</code> and <code>last_tool_calls</code></div></li>
+    <li><span class="check">✓</span><div><strong><code>/api/chat</code> response</strong> includes <code>tool_calls</code> and <code>checkout_session</code> so the React frontend can sync cart state</div></li>
+    <li><span class="check opt">★</span><div><strong>Optional: CORS middleware</strong> — required if React dev server is on a different port than the Python backend</div></li>
+    <li><span class="check opt">★</span><div><strong>Optional: MCP transport block in manifest</strong> — tells Claude-based agents where to find the richer MCP server</div></li>
+    <li><span class="check opt">★</span><div><strong>Optional: <code>agent_hints</code> field</strong> — freeform guidance Gemini incorporates into its system prompt from the manifest</div></li>
+  </ul>
+
+</div><!-- /main -->
+
+<footer>
+  <p>Source: <code>examples/demo_common/gemini_ucp_agent.py</code> · <code>examples/demo_common/ucp.py</code> · <code>scripts/gemini_web_server.py</code></p>
+</footer>
+
+</body>
+</html>

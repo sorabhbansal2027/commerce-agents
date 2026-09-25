@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Merchant AI Agent — SitePreferences type extension
+  Import via: Administration > Site Development > Import & Export > Meta Data
+-->
+<metadata xmlns="http://www.demandware.com/xml/impex/metadata/2006-10-31">
+
+    <type-extension type-id="SitePreferences">
+
+        <custom-attribute-definitions>
+
+            <attribute-definition attribute-id="merchantAgentWebUrl">
+                <display-name xml:lang="x-default">Merchant Agent Web URL</display-name>
+                <description xml:lang="x-default">
+                    Full HTTPS URL of the deployed merchant-web portal (e.g. Railway).
+                    This URL is loaded inside an iframe in the Business Manager left-nav page.
+                    Example: https://merchant-web-production-e806.up.railway.app
+                </description>
+                <type>string</type>
+                <mandatory-flag>false</mandatory-flag>
+                <externally-managed-flag>false</externally-managed-flag>
+                <min-length>0</min-length>
+            </attribute-definition>
+
+            <attribute-definition attribute-id="merchantAgentMcpUrl">
+                <display-name xml:lang="x-default">Merchant Agent MCP URL</display-name>
+                <description xml:lang="x-default">
+                    Full HTTPS URL of the merchant MCP server endpoint.
+                    Used when connecting Claude Code to the merchant backend.
+                    Example: https://merchant-mcp.up.railway.app/mcp
+                </description>
+                <type>string</type>
+                <mandatory-flag>false</mandatory-flag>
+                <externally-managed-flag>false</externally-managed-flag>
+                <min-length>0</min-length>
+            </attribute-definition>
+
+        </custom-attribute-definitions>
+
+        <group-definitions>
+            <attribute-group group-id="MerchantAgent">
+                <display-name xml:lang="x-default">Merchant AI Agent</display-name>
+                <attribute attribute-id="merchantAgentWebUrl"/>
+                <attribute attribute-id="merchantAgentMcpUrl"/>
+            </attribute-group>
+        </group-definitions>
+
+    </type-extension>
+
+</metadata>

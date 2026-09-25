@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI-Assisted Salesforce Dev Workflow</title>
+<style>
+  /* ── Tokens ─────────────────────────────────────────────────────────────── */
+  :root {
+    --bg:          #f4f5f8;
+    --surface:     #ffffff;
+    --card:        #ffffff;
+    --well:        #eef1f5;
+    --ink:         #1e2c4f;
+    --ink-2:       #3b4763;
+    --ink-soft:    #66708a;
+    --ink-faint:   #9aa2b5;
+    --line:        rgba(30,44,79,.10);
+    --accent:      #d97f5f;
+    --accent-str:  #c4643f;
+    --accent-soft: #faece5;
+    --blue:        #2563eb;
+    --blue-soft:   #dbeafe;
+    --green:       #16a34a;
+    --green-soft:  #dcfce7;
+    --orange:      #ea580c;
+    --orange-soft: #ffedd5;
+    --purple:      #7c3aed;
+    --purple-soft: #ede9fe;
+    --shadow:      0 1px 3px rgba(30,44,79,.08), 0 4px 16px -6px rgba(30,44,79,.14);
+    --radius:      12px;
+    font-family: "Instrument Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
+    font-size: 14px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--ink); padding: 24px; min-height: 100vh; }
+
+  /* ── Page header ─────────────────────────────────────────────────────────── */
+  .page-header { text-align: center; margin-bottom: 32px; }
+  .page-header h1 { font-size: 24px; font-weight: 700; color: var(--ink); }
+  .page-header p  { font-size: 14px; color: var(--ink-soft); margin-top: 6px; }
+
+  /* ── Tool tabs ───────────────────────────────────────────────────────────── */
+  .tabs { display: flex; justify-content: center; gap: 8px; margin-bottom: 28px; }
+  .tab {
+    padding: 8px 20px; border-radius: 999px; border: 1px solid var(--line);
+    background: var(--card); color: var(--ink-soft); font-size: 13px; font-weight: 600;
+    cursor: pointer; transition: all 140ms;
+  }
+  .tab:hover { background: var(--well); }
+  .tab.active { background: var(--ink); color: #fff; border-color: var(--ink); }
+  .tab.claude.active { background: #d97f5f; border-color: #d97f5f; }
+  .tab.ghcp.active   { background: #2563eb; border-color: #2563eb; }
+  .tab.both.active   { background: #7c3aed; border-color: #7c3aed; }
+
+  /* ── Branch lane diagram ─────────────────────────────────────────────────── */
+  .branch-diagram-wrap {
+    background: var(--card); border-radius: var(--radius);
+    border: 1px solid var(--line); box-shadow: var(--shadow);
+    padding: 24px 28px; margin-bottom: 28px; overflow-x: auto;
+  }
+  .branch-diagram-wrap h3 { font-size: 12px; font-weight: 700; color: var(--ink-soft);
+    text-transform: uppercase; letter-spacing: .06em; margin-bottom: 16px; }
+
+  .branch-lanes { display: flex; flex-direction: column; gap: 20px; position: relative; }
+  .branch-lane  { display: flex; align-items: center; gap: 0; position: relative; }
+
+  .branch-label {
+    font-size: 12px; font-weight: 700; width: 90px; flex-shrink: 0;
+    padding: 4px 8px; border-radius: 6px; text-align: center;
+  }
+  .branch-label.main    { background: var(--green-soft);  color: var(--green); }
+  .branch-label.develop { background: var(--blue-soft);   color: var(--blue); }
+  .branch-label.feature { background: var(--orange-soft); color: var(--orange); }
+
+  .lane-track {
+    flex: 1; height: 4px; border-radius: 2px; position: relative; margin: 0 12px;
+  }
+  .lane-main    .lane-track { background: var(--green); }
+  .lane-develop .lane-track { background: var(--blue); }
+  .lane-feature .lane-track { background: var(--orange); }
+
+  .lane-node {
+    position: absolute; top: 50%; transform: translateY(-50%);
+    width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--card);
+  }
+  .lane-main    .lane-node { background: var(--green); }
+  .lane-develop .lane-node { background: var(--blue); }
+  .lane-feature .lane-node { background: var(--orange); }
+
+  .lane-tag {
+    position: absolute; top: -22px; font-size: 10px; font-weight: 600;
+    color: var(--ink-soft); white-space: nowrap; transform: translateX(-50%);
+  }
+  .lane-env {
+    font-size: 11px; color: var(--ink-soft); width: 90px; flex-shrink: 0; text-align: right;
+  }
+
+  .pr-arrow {
+    position: absolute; right: 108px; display: flex; align-items: center;
+    gap: 4px; font-size: 10px; font-weight: 700; color: var(--purple);
+    background: var(--purple-soft); padding: 2px 8px; border-radius: 999px;
+  }
+
+  /* ── AI merge arrow animation ────────────────────────────────────────────── */
+  .merge-indicator {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 11px; font-weight: 600; color: var(--purple);
+    position: absolute; right: 96px; top: -26px;
+  }
+  .merge-dot {
+    width: 8px; height: 8px; border-radius: 50%; background: var(--purple);
+    animation: pulse 1.6s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(1.3)} }
+
+  /* ── Workflow steps ───────────────────────────────────────────────────────── */
+  .steps-section h3 {
+    font-size: 12px; font-weight: 700; color: var(--ink-soft);
+    text-transform: uppercase; letter-spacing: .06em; margin-bottom: 14px;
+  }
+  .steps-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 10px; margin-bottom: 28px; }
+  @media (max-width: 900px) { .steps-grid { grid-template-columns: repeat(4, 1fr); } }
+  @media (max-width: 560px) { .steps-grid { grid-template-columns: repeat(2, 1fr); } }
+
+  .step-card {
+    background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 14px 12px; cursor: pointer; transition: all 140ms;
+    box-shadow: var(--shadow); position: relative;
+  }
+  .step-card:hover { transform: translateY(-2px); box-shadow: 0 6px 20px -4px rgba(30,44,79,.18); }
+  .step-card.active { border-width: 2px; }
+  .step-card.active.human  { border-color: var(--blue);   }
+  .step-card.active.ai     { border-color: var(--accent); }
+  .step-card.active.gate   { border-color: var(--orange); }
+  .step-card.active.deploy { border-color: var(--green);  }
+
+  .step-number {
+    font-size: 11px; font-weight: 700; color: var(--ink-faint);
+    margin-bottom: 6px;
+  }
+  .step-icon  { font-size: 22px; margin-bottom: 6px; }
+  .step-title { font-size: 12px; font-weight: 700; color: var(--ink); line-height: 1.3; }
+
+  .step-badge {
+    position: absolute; top: 8px; right: 8px;
+    font-size: 9px; font-weight: 700; padding: 2px 6px; border-radius: 999px;
+    text-transform: uppercase; letter-spacing: .04em;
+  }
+  .badge-ai     { background: var(--accent-soft); color: var(--accent-str); }
+  .badge-gate   { background: var(--orange-soft); color: var(--orange); }
+  .badge-human  { background: var(--blue-soft);   color: var(--blue); }
+  .badge-auto   { background: var(--green-soft);  color: var(--green); }
+
+  /* ── Step detail panel ───────────────────────────────────────────────────── */
+  .step-detail {
+    background: var(--card); border-radius: var(--radius);
+    border: 1px solid var(--line); box-shadow: var(--shadow);
+    padding: 24px 28px; margin-bottom: 28px;
+    animation: slideIn 200ms ease both;
+  }
+  @keyframes slideIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:none} }
+
+  .detail-header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+  .detail-icon   { font-size: 32px; }
+  .detail-title  { font-size: 18px; font-weight: 700; color: var(--ink); }
+  .detail-sub    { font-size: 13px; color: var(--ink-soft); margin-top: 2px; }
+
+  .detail-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 640px) { .detail-cols { grid-template-columns: 1fr; } }
+
+  .detail-col { background: var(--well); border-radius: 10px; padding: 16px; }
+  .detail-col h4 {
+    font-size: 11px; font-weight: 700; color: var(--ink-soft);
+    text-transform: uppercase; letter-spacing: .06em; margin-bottom: 10px;
+  }
+  .detail-col ul { list-style: none; display: flex; flex-direction: column; gap: 7px; }
+  .detail-col li { font-size: 13px; color: var(--ink-2); line-height: 1.45; }
+  .detail-col li::before { content: "→ "; color: var(--accent); font-weight: 700; }
+
+  .ai-box {
+    margin-top: 16px; padding: 14px 16px; border-radius: 10px;
+    border-left: 3px solid var(--accent); background: var(--accent-soft);
+  }
+  .ai-box.ghcp  { border-color: var(--blue); background: var(--blue-soft); }
+  .ai-box.both  { border-color: var(--purple); background: var(--purple-soft); }
+  .ai-box h4 { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 8px; }
+  .ai-box h4.claude { color: var(--accent-str); }
+  .ai-box h4.ghcp   { color: var(--blue); }
+  .ai-box h4.both   { color: var(--purple); }
+  .ai-box code {
+    display: block; font-family: "SF Mono", "Fira Code", monospace;
+    font-size: 12px; background: rgba(0,0,0,.06); padding: 8px 12px;
+    border-radius: 6px; margin-top: 6px; white-space: pre-wrap; color: var(--ink);
+  }
+
+  /* ── Approval gate banner ────────────────────────────────────────────────── */
+  .gate-banner {
+    display: flex; align-items: center; gap: 0;
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--radius); box-shadow: var(--shadow);
+    padding: 16px 24px; margin-bottom: 28px; overflow-x: auto;
+  }
+  .gate-step {
+    display: flex; flex-direction: column; align-items: center;
+    gap: 6px; min-width: 110px;
+  }
+  .gate-step-icon {
+    width: 44px; height: 44px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px; border: 2px solid var(--line);
+    background: var(--card);
+  }
+  .gate-step-icon.pass { border-color: var(--green); background: var(--green-soft); }
+  .gate-step-icon.review { border-color: var(--blue); background: var(--blue-soft); }
+  .gate-step-icon.admin  { border-color: var(--orange); background: var(--orange-soft); }
+  .gate-step-icon.merge  { border-color: var(--green); background: var(--green-soft); }
+  .gate-step-label { font-size: 11px; font-weight: 600; color: var(--ink-soft); text-align: center; }
+  .gate-arrow { flex: 1; height: 2px; background: var(--line); margin: 0 4px; min-width: 24px; }
+  .gate-arrow.active { background: linear-gradient(90deg, var(--green), var(--blue)); }
+
+  .gate-banner h3 {
+    font-size: 12px; font-weight: 700; color: var(--ink-soft);
+    text-transform: uppercase; letter-spacing: .06em;
+    width: 100%; margin-bottom: 12px;
+  }
+  .gate-wrap { display: flex; flex-direction: column; width: 100%; }
+
+  /* ── Legend ──────────────────────────────────────────────────────────────── */
+  .legend {
+    display: flex; flex-wrap: wrap; gap: 16px; justify-content: center;
+    padding: 16px; background: var(--card); border-radius: var(--radius);
+    border: 1px solid var(--line);
+  }
+  .legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-soft); }
+  .legend-dot  { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+</style>
+</head>
+<body>
+
+<div class="page-header">
+  <h1>AI-Assisted Salesforce Development Workflow</h1>
+  <p>Click a step to explore what the developer does — and where Claude / GitHub Copilot assists</p>
+</div>
+
+<!-- ── Tool selector ──────────────────────────────────────────────────────── -->
+<div class="tabs">
+  <button class="tab claude active" data-tool="claude" onclick="setTool('claude')">Claude Code</button>
+  <button class="tab ghcp"          data-tool="ghcp"   onclick="setTool('ghcp')">GitHub Copilot</button>
+  <button class="tab both"          data-tool="both"   onclick="setTool('both')">Both</button>
+</div>
+
+<!-- ── Branch lane diagram ────────────────────────────────────────────────── -->
+<div class="branch-diagram-wrap">
+  <h3>Git Branch Strategy</h3>
+  <div class="branch-lanes">
+
+    <div class="branch-lane lane-main">
+      <div class="branch-label main">main</div>
+      <div class="lane-track">
+        <div class="lane-node" style="left:5%"></div>
+        <div class="lane-tag" style="left:5%">v1.0</div>
+        <div class="lane-node" style="left:42%"></div>
+        <div class="lane-tag" style="left:42%">hotfix</div>
+        <div class="lane-node" style="left:78%"></div>
+        <div class="lane-tag" style="left:78%">v1.1 ✓</div>
+        <div class="lane-node" style="left:92%"></div>
+      </div>
+      <div class="lane-env">Production org</div>
+    </div>
+
+    <div class="branch-lane lane-develop">
+      <div class="branch-label develop">develop</div>
+      <div class="lane-track">
+        <div class="lane-node" style="left:5%"></div>
+        <div class="lane-node" style="left:30%"></div>
+        <div class="lane-tag" style="left:30%">merge A</div>
+        <div class="lane-node" style="left:60%"></div>
+        <div class="lane-tag" style="left:60%">merge B</div>
+        <div class="lane-node" style="left:78%"></div>
+        <div class="lane-node" style="left:92%"></div>
+      </div>
+      <div class="lane-env">Sandbox org</div>
+    </div>
+
+    <div class="branch-lane lane-feature" style="position:relative">
+      <div class="branch-label feature">feature/*</div>
+      <div class="lane-track">
+        <div class="lane-node" style="left:5%"></div>
+        <div class="lane-tag" style="left:5%">branch off</div>
+        <div class="lane-node" style="left:20%"></div>
+        <div class="lane-tag" style="left:20%">commit</div>
+        <div class="lane-node" style="left:35%"></div>
+        <div class="lane-tag" style="left:35%">commit</div>
+        <div class="lane-node" style="left:52%"></div>
+        <div class="lane-tag" style="left:52%">PR opened</div>
+      </div>
+      <div class="merge-indicator" style="right:96px">
+        <div class="merge-dot"></div>
+        PR → develop
+      </div>
+      <div class="lane-env">Scratch org</div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ── Steps grid ─────────────────────────────────────────────────────────── -->
+<div class="steps-section">
+  <h3>Developer Loop — 7 Steps</h3>
+  <div class="steps-grid" id="stepsGrid">
+
+    <div class="step-card human" data-step="1" onclick="selectStep(1)">
+      <div class="step-number">01</div>
+      <div class="step-icon">🏗️</div>
+      <div class="step-title">Scaffold Feature Branch</div>
+      <div class="step-badge badge-human">Human</div>
+    </div>
+
+    <div class="step-card ai" data-step="2" onclick="selectStep(2)">
+      <div class="step-number">02</div>
+      <div class="step-icon">✍️</div>
+      <div class="step-title">Write Apex / LWC with AI</div>
+      <div class="step-badge badge-ai">AI Assist</div>
+    </div>
+
+    <div class="step-card ai" data-step="3" onclick="selectStep(3)">
+      <div class="step-number">03</div>
+      <div class="step-icon">🧪</div>
+      <div class="step-title">Generate & Run Tests</div>
+      <div class="step-badge badge-ai">AI Assist</div>
+    </div>
+
+    <div class="step-card human" data-step="4" onclick="selectStep(4)">
+      <div class="step-number">04</div>
+      <div class="step-icon">📬</div>
+      <div class="step-title">Open Pull Request</div>
+      <div class="step-badge badge-human">Human</div>
+    </div>
+
+    <div class="step-card ai" data-step="5" onclick="selectStep(5)">
+      <div class="step-number">05</div>
+      <div class="step-icon">⚙️</div>
+      <div class="step-title">CI Gate + AI Review</div>
+      <div class="step-badge badge-auto">Automated</div>
+    </div>
+
+    <div class="step-card gate" data-step="6" onclick="selectStep(6)">
+      <div class="step-number">06</div>
+      <div class="step-icon">✅</div>
+      <div class="step-title">CODEOWNERS Approval</div>
+      <div class="step-badge badge-gate">Gate</div>
+    </div>
+
+    <div class="step-card deploy" data-step="7" onclick="selectStep(7)">
+      <div class="step-number">07</div>
+      <div class="step-icon">🚀</div>
+      <div class="step-title">Deploy to Org</div>
+      <div class="step-badge badge-auto">Automated</div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ── Step detail panel (shown when a step is clicked) ──────────────────── -->
+<div id="stepDetail" style="display:none"></div>
+
+<!-- ── Approval gate banner ───────────────────────────────────────────────── -->
+<div class="gate-wrap">
+  <div class="gate-banner">
+    <div style="flex:1">
+      <h3>Merge Approval Gate</h3>
+      <div style="display:flex;align-items:center;gap:0;overflow-x:auto">
+
+        <div class="gate-step">
+          <div class="gate-step-icon pass">⚙️</div>
+          <div class="gate-step-label">CI All Green<br><small>apex-scan + lwc-tests + scratch-org</small></div>
+        </div>
+        <div class="gate-arrow active"></div>
+
+        <div class="gate-step">
+          <div class="gate-step-icon pass">🤖</div>
+          <div class="gate-step-label">AI PR Review<br><small>Claude posts SF risks</small></div>
+        </div>
+        <div class="gate-arrow active"></div>
+
+        <div class="gate-step">
+          <div class="gate-step-icon review">👀</div>
+          <div class="gate-step-label">CODEOWNERS<br><small>apex-leads / lwc-leads</small></div>
+        </div>
+        <div class="gate-arrow"></div>
+
+        <div class="gate-step">
+          <div class="gate-step-icon admin">🔐</div>
+          <div class="gate-step-label">Admin Gate<br><small>production env approval</small></div>
+        </div>
+        <div class="gate-arrow"></div>
+
+        <div class="gate-step">
+          <div class="gate-step-icon merge">✅</div>
+          <div class="gate-step-label">Merge + Deploy<br><small>sf project deploy start</small></div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Legend ─────────────────────────────────────────────────────────────── -->
+<div class="legend" style="margin-top:16px">
+  <div class="legend-item"><div class="legend-dot" style="background:var(--blue)"></div>Human action</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--accent)"></div>AI assisted</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--orange)"></div>Approval gate</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--green)"></div>Automated / CI</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--purple)"></div>Claude Code</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--blue)"></div>GitHub Copilot</div>
+</div>
+
+<script>
+// ── Data ──────────────────────────────────────────────────────────────────────
+const STEPS = {
+  1: {
+    title: 'Scaffold Feature Branch',
+    icon: '🏗️',
+    sub: 'Developer creates the branch and SFDX project scaffold',
+    type: 'human',
+    dev: [
+      'git checkout -b feature/order-agent-sync develop',
+      'cd salesforce/ — open project in VS Code + Salesforce Extension Pack',
+      'Review sfdx-project.json and config/project-scratch-def.json',
+      'sf org create scratch --definition-file config/project-scratch-def.json --alias dev-scratch',
+      'sf project deploy start --source-dir force-app --target-org dev-scratch',
+    ],
+    ai_claude: null,
+    ai_ghcp: null,
+    ai_both: null,
+  },
+  2: {
+    title: 'Write Apex / LWC with AI Assist',
+    icon: '✍️',
+    sub: 'AI tools suggest code while the developer types',
+    type: 'ai',
+    dev: [
+      'Create OrderService.cls — service layer for callouts to agent API',
+      'Extend TriggerHandler.cls to write OrderTriggerHandler.cls',
+      'Add @AuraEnabled methods to CommerceAgentController.cls',
+      'Build LWC component template and wire up fetch() calls',
+    ],
+    ai_claude: {
+      label: 'Claude Code suggestions',
+      lines: [
+        '/review — flags: SOQL in loop at line 34, missing with sharing',
+        'Inline: suggests bulkified List<OrderSummary> instead of single record',
+        'Autocompletes Named Credential pattern: callout:Commerce_Agent_API/path',
+        'Chat: "Explain what FLS violation this SOQL might trigger"',
+      ],
+      cmd: '# In VS Code terminal with Claude Code:\n/review OrderService.cls\n# → "Line 34: SOQL inside for-loop. Move to Map<Id,OrderSummary> before the loop."',
+    },
+    ai_ghcp: {
+      label: 'GitHub Copilot suggestions',
+      lines: [
+        'Inline completions for Apex syntax inside VS Code (Salesforce Extension Pack)',
+        'Schema-aware: autocompletes OrderSummary field names from your org schema',
+        'Copilot Chat: /explain the @AuraEnabled annotation and cacheable=true',
+        'Suggests @TestVisible on private methods automatically',
+      ],
+      cmd: '# GitHub Copilot Chat:\n@workspace what Apex governor limits apply\nto HTTP callouts inside triggers?',
+    },
+    ai_both: {
+      label: 'Using both tools together',
+      lines: [
+        'GHCP for inline completions as you type (schema-aware, fast)',
+        'Claude Code /review after each class is done (architectural check)',
+        'GHCP Chat for quick API lookups; Claude Code for multi-file analysis',
+      ],
+      cmd: '# Workflow:\n# 1. GHCP inline → write the class\n# 2. Claude /review → catch anti-patterns\n# 3. Commit when both are satisfied',
+    },
+  },
+  3: {
+    title: 'Generate & Run Tests',
+    icon: '🧪',
+    sub: 'AI generates @isTest classes and Jest specs; developer runs them locally',
+    type: 'ai',
+    dev: [
+      'sf apex run test --target-org dev-scratch --test-level RunLocalTests --result-format human',
+      'npm run test:unit:coverage — Jest for all three LWC components',
+      'python scripts/check_coverage.py test-results/ — assert ≥75%',
+      'Fix any failing assertions before committing',
+    ],
+    ai_claude: {
+      label: 'Claude Code test generation',
+      lines: [
+        '/test CommerceAgentController.cls — generates complete @isTest class',
+        'Includes: @TestSetup, Test.startTest/stopTest, MockHttpService inner class',
+        'Bulk test: 200-record insert automatically included',
+        'Jest: generates __tests__/salesforceStorefront.test.js with createElement smoke tests',
+      ],
+      cmd: '# Claude Code:\n/test CommerceAgentController.cls\n# → Writes CommerceAgentControllerTest.cls\n# → Includes AuraHandledException test, 200-record bulk test\n# → MockHttpService injected via @TestVisible constructor',
+    },
+    ai_ghcp: {
+      label: 'GitHub Copilot test completion',
+      lines: [
+        'Start typing @isTest class — Copilot autocompletes @TestSetup and test method stubs',
+        'Suggests MockHttpService pattern when it sees IHttpService interface',
+        'Fills in System.assertEquals assertions based on method return type',
+        'For LWC Jest: completes createElement + shadowRoot.querySelector patterns',
+      ],
+      cmd: '// In VS Code, type:\n@isTest\nprivate class OrderServiceTest {\n// Copilot suggests:\n    @TestSetup static void makeData() { ... }\n    @isTest static void syncOrders_makesCallout() { ... }',
+    },
+    ai_both: {
+      label: 'Combined test workflow',
+      lines: [
+        'Use /test in Claude for the full generated class (fastest baseline)',
+        'Let GHCP fill in edge-case assertions as you extend the test class',
+        'Claude /review the final test class: checks for missing bulk tests',
+      ],
+      cmd: '# Step 1 — Claude generates:\n/test OrderService.cls\n\n# Step 2 — GHCP extends:\n# Start typing a new @isTest method → Copilot fills it in\n\n# Step 3 — Claude reviews:\n/review OrderServiceTest.cls',
+    },
+  },
+  4: {
+    title: 'Open Pull Request',
+    icon: '📬',
+    sub: 'Developer pushes the branch and opens a PR against develop',
+    type: 'human',
+    dev: [
+      'git push -u origin feature/order-agent-sync',
+      'gh pr create --base develop --title "feat: OrderSummary trigger + agent sync"',
+      'PR template auto-fills checklist (Apex coverage, LWC tests, sandbox test)',
+      'CODEOWNERS automatically requested: @apex-leads for classes/, @lwc-leads for lwc/',
+    ],
+    ai_claude: {
+      label: 'Claude assists PR description',
+      lines: [
+        'CI job ai-pr-review runs automatically on PR open',
+        'Claude reads the diff and posts a structured comment: what changed, SF risks, coverage delta',
+        'Translates PMD violations into plain English if apex-scan fails',
+      ],
+      cmd: '# Auto-posted by CI:\n## 🤖 AI Salesforce Review\n**What changed:** OrderService.cls (callout layer),\nOrderTriggerHandler.cls, OrderTrigger.trigger\n\n**SF Risks:** None detected — with sharing present,\nNamed Credential used, no SOQL in loops\n\n**Verdict:** LGTM',
+    },
+    ai_ghcp: {
+      label: 'Copilot for PR description',
+      lines: [
+        'Copilot can draft PR descriptions from your commit messages in GitHub UI',
+        'Use "Summarize my changes" in GitHub Copilot chat',
+      ],
+      cmd: '# GitHub Copilot in browser:\n"Summarize the changes in this PR"\n→ Draft description auto-filled',
+    },
+    ai_both: {
+      label: 'Combined PR creation',
+      lines: [
+        'GHCP drafts the PR description from commits',
+        'Claude CI job reviews the diff for Salesforce-specific risks',
+        'Both provide complementary coverage',
+      ],
+      cmd: 'gh pr create --base develop \\\n  --title "feat: OrderSummary trigger + agent sync" \\\n  --body "$(gh copilot suggest pr-body)"',
+    },
+  },
+  5: {
+    title: 'CI Gate + AI Review',
+    icon: '⚙️',
+    sub: 'GitHub Actions runs all four CI jobs automatically',
+    type: 'ai',
+    dev: [
+      'Watch CI run in GitHub Actions — typically 15 min total',
+      'Fix any PMD violations flagged by apex-scan',
+      'Fix any LWC Jest failures from lwc-unit-tests',
+      'Re-push if scratch-org-validate fails (deploy errors visible in logs)',
+    ],
+    ai_claude: {
+      label: 'Claude in CI pipeline',
+      lines: [
+        'ai-pr-review job: posts structured SF review on PR open',
+        'apex-scan failure: explain_pmd_violations.py calls Claude to explain each PMD code',
+        'Claude response includes: what the rule means, why it matters in SF, exact fix',
+        'No developer action needed — comment appears automatically',
+      ],
+      cmd: '# Auto-generated by explain_pmd_violations.py:\n[ApexSOQLInjection] CommerceAgentService.cls:45\n→ Plain English: "String.escapeSingleQuotes() is missing\n   before building this SOQL string. An attacker could\n   inject SOQL to read or modify records they should not access."\n→ Fix: wrap user input with String.escapeSingleQuotes(input)',
+    },
+    ai_ghcp: {
+      label: 'Copilot for CI fixes',
+      lines: [
+        'GHCP inline completions help fix PMD violations as you edit',
+        'Copilot Chat: paste the PMD error → get fix suggestion',
+        'No native CI integration — developer pastes the error manually',
+      ],
+      cmd: '# In Copilot Chat:\n"PMD says ApexCRUDViolation at line 67 of OrderService.cls"\n→ Copilot explains and suggests fix',
+    },
+    ai_both: {
+      label: 'CI + local fix loop',
+      lines: [
+        'Claude in CI explains failures automatically — no copy-paste needed',
+        'GHCP inline helps apply the fix in the editor',
+        'Re-push → CI reruns → all green',
+      ],
+      cmd: '# Loop:\n# 1. CI fails → Claude explains in PR comment\n# 2. Dev opens file → GHCP suggests fix\n# 3. git push → CI reruns',
+    },
+  },
+  6: {
+    title: 'CODEOWNERS Approval',
+    icon: '✅',
+    sub: 'Required reviewers from CODEOWNERS review and approve the PR',
+    type: 'gate',
+    dev: [
+      '@apex-leads reviews Apex classes: TriggerHandler pattern, bulkification, sharing',
+      '@lwc-leads reviews LWC: LWS compliance, Jest coverage, mobile layout',
+      '@platform reviews sfdx-project.json and CI changes if modified',
+      'Reviewer approves or requests changes — PR cannot merge without all approvals',
+    ],
+    ai_claude: {
+      label: 'Claude assists reviewers',
+      lines: [
+        'Reviewer can ask Claude Code: /explain this Apex service layer',
+        'Claude summarises the AI review comment at the top of the PR thread',
+        'Reviewer uses Claude to quickly understand unfamiliar patterns',
+      ],
+      cmd: '# Reviewer in their terminal:\n/explain CommerceAgentService.cls\n→ "This service wraps all HTTP callouts to the external\n   agent API. IHttpService is injected for testability.\n   With sharing is enforced — callers see only records\n   they have access to in the running user context."',
+    },
+    ai_ghcp: {
+      label: 'Copilot assists reviewers',
+      lines: [
+        'Reviewer can use Copilot Chat on GitHub.com to explain a diff',
+        '"What does this trigger handler do?" → plain English explanation',
+        'GHCP can suggest inline review comments from the diff view',
+      ],
+      cmd: '# On GitHub PR diff view:\n# Copilot → "Explain this changed method"\n→ Instant explanation of the trigger handler logic',
+    },
+    ai_both: {
+      label: 'AI-aided code review',
+      lines: [
+        'Claude auto-review comment gives reviewers the risk summary upfront',
+        'GHCP helps explain unfamiliar patterns on GitHub.com',
+        'Reviewers spend time on logic, not syntax — AI handles the boilerplate checks',
+      ],
+      cmd: '# Reviewer reads Claude\'s auto-comment first:\n# → "No SOQL in loops, with sharing present, Named Credential used"\n# Then focuses review on: business logic correctness + test quality',
+    },
+  },
+  7: {
+    title: 'Deploy to Org',
+    icon: '🚀',
+    sub: 'CI deploys automatically after merge — no manual Workbench step',
+    type: 'deploy',
+    dev: [
+      'Merge PR → develop: CI triggers sandbox-deploy job automatically',
+      'sf project deploy start --source-dir force-app --target-org ci-sandbox',
+      'Apex tests run on sandbox after deploy (regression gate)',
+      'Merge develop → main (needs 2 reviewers + production env approval): production-deploy fires',
+    ],
+    ai_claude: null,
+    ai_ghcp: null,
+    ai_both: {
+      label: 'Post-deploy verification',
+      lines: [
+        'After sandbox deploy: use Claude Code to generate a smoke-test script',
+        'GHCP helps write an sf CLI script to verify Named Credential endpoint is correct',
+        'Both tools assist with any hotfix needed after deploy',
+      ],
+      cmd: '# After deploy, Claude verifies:\n/review — check deployed LWC matches source\n\n# GHCP assists hotfix if needed:\ngit checkout -b hotfix/ncred-endpoint main\n# → GHCP fills in the Named Credential update steps',
+    },
+  },
+};
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let activeTool = 'claude';
+let activeStep = null;
+
+function setTool(tool) {
+  activeTool = tool;
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelector(`.tab.${tool}`).classList.add('active');
+  if (activeStep) renderDetail(activeStep);
+}
+
+function selectStep(n) {
+  if (activeStep === n) {
+    // toggle off
+    activeStep = null;
+    document.getElementById('stepDetail').style.display = 'none';
+    document.querySelectorAll('.step-card').forEach(c => c.classList.remove('active'));
+    return;
+  }
+  activeStep = n;
+  document.querySelectorAll('.step-card').forEach(c => {
+    c.classList.toggle('active', parseInt(c.dataset.step) === n);
+  });
+  renderDetail(n);
+  document.getElementById('stepDetail').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function renderDetail(n) {
+  const s = STEPS[n];
+  const ai = activeTool === 'claude' ? s.ai_claude
+           : activeTool === 'ghcp'   ? s.ai_ghcp
+           : s.ai_both || s.ai_claude || s.ai_ghcp;
+
+  const toolName = activeTool === 'claude' ? 'Claude Code'
+                 : activeTool === 'ghcp'   ? 'GitHub Copilot'
+                 : 'Claude + GitHub Copilot';
+  const toolClass = activeTool === 'both' ? 'both' : activeTool === 'ghcp' ? 'ghcp' : '';
+
+  let aiHtml = '';
+  if (ai) {
+    aiHtml = `
+      <div class="ai-box ${toolClass}">
+        <h4 class="${toolClass || 'claude'}">${toolName}</h4>
+        <ul style="list-style:none;display:flex;flex-direction:column;gap:6px;margin-bottom:10px">
+          ${ai.lines.map(l => `<li style="font-size:13px;color:var(--ink-2)">→ ${l}</li>`).join('')}
+        </ul>
+        ${ai.cmd ? `<code>${escHtml(ai.cmd)}</code>` : ''}
+      </div>`;
+  } else {
+    aiHtml = `<div class="ai-box" style="opacity:.5"><h4 class="claude">No AI touchpoint at this step</h4>
+      <p style="font-size:13px;color:var(--ink-soft)">This step is fully manual — no AI tool is active.</p></div>`;
+  }
+
+  document.getElementById('stepDetail').innerHTML = `
+    <div class="step-detail">
+      <div class="detail-header">
+        <div class="detail-icon">${s.icon}</div>
+        <div>
+          <div class="detail-title">Step ${n}: ${s.title}</div>
+          <div class="detail-sub">${s.sub}</div>
+        </div>
+      </div>
+      <div class="detail-cols">
+        <div class="detail-col">
+          <h4>Developer Actions</h4>
+          <ul>${s.dev.map(d => `<li>${d}</li>`).join('')}</ul>
+        </div>
+        <div class="detail-col">
+          <h4>AI Tool: ${toolName}</h4>
+          ${aiHtml}
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('stepDetail').style.display = 'block';
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+</script>
+</body>
+</html>

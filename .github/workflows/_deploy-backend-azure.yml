@@ -1,0 +1,162 @@
+name: _Deploy backend — Azure Container Apps
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Reusable workflow: deploy the FastAPI backend to Azure Container Apps.
+# Caller must pass `environment` and `image-tag`; all secrets are inherited.
+#
+# Prerequisites (one-time setup):
+#   1. Azure Container Registry:  az acr create --name <ACR_NAME> --sku Basic
+#   2. Resource group:            az group create --name commerce-agents-rg --location eastus
+#   3. Container App environment: az containerapp env create ...
+#   4. Sandbox and production Container Apps (see infrastructure/azure/container-app.bicep)
+#   5. Federated identity credential on the service principal for OIDC
+#   6. Repository variables: ACR_LOGIN_SERVER, ACR_NAME, ACA_RESOURCE_GROUP
+#      SANDBOX_ACA_APP, SANDBOX_ACA_ENV, SANDBOX_API_URL
+#      PROD_ACA_APP, PROD_ACA_ENV, PROD_API_URL
+#   7. Repository secrets: AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID
+# ──────────────────────────────────────────────────────────────────────────────
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string   # 'sandbox' | 'production'
+      image-tag:
+        required: true
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy-azure:
+    name: "Azure Container Apps · ${{ inputs.environment }}"
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+
+    env:
+      ACR_LOGIN_SERVER: ${{ vars.ACR_LOGIN_SERVER }}
+      IMAGE_NAME:       commerce-agent-api
+      RESOURCE_GROUP:   ${{ vars.ACA_RESOURCE_GROUP || 'commerce-agents-rg' }}
+      ACA_APP:          ${{ inputs.environment == 'production' && vars.PROD_ACA_APP     || vars.SANDBOX_ACA_APP }}
+      ACA_ENV:          ${{ inputs.environment == 'production' && vars.PROD_ACA_ENV     || vars.SANDBOX_ACA_ENV }}
+      API_URL:          ${{ inputs.environment == 'production' && vars.PROD_API_URL     || vars.SANDBOX_API_URL }}
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      # ── Azure OIDC login (no client secrets needed) ────────────────────────
+      - name: Log in to Azure
+        uses: azure/login@6c251865b4e6290e7b78be643ea2d005bc51f69a # v2
+        with:
+          client-id:       ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id:       ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Log in to ACR
+        run: az acr login --name ${{ vars.ACR_NAME }}
+
+      # ── Deploy image to Container Apps ─────────────────────────────────────
+      - name: Update Container App image
+        run: |
+          az containerapp update \
+            --name "${{ env.ACA_APP }}" \
+            --resource-group "${{ env.RESOURCE_GROUP }}" \
+            --image "${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ inputs.image-tag }}" \
+            --set-env-vars \
+              "SF_INSTANCE_URL=${{ secrets.SF_INSTANCE_URL }}" \
+              "ANTHROPIC_BASE_URL=${{ vars.ANTHROPIC_BASE_URL }}" \
+              "ENVIRONMENT=${{ inputs.environment }}"
+
+      # ── Wait for revision to be active ────────────────────────────────────
+      - name: Wait for Container App revision
+        run: |
+          echo "Waiting for new revision to be provisioned…"
+          for i in $(seq 1 20); do
+            STATUS=$(az containerapp revision list \
+              --name "${{ env.ACA_APP }}" \
+              --resource-group "${{ env.RESOURCE_GROUP }}" \
+              --query "[0].properties.runningState" -o tsv 2>/dev/null || echo "Unknown")
+            echo "Attempt $i — runningState: $STATUS"
+            if [ "$STATUS" = "Running" ]; then exit 0; fi
+            sleep 15
+          done
+          echo "Container App did not reach Running state in time"
+          exit 1
+
+      # ── Health check ───────────────────────────────────────────────────────
+      - name: Health check
+        run: |
+          URL="${{ env.API_URL }}"
+          if [ -z "$URL" ]; then echo "API URL not set — skipping health check"; exit 0; fi
+          for i in 1 2 3 4 5; do
+            STATUS=$(curl -sf -o /dev/null -w "%{http_code}" "${URL}/health" || echo "000")
+            if [ "$STATUS" = "200" ]; then echo "Health check passed (attempt $i)"; exit 0; fi
+            echo "Attempt $i: HTTP $STATUS — retrying in 15s…"
+            sleep 15
+          done
+          echo "Health check failed after 5 attempts"
+          exit 1
+
+      # ── Rollback on failure ────────────────────────────────────────────────
+      - name: Rollback on failure
+        if: failure()
+        run: |
+          PREV=$(az containerapp revision list \
+            --name "${{ env.ACA_APP }}" \
+            --resource-group "${{ env.RESOURCE_GROUP }}" \
+            --query "[1].name" -o tsv 2>/dev/null || echo "")
+          if [ -n "$PREV" ]; then
+            echo "Activating previous revision: $PREV"
+            az containerapp revision activate \
+              --name "${{ env.ACA_APP }}" \
+              --resource-group "${{ env.RESOURCE_GROUP }}" \
+              --revision "$PREV"
+          else
+            echo "No previous revision found — cannot rollback"
+          fi
+
+  # ── Web apps: Azure Static Web Apps ───────────────────────────────────────
+  deploy-web-azure:
+    name: "Azure SWA · ${{ inputs.environment }}"
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    strategy:
+      matrix:
+        include:
+          - app: storefront-web
+            token_secret: AZURE_SWA_TOKEN_STOREFRONT
+          - app: merchant-web
+            token_secret: AZURE_SWA_TOKEN_MERCHANT
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: examples/salesforce/${{ matrix.app }}/package-lock.json
+
+      - name: Install
+        run: npm ci
+        working-directory: examples/salesforce/${{ matrix.app }}
+
+      - name: Build
+        run: npm run build
+        working-directory: examples/salesforce/${{ matrix.app }}
+        env:
+          NEXT_PUBLIC_API_URL: ${{ inputs.environment == 'production' && vars.PROD_API_URL || vars.SANDBOX_API_URL }}
+
+      - name: Deploy to Azure Static Web Apps
+        uses: Azure/static-web-apps-deploy@1a947af9992250f3bc2e68ad0754c0b0c11566c9 # v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets[matrix.token_secret] }}
+          repo_token: ${{ github.token }}
+          action: upload
+          app_location: examples/salesforce/${{ matrix.app }}
+          output_location: out
+          skip_app_build: false
+          deployment_environment: ${{ inputs.environment }}

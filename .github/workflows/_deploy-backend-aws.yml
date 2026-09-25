@@ -1,0 +1,194 @@
+name: _Deploy backend — AWS ECS
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Reusable workflow: deploy the FastAPI backend to AWS ECS Fargate.
+# Caller must pass `environment` and `image-tag`; all secrets are inherited.
+#
+# Prerequisites (one-time setup):
+#   1. ECR repository created:  aws ecr create-repository --repository-name commerce-agent-api
+#   2. ECS cluster:             aws ecs create-cluster --cluster-name commerce-agents
+#   3. ECS services for sandbox and production (see infrastructure/aws/ecs-service.json)
+#   4. GitHub OIDC trust on the IAM role (see infrastructure/aws/iam-oidc-policy.json)
+#   5. Repository variables: ECR_REGISTRY, AWS_REGION, ECS_CLUSTER
+#      SANDBOX_ECS_SERVICE, SANDBOX_TASK_DEF_FAMILY, SANDBOX_API_URL
+#      PROD_ECS_SERVICE, PROD_TASK_DEF_FAMILY
+# ──────────────────────────────────────────────────────────────────────────────
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string   # 'sandbox' | 'production'
+      image-tag:
+        required: true
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy-aws:
+    name: "AWS ECS · ${{ inputs.environment }}"
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+
+    env:
+      AWS_REGION:       ${{ vars.AWS_REGION || 'us-east-1' }}
+      ECR_REGISTRY:     ${{ vars.ECR_REGISTRY }}
+      IMAGE_NAME:       commerce-agent-api
+      ECS_CLUSTER:      ${{ vars.ECS_CLUSTER || 'commerce-agents' }}
+      ECS_SERVICE:      ${{ inputs.environment == 'production' && vars.PROD_ECS_SERVICE  || vars.SANDBOX_ECS_SERVICE }}
+      TASK_DEF_FAMILY:  ${{ inputs.environment == 'production' && vars.PROD_TASK_DEF_FAMILY || vars.SANDBOX_TASK_DEF_FAMILY }}
+      CONTAINER_NAME:   commerce-agent-api
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      # ── AWS auth via OIDC (no long-lived access keys) ──────────────────────
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # ── Pull current task definition from ECS ─────────────────────────────
+      - name: Download current task definition
+        run: |
+          aws ecs describe-task-definition \
+            --task-definition "${{ env.TASK_DEF_FAMILY }}" \
+            --query taskDefinition \
+            > task-definition.json
+
+      # ── Stamp the new image SHA into the task definition ──────────────────
+      - name: Update image in task definition
+        id: task-def
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: task-definition.json
+          container-name: ${{ env.CONTAINER_NAME }}
+          image: >-
+            ${{ env.ECR_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ inputs.image-tag }}
+
+      # ── Inject secrets as environment variables in the task definition ─────
+      - name: Inject environment config
+        run: |
+          TASK_DEF=$(cat "${{ steps.task-def.outputs.task-definition }}")
+          echo "$TASK_DEF" | python3 - <<'PYEOF'
+          import sys, json, os
+          td = json.load(open(sys.argv[1]))
+          env = td['containerDefinitions'][0].setdefault('environment', [])
+          overrides = {
+              'ANTHROPIC_BASE_URL':  os.environ.get('ANTHROPIC_BASE_URL', ''),
+              'SF_INSTANCE_URL':     os.environ.get('SF_INSTANCE_URL', ''),
+          }
+          existing = {e['name'] for e in env}
+          for k, v in overrides.items():
+              if k not in existing and v:
+                  env.append({'name': k, 'value': v})
+          print(json.dumps(td, indent=2))
+          PYEOF
+        env:
+          SF_INSTANCE_URL: ${{ secrets.SF_INSTANCE_URL }}
+          ANTHROPIC_BASE_URL: ${{ vars.ANTHROPIC_BASE_URL }}
+
+      # ── Deploy new task definition to ECS ─────────────────────────────────
+      - name: Deploy to ECS
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.task-def.outputs.task-definition }}
+          service: ${{ env.ECS_SERVICE }}
+          cluster: ${{ env.ECS_CLUSTER }}
+          wait-for-service-stability: true
+          wait-for-minutes: 10
+
+      # ── Health check ───────────────────────────────────────────────────────
+      - name: Health check
+        run: |
+          URL="${{ inputs.environment == 'production' && vars.PROD_API_URL || vars.SANDBOX_API_URL }}"
+          if [ -z "$URL" ]; then echo "SANDBOX_API_URL / PROD_API_URL not set — skipping health check"; exit 0; fi
+          for i in 1 2 3 4 5; do
+            STATUS=$(curl -sf -o /dev/null -w "%{http_code}" "${URL}/health" || echo "000")
+            if [ "$STATUS" = "200" ]; then echo "Health check passed (attempt $i)"; exit 0; fi
+            echo "Attempt $i: HTTP $STATUS — retrying in 15s…"
+            sleep 15
+          done
+          echo "Health check failed after 5 attempts"
+          exit 1
+
+      # ── Rollback on failure ────────────────────────────────────────────────
+      - name: Rollback on failure
+        if: failure()
+        run: |
+          PREVIOUS=$(aws ecs describe-services \
+            --cluster "${{ env.ECS_CLUSTER }}" \
+            --services "${{ env.ECS_SERVICE }}" \
+            --query 'services[0].deployments[-1].taskDefinition' \
+            --output text)
+          echo "Rolling back to: $PREVIOUS"
+          aws ecs update-service \
+            --cluster "${{ env.ECS_CLUSTER }}" \
+            --service "${{ env.ECS_SERVICE }}" \
+            --task-definition "$PREVIOUS" \
+            --force-new-deployment
+
+  # ── Web apps: S3 + CloudFront ──────────────────────────────────────────────
+  deploy-web-aws:
+    name: "AWS S3+CF · ${{ inputs.environment }}"
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    strategy:
+      matrix:
+        app: [storefront-web, merchant-web]
+
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+      S3_BUCKET:  ${{ inputs.environment == 'production' && vars.PROD_S3_BUCKET  || vars.SANDBOX_S3_BUCKET }}
+      CF_DIST:    ${{ inputs.environment == 'production' && vars.PROD_CF_DIST_ID || vars.SANDBOX_CF_DIST_ID }}
+      API_URL:    ${{ inputs.environment == 'production' && vars.PROD_API_URL    || vars.SANDBOX_API_URL }}
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: examples/salesforce/${{ matrix.app }}/package-lock.json
+
+      - name: Install
+        run: npm ci
+        working-directory: examples/salesforce/${{ matrix.app }}
+
+      - name: Build with real API URL
+        run: npm run build
+        working-directory: examples/salesforce/${{ matrix.app }}
+        env:
+          NEXT_PUBLIC_API_URL: ${{ env.API_URL }}
+
+      # Next.js static export requires `output: 'export'` in next.config.ts
+      - name: Export static files
+        run: npm run export || npx next export
+        working-directory: examples/salesforce/${{ matrix.app }}
+
+      - name: Upload to S3
+        run: |
+          aws s3 sync \
+            examples/salesforce/${{ matrix.app }}/out/ \
+            s3://${{ env.S3_BUCKET }}/${{ matrix.app }}/ \
+            --delete \
+            --cache-control "public, max-age=86400"
+
+      - name: Invalidate CloudFront cache
+        if: env.CF_DIST != ''
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id "${{ env.CF_DIST }}" \
+            --paths "/${{ matrix.app }}/*"

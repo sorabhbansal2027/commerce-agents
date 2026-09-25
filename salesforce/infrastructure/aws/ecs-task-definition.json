@@ -1,0 +1,65 @@
+{
+  "_comment": "ECS Fargate task definition template for commerce-agent-api. Replace <ECR_REGISTRY>, <ACCOUNT_ID>, <REGION> before registering. Register with: aws ecs register-task-definition --cli-input-json file://ecs-task-definition.json",
+  "family": "commerce-agent-api",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "512",
+  "memory": "1024",
+  "executionRoleArn": "arn:aws:iam::<ACCOUNT_ID>:role/ecsTaskExecutionRole",
+  "taskRoleArn": "arn:aws:iam::<ACCOUNT_ID>:role/ecsTaskRole",
+  "containerDefinitions": [
+    {
+      "name": "commerce-agent-api",
+      "image": "<ECR_REGISTRY>/commerce-agent-api:latest",
+      "portMappings": [
+        {
+          "containerPort": 8000,
+          "protocol": "tcp"
+        }
+      ],
+      "essential": true,
+      "environment": [
+        { "name": "PORT", "value": "8000" }
+      ],
+      "secrets": [
+        {
+          "name": "SF_CLIENT_ID",
+          "valueFrom": "arn:aws:secretsmanager:<REGION>:<ACCOUNT_ID>:secret:commerce-agents/salesforce:SF_CLIENT_ID::"
+        },
+        {
+          "name": "SF_CLIENT_SECRET",
+          "valueFrom": "arn:aws:secretsmanager:<REGION>:<ACCOUNT_ID>:secret:commerce-agents/salesforce:SF_CLIENT_SECRET::"
+        },
+        {
+          "name": "SF_INSTANCE_URL",
+          "valueFrom": "arn:aws:secretsmanager:<REGION>:<ACCOUNT_ID>:secret:commerce-agents/salesforce:SF_INSTANCE_URL::"
+        },
+        {
+          "name": "ANTHROPIC_API_KEY",
+          "valueFrom": "arn:aws:secretsmanager:<REGION>:<ACCOUNT_ID>:secret:commerce-agents/anthropic:ANTHROPIC_API_KEY::"
+        }
+      ],
+      "healthCheck": {
+        "command": ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"],
+        "interval": 30,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 15
+      },
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/commerce-agent-api",
+          "awslogs-region": "<REGION>",
+          "awslogs-stream-prefix": "ecs"
+        }
+      },
+      "readonlyRootFilesystem": false,
+      "user": "1000:1000"
+    }
+  ],
+  "tags": [
+    { "key": "Project",     "value": "commerce-agents" },
+    { "key": "ManagedBy",   "value": "github-actions" }
+  ]
+}

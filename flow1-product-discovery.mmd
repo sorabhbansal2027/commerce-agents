@@ -1,0 +1,48 @@
+sequenceDiagram
+    autonumber
+    actor User
+    participant React as React Frontend<br/>(Railway)
+    participant FastAPI as FastAPI Server<br/>(Railway)
+    participant Agent as TrackedAgent<br/>(Railway)
+    participant Gemini as Gemini API<br/>(Google Cloud)
+    participant UCP as UCP Endpoints<br/>(Railway)
+    participant SF as Salesforce B2B<br/>(External)
+
+    Note over React,SF: Flow 1 — Product Discovery: "Show me laptops under $1,200"
+
+    User->>React: Types message in chat input
+    React->>FastAPI: POST /api/chat<br/>{ "message": "Show me laptops under $1,200" }
+
+    FastAPI->>Agent: Reset per-turn state<br/>last_products=[], last_tool_calls=[]
+
+    FastAPI->>Gemini: generate_content(<br/>  tools=[search_products, add_to_cart, …],<br/>  config=GenerateContentConfig,<br/>  history + user message<br/>)
+
+    Note over Gemini: Model reads UCP FunctionDeclarations<br/>and decides to call search_products
+
+    Gemini-->>FastAPI: FunctionCall<br/>{ name: "search_products",<br/>  args: { query: "laptop", max_price: 1200 } }
+
+    FastAPI->>Agent: _call_ucp("search_products", args)<br/>Records tool call in last_tool_calls[]
+
+    Agent->>UCP: GET /ucp/products<br/>?q=laptop&max_price=1200
+
+    UCP->>SF: SOQL SELECT Id, Name, StockKeepingUnit,<br/>UnitPrice FROM ProductCatalog<br/>WHERE UnitPrice < 1200<br/>AND Name LIKE '%laptop%'
+
+    SF-->>UCP: [ { product_id, title, price,<br/>currency, image_url, in_stock }, … ]
+
+    UCP-->>Agent: { products: [ ProBook 440, EliteBook 640, … ] }
+
+    Agent->>Agent: Stores results in last_products[]
+
+    Agent-->>FastAPI: { products: […] }
+
+    FastAPI->>Gemini: FunctionResponse<br/>{ role: "user",<br/>  parts: [{ function_response:<br/>    { name: "search_products",<br/>      response: { products: […] } } }] }
+
+    Note over Gemini: Agentic loop: no more tool calls needed<br/>Generates natural language reply
+
+    Gemini-->>FastAPI: "Here are laptops under $1,200:<br/>1. HP ProBook 440 G11 — $1,099<br/>2. HP EliteBook 640 G10 — $1,149 …"
+
+    FastAPI-->>React: HTTP 200<br/>{ reply: "Here are laptops…",<br/>  products: [ ProBook, EliteBook, … ],<br/>  tool_calls: [{ tool:"search_products", args:{…} }],<br/>  cart_additions: [] }
+
+    React->>React: Renders assistant message<br/>+ product-grid cards with Add to Cart buttons
+
+    React-->>User: Chat reply + product cards displayed

@@ -1,0 +1,1595 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>commerce-agents-main — Directory Map</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface2: #22263a;
+    --border: #2e3350;
+    --text: #e2e8f0;
+    --text-muted: #8892b0;
+    --text-dim: #4a5568;
+    --accent: #64ffda;
+    --header-bg: #0a0c14;
+
+    --tag-ucp: #7c3aed;
+    --tag-ucp-bg: #1e1040;
+    --tag-mcp: #16a34a;
+    --tag-mcp-bg: #052e16;
+    --tag-lwc: #d97706;
+    --tag-lwc-bg: #2d1a00;
+    --tag-nextjs: #2563eb;
+    --tag-nextjs-bg: #0a1628;
+    --tag-gemini: #7c3aed;
+    --tag-gemini-bg: #1e0f40;
+    --tag-plugin: #0891b2;
+    --tag-plugin-bg: #042030;
+    --tag-core: #475569;
+    --tag-core-bg: #111827;
+    --tag-new: #22c55e;
+    --tag-new-bg: #052e16;
+
+    --file-py: #4ade80;
+    --file-ts: #60a5fa;
+    --file-html: #f472b6;
+    --file-json: #facc15;
+    --file-md: #c084fc;
+    --file-yaml: #fb923c;
+    --file-sh: #34d399;
+    --file-txt: #94a3b8;
+    --file-toml: #fb923c;
+    --file-js: #fbbf24;
+    --file-css: #f472b6;
+    --file-cls: #60a5fa;
+    --file-other: #8892b0;
+
+    --folder: #fbbf24;
+    --indent: 20px;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    font-size: 14px;
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+
+  /* HEADER */
+  header {
+    background: var(--header-bg);
+    border-bottom: 1px solid var(--border);
+    padding: 28px 32px 24px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    backdrop-filter: blur(8px);
+  }
+
+  .header-top {
+    display: flex;
+    align-items: baseline;
+    gap: 16px;
+    margin-bottom: 20px;
+  }
+
+  header h1 {
+    font-size: 20px;
+    font-weight: 700;
+    color: #fff;
+    letter-spacing: -0.3px;
+  }
+
+  header h1 span {
+    color: var(--accent);
+  }
+
+  .header-sub {
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+
+  /* STAT CARDS */
+  .stats {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 18px;
+  }
+
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 14px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 90px;
+  }
+
+  .stat-num {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--accent);
+    line-height: 1.2;
+  }
+
+  .stat-label {
+    font-size: 11px;
+    color: var(--text-muted);
+    text-align: center;
+  }
+
+  /* CONTROLS */
+  .controls {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .search-wrap {
+    position: relative;
+    flex: 0 0 260px;
+  }
+
+  .search-wrap input {
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 13px;
+    padding: 7px 32px 7px 12px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+
+  .search-wrap input:focus { border-color: var(--accent); }
+  .search-wrap input::placeholder { color: var(--text-dim); }
+
+  .search-clear {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 16px;
+    line-height: 1;
+    display: none;
+    padding: 2px;
+  }
+
+  .filter-label {
+    font-size: 12px;
+    color: var(--text-muted);
+    white-space: nowrap;
+  }
+
+  .filters {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .filter-btn {
+    border: 1px solid transparent;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.4px;
+    padding: 4px 9px;
+    transition: all 0.15s;
+    text-transform: uppercase;
+  }
+
+  .filter-btn[data-tag="UCP"]    { background: var(--tag-ucp-bg);    color: #a78bfa; border-color: #4c1d95; }
+  .filter-btn[data-tag="MCP"]    { background: var(--tag-mcp-bg);    color: #4ade80; border-color: #14532d; }
+  .filter-btn[data-tag="LWC"]    { background: var(--tag-lwc-bg);    color: #fbbf24; border-color: #78350f; }
+  .filter-btn[data-tag="Next.js"]{ background: var(--tag-nextjs-bg); color: #60a5fa; border-color: #1e3a8a; }
+  .filter-btn[data-tag="Gemini"] { background: #1a0a2e;              color: #c084fc; border-color: #4c1d95; }
+  .filter-btn[data-tag="Plugin"] { background: var(--tag-plugin-bg); color: #22d3ee; border-color: #164e63; }
+  .filter-btn[data-tag="NEW"]    { background: var(--tag-new-bg);    color: #4ade80; border-color: #14532d; }
+  .filter-btn[data-tag="Core"]   { background: var(--tag-core-bg);   color: #94a3b8; border-color: #1e293b; }
+
+  .filter-btn.active { opacity: 1; box-shadow: 0 0 0 2px currentColor; }
+  .filter-btn:not(.active) { opacity: 0.65; }
+  .filter-btn:hover { opacity: 1; }
+
+  .collapse-all-btn {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 11px;
+    padding: 5px 10px;
+    transition: all 0.15s;
+    margin-left: auto;
+  }
+  .collapse-all-btn:hover { color: var(--text); border-color: var(--accent); }
+
+  /* MAIN */
+  main {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 24px 32px 64px;
+  }
+
+  /* SECTION HEADERS */
+  .section-header {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin: 32px 0 8px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .section-header:first-of-type { margin-top: 8px; }
+
+  /* TREE */
+  .tree {
+    font-family: 'SFMono-Regular', 'Cascadia Code', 'Fira Code', 'Consolas', 'Monaco', monospace;
+    font-size: 13px;
+    line-height: 1;
+  }
+
+  .tree-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 0;
+    border-radius: 4px;
+    cursor: default;
+    transition: background 0.1s;
+    position: relative;
+  }
+
+  .tree-row:hover { background: var(--surface); }
+
+  .tree-row.hidden { display: none; }
+
+  .tree-row.search-highlight { background: #1a2a1a; }
+
+  .tree-row.folder-row { cursor: pointer; }
+
+  /* Indent */
+  .indent { display: inline-block; width: var(--indent); flex-shrink: 0; }
+
+  /* Toggle */
+  .toggle {
+    display: inline-block;
+    width: 14px;
+    flex-shrink: 0;
+    color: var(--text-muted);
+    font-size: 10px;
+    text-align: center;
+    transition: transform 0.15s;
+    user-select: none;
+  }
+
+  .toggle.collapsed { transform: rotate(-90deg); }
+  .toggle.leaf { color: transparent; pointer-events: none; }
+
+  /* Icon */
+  .icon {
+    flex-shrink: 0;
+    font-size: 13px;
+    width: 16px;
+    text-align: center;
+  }
+
+  /* Name */
+  .name {
+    flex-shrink: 0;
+    font-weight: 500;
+  }
+
+  .name.folder-name { color: var(--folder); }
+
+  .ext-py  { color: var(--file-py); }
+  .ext-ts, .ext-tsx { color: var(--file-ts); }
+  .ext-html { color: var(--file-html); }
+  .ext-json { color: var(--file-json); }
+  .ext-md  { color: var(--file-md); }
+  .ext-yaml, .ext-yml { color: var(--file-yaml); }
+  .ext-sh  { color: var(--file-sh); }
+  .ext-txt { color: var(--file-txt); }
+  .ext-toml { color: var(--file-toml); }
+  .ext-js  { color: var(--file-js); }
+  .ext-css { color: var(--file-css); }
+  .ext-cls { color: var(--file-cls); }
+  .ext-other { color: var(--file-other); }
+
+  /* Desc */
+  .desc {
+    color: var(--text-muted);
+    font-size: 12px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    margin-left: 4px;
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Badges */
+  .badges {
+    display: flex;
+    gap: 4px;
+    flex-shrink: 0;
+    margin-left: auto;
+    padding-right: 6px;
+  }
+
+  .badge {
+    border-radius: 3px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    padding: 1px 5px;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .badge-UCP    { background: var(--tag-ucp-bg);    color: #a78bfa; }
+  .badge-MCP    { background: var(--tag-mcp-bg);    color: #4ade80; }
+  .badge-LWC    { background: var(--tag-lwc-bg);    color: #fbbf24; }
+  .badge-Nextjs { background: var(--tag-nextjs-bg); color: #60a5fa; }
+  .badge-Gemini { background: #1a0a2e;              color: #c084fc; }
+  .badge-Plugin { background: var(--tag-plugin-bg); color: #22d3ee; }
+  .badge-NEW    { background: #052e16;              color: #4ade80; }
+  .badge-Core   { background: var(--tag-core-bg);   color: #94a3b8; }
+
+  /* Children container */
+  .children { overflow: hidden; }
+  .children.collapsed { display: none; }
+
+  /* Search match highlight */
+  mark {
+    background: #fbbf2433;
+    color: inherit;
+    border-radius: 2px;
+  }
+
+  /* No results */
+  .no-results {
+    color: var(--text-muted);
+    text-align: center;
+    padding: 32px;
+    font-size: 14px;
+    display: none;
+  }
+
+  .no-results.visible { display: block; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-top">
+    <h1>commerce-agents-main <span>— Directory Map</span></h1>
+    <span class="header-sub">Complete annotated repo structure</span>
+  </div>
+
+  <div class="stats">
+    <div class="stat-card"><span class="stat-num">7</span><span class="stat-label">Packages</span></div>
+    <div class="stat-card"><span class="stat-num">5</span><span class="stat-label">Channels</span></div>
+    <div class="stat-card"><span class="stat-num">4</span><span class="stat-label">Verticals</span></div>
+    <div class="stat-card"><span class="stat-num">15</span><span class="stat-label">Skills<br><small style="font-size:9px">Shop 10 + Merch 5</small></span></div>
+    <div class="stat-card"><span class="stat-num">3</span><span class="stat-label">LWCs</span></div>
+    <div class="stat-card"><span class="stat-num">2</span><span class="stat-label">Agent Roles</span></div>
+    <div class="stat-card"><span class="stat-num">3</span><span class="stat-label">Runtime Paths<br><small style="font-size:9px">per role</small></span></div>
+  </div>
+
+  <div class="controls">
+    <div class="search-wrap">
+      <input type="text" id="search" placeholder="Search files and folders…" autocomplete="off">
+      <button class="search-clear" id="searchClear" title="Clear search">×</button>
+    </div>
+    <span class="filter-label">Filter:</span>
+    <div class="filters">
+      <button class="filter-btn" data-tag="UCP">UCP</button>
+      <button class="filter-btn" data-tag="MCP">MCP</button>
+      <button class="filter-btn" data-tag="LWC">LWC</button>
+      <button class="filter-btn" data-tag="Next.js">Next.js</button>
+      <button class="filter-btn" data-tag="Gemini">Gemini</button>
+      <button class="filter-btn" data-tag="Plugin">Plugin</button>
+      <button class="filter-btn" data-tag="NEW">NEW</button>
+      <button class="filter-btn" data-tag="Core">Core</button>
+    </div>
+    <button class="collapse-all-btn" id="collapseAllBtn">Collapse All</button>
+  </div>
+</header>
+
+<main>
+  <div class="no-results" id="noResults">No files match your search or filter.</div>
+
+  <!-- ============================================================ ROOT ============================================================ -->
+  <div class="section-header">Root</div>
+  <div class="tree" id="tree">
+
+    <!-- Root files -->
+    <div class="tree-row" data-tags="">
+      <span class="toggle leaf">▶</span>
+      <span class="icon">📄</span>
+      <span class="name ext-md">CLAUDE.md</span>
+      <span class="desc">— Project instructions for Claude agents; design rules, conventions, layout</span>
+      <div class="badges"><span class="badge badge-Core">Core</span></div>
+    </div>
+    <div class="tree-row" data-tags="">
+      <span class="toggle leaf">▶</span>
+      <span class="icon">📄</span>
+      <span class="name ext-md">README.md</span>
+      <span class="desc">— Main project README: what it is, how to run, interfaces</span>
+    </div>
+    <div class="tree-row" data-tags="">
+      <span class="toggle leaf">▶</span>
+      <span class="icon">📄</span>
+      <span class="name ext-other">Dockerfile</span>
+      <span class="desc">— Container build for the commerce agents server</span>
+    </div>
+    <div class="tree-row" data-tags="">
+      <span class="toggle leaf">▶</span>
+      <span class="icon">📄</span>
+      <span class="name ext-txt">requirements.txt</span>
+      <span class="desc">— Installs all 7 packages and pinned dependencies</span>
+    </div>
+    <div class="tree-row" data-tags="">
+      <span class="toggle leaf">▶</span>
+      <span class="icon">📄</span>
+      <span class="name ext-txt">requirements-dev.txt</span>
+      <span class="desc">— Dev extras: pytest, ruff</span>
+    </div>
+    <div class="tree-row" data-tags="Gemini NEW">
+      <span class="toggle leaf">▶</span>
+      <span class="icon">📄</span>
+      <span class="name ext-txt">requirements-gemini.txt</span>
+      <span class="desc">— Optional Google Gemini dependency (google-genai ≥ 1.0.0)</span>
+      <div class="badges"><span class="badge badge-Gemini">Gemini</span><span class="badge badge-NEW">NEW</span></div>
+    </div>
+    <div class="tree-row" data-tags="">
+      <span class="toggle leaf">▶</span>
+      <span class="icon">📄</span>
+      <span class="name ext-other">pytest.ini</span>
+      <span class="desc">— Pytest root config and test discovery settings</span>
+    </div>
+    <div class="tree-row" data-tags="">
+      <span class="toggle leaf">▶</span>
+      <span class="icon">📄</span>
+      <span class="name ext-toml">ruff.toml</span>
+      <span class="desc">— Ruff linter configuration (Python code quality)</span>
+    </div>
+    <div class="tree-row" data-tags="">
+      <span class="toggle leaf">▶</span>
+      <span class="icon">📄</span>
+      <span class="name ext-py">conftest.py</span>
+      <span class="desc">— Root pytest fixtures shared across all test suites</span>
+    </div>
+
+    <!-- ============================================================ SECTION: Core Packages ============================================================ -->
+  </div><!-- /tree root section -->
+
+  <div class="section-header">Core Packages</div>
+  <div class="tree">
+
+    <!-- commerce-common -->
+    <div class="tree-row folder-row" data-tags="Core" data-folder="commerce-common">
+      <span class="toggle">▶</span>
+      <span class="icon">📁</span>
+      <span class="name folder-name">commerce-common/</span>
+      <span class="desc">— Shared code between both agent roles</span>
+      <div class="badges"><span class="badge badge-Core">Core</span></div>
+    </div>
+    <div class="children" id="commerce-common">
+
+      <div class="tree-row folder-row" data-tags="Core" data-folder="commerce_common">
+        <span class="indent"></span>
+        <span class="toggle">▶</span>
+        <span class="icon">📁</span>
+        <span class="name folder-name">commerce_common/</span>
+        <span class="desc">— Python package (listed in __init__)</span>
+        <div class="badges"><span class="badge badge-Core">Core</span></div>
+      </div>
+      <div class="children" id="commerce_common">
+
+        <div class="tree-row" data-tags="Core">
+          <span class="indent"></span><span class="indent"></span>
+          <span class="toggle leaf">▶</span><span class="icon">🐍</span>
+          <span class="name ext-py">agent_sdk.py</span>
+          <span class="desc">— ClaudeAgentOptions builder; constructs agent configs for SDK path</span>
+          <div class="badges"><span class="badge badge-Core">Core</span></div>
+        </div>
+        <div class="tree-row" data-tags="Core">
+          <span class="indent"></span><span class="indent"></span>
+          <span class="toggle leaf">▶</span><span class="icon">🐍</span>
+          <span class="name ext-py">config.py</span>
+          <span class="desc">— Environment variables + shared settings (API keys, model, timeouts)</span>
+          <div class="badges"><span class="badge badge-Core">Core</span></div>
+        </div>
+        <div class="tree-row" data-tags="Core">
+          <span class="indent"></span><span class="indent"></span>
+          <span class="toggle leaf">▶</span><span class="icon">🐍</span>
+          <span class="name ext-py">delegation.py</span>
+          <span class="desc">— Sub-agent delegation: spawn and coordinate child agents</span>
+          <div class="badges"><span class="badge badge-Core">Core</span></div>
+        </div>
+        <div class="tree-row" data-tags="Core">
+          <span class="indent"></span><span class="indent"></span>
+          <span class="toggle leaf">▶</span><span class="icon">🐍</span>
+          <span class="name ext-py">execution.py</span>
+          <span class="desc">— Turn execution loop: drives model calls, handles tool use</span>
+          <div class="badges"><span class="badge badge-Core">Core</span></div>
+        </div>
+        <div class="tree-row" data-tags="Core">
+          <span class="indent"></span><span class="indent"></span>
+          <span class="toggle leaf">▶</span><span class="icon">🐍</span>
+          <span class="name ext-py">fencing.py</span>
+          <span class="desc">— Provenance gates: write caps and safety fencing for all mutations</span>
+          <div class="badges"><span class="badge badge-Core">Core</span></div>
+        </div>
+        <div class="tree-row" data-tags="Core">
+          <span class="indent"></span><span class="indent"></span>
+          <span class="toggle leaf">▶</span><span class="icon">🐍</span>
+          <span class="name ext-py">grounding.py</span>
+          <span class="desc">— Context assembly: builds the fenced block injected each turn</span>
+          <div class="badges"><span class="badge badge-Core">Core</span></div>
+        </div>
+        <div class="tree-row" data-tags="Core">
+          <span class="indent"></span><span class="indent"></span>
+          <span class="toggle leaf">▶</span><span class="icon">🐍</span>
+          <span class="name ext-py">manifest.py</span>
+          <span class="desc">— System prompt / manifest builder; derives system.md</span>
+          <div class="badges"><span class="badge badge-Core">Core</span></div>
+        </div>
+        <div class="tree-row" data-tags="Core MCP">
+          <span class="indent"></span><span class="indent"></span>
+          <span class="toggle leaf">▶</span><span class="icon">🐍</span>
+          <span class="name ext-py">mcp_server.py</span>
+          <span class="desc">— MCP server base utilities shared by both role MCP servers</span>
+          <div class="badges"><span class="badge badge-Core">Core</span><span class="badge badge-MCP">MCP</span></div>
+        </div>
+        <div class="tree-row" data-tags="Core">
+          <span class="indent"></span><span class="indent"></span>
+          <span class="toggle leaf">▶</span><span class="icon">🐍</span>
+          <span class="name ext-py">memory.py</span>
+          <span class="desc">— JsonFileMemoryStore and InMemoryMemoryStore implementations</span>
+          <div class="badges"><span class="badge badge-Core">Core</span></div>
+        </div>
+        <div class="tree-row" data-tags="Core">
+          <span class="indent"></span><span class="indent"></span>
+          <span class="toggle leaf">▶</span><span class="icon">🐍</span>
+          <span class="name ext-py">presentation.py</span>
+          <span class="desc">— PresentationExtension base class for vertical UI extensions</span>
+          <div class="badges"><span class="badge badge-Core">Core</span></div>
+        </div>
+        <div class="tree-row" data-tags="Core">
+          <span class="indent"></span><span class="indent"></span>
+          <span class="toggle leaf">▶</span><span class="icon">🐍</span>
+          <span class="name ext-py">prompt_assembly.py</span>
+          <span class="desc">— Assembles static prompt + per-request fenced block</span>
+          <div class="badges"><span class="badge badge-Core">Core</span></div>
+        </div>
+        <div class="tree-row" data-tags="Core">
+          <span class="indent"></span><span class="indent"></span>
+          <span class="toggle leaf">▶</span><span class="icon">🐍</span>
+          <span class="name ext-py">skills.py</span>
+          <span class="desc">— Skill loader: reads SKILL.md files and injects them into prompts</span>
+          <div class="badges"><span class="badge badge-Core">Core</span></div>
+        </div>
+        <div class="tree-row" data-tags="Core">
+          <span class="indent"></span><span class="indent"></span>
+          <span class="toggle leaf">▶</span><span class="icon">🐍</span>
+          <span class="name ext-py">streaming.py</span>
+          <span class="desc">— SSE streaming helpers: formats and emits ui/text/tool events</span>
+          <div class="badges"><span class="badge badge-Core">Core</span></div>
+        </div>
+        <div class="tree-row" data-tags="Core">
+          <span class="indent"></span><span class="indent"></span>
+          <span class="toggle leaf">▶</span><span class="icon">🐍</span>
+          <span class="name ext-py">testing.py</span>
+          <span class="desc">— Shared test helpers and mock backends for both roles</span>
+          <div class="badges"><span class="badge badge-Core">Core</span></div>
+        </div>
+        <div class="tree-row" data-tags="Core">
+          <span class="indent"></span><span class="indent"></span>
+          <span class="toggle leaf">▶</span><span class="icon">🐍</span>
+          <span class="name ext-py">turn.py</span>
+          <span class="desc">— Turn types: input/output message models per conversation step</span>
+          <div class="badges"><span class="badge badge-Core">Core</span></div>
+        </div>
+        <div class="tree-row" data-tags="Core">
+          <span class="indent"></span><span class="indent"></span>
+          <span class="toggle leaf">▶</span><span class="icon">🐍</span>
+          <span class="name ext-py">types.py</span>
+          <span class="desc">— Shared Pydantic schemas: Product, Cart, Order, Message, etc.</span>
+          <div class="badges"><span class="badge badge-Core">Core</span></div>
+        </div>
+
+      </div><!-- /commerce_common -->
+    </div><!-- /commerce-common -->
+
+  </div><!-- /core packages tree -->
+
+  <!-- ============================================================ SECTION: Agent Roles ============================================================ -->
+  <div class="section-header">Agent Roles</div>
+  <div class="tree">
+
+    <!-- shopping-agent -->
+    <div class="tree-row folder-row" data-tags="" data-folder="shopping-agent">
+      <span class="toggle">▶</span>
+      <span class="icon">📁</span>
+      <span class="name folder-name">shopping-agent/</span>
+      <span class="desc">— Buyer-facing agent: search, cart, checkout, quotes, subscriptions</span>
+    </div>
+    <div class="children" id="shopping-agent">
+
+      <!-- shopping core -->
+      <div class="tree-row folder-row" data-tags="" data-folder="shopping-agent-core">
+        <span class="indent"></span>
+        <span class="toggle">▶</span><span class="icon">📁</span>
+        <span class="name folder-name">core/shopping_agent/</span>
+        <span class="desc">— Shopping agent Python package</span>
+      </div>
+      <div class="children" id="shopping-agent-core">
+        <div class="tree-row" data-tags="Core">
+          <span class="indent"></span><span class="indent"></span>
+          <span class="toggle leaf">▶</span><span class="icon">🐍</span>
+          <span class="name ext-py">backend.py</span>
+          <span class="desc">— StorefrontBackend ABC: interface all storefronts must implement</span>
+          <div class="badges"><span class="badge badge-Core">Core</span></div>
+        </div>
+        <div class="tree-row" data-tags="">
+          <span class="indent"></span><span class="indent"></span>
+          <span class="toggle leaf">▶</span><span class="icon">🐍</span>
+          <span class="name ext-py">config.py</span>
+          <span class="desc">— ShoppingAgentConfig: model, skills, feature flags</span>
+        </div>
+        <div class="tree-row" data-tags="">
+          <span class="indent"></span><span class="indent"></span>
+          <span class="toggle leaf">▶</span><span class="icon">🐍</span>
+          <span class="name ext-py">enrichment.py</span>
+          <span class="desc">— Product detail enrichment: adds specs, reviews, cross-sells to context</span>
+        </div>
+        <div class="tree-row" data-tags="">
+          <span class="indent"></span><span class="indent"></span>
+          <span class="toggle leaf">▶</span><span class="icon">🐍</span>
+          <span class="name ext-py">executor.py</span>
+          <span class="desc">— Shopping turn executor: wires backend + tools + grounding per call</span>
+        </div>
+        <div class="tree-row" data-tags="">
+          <span class="indent"></span><span class="indent"></span>
+          <span class="toggle leaf">▶</span><span class="icon">🐍</span>
+          <span class="name ext-py">fencing.py</span>
+          <span class="desc">— Shopping write gates: provenance checks for cart mutations</span>
+        </div>
+        <div class="tree-row" data-tags="">
+          <span class="indent"></span><span class="indent"></span>
+          <span class="toggle leaf">▶</span><span class="icon">🐍</span>
+          <span class="name ext-py">gates.py</span>
+          <span class="desc">— Action gates: allows/blocks tool calls based on session state</span>
+        </div>
+        <div class="tree-row" data-tags="">
+          <span class="indent"></span><span class="indent"></span>
+          <span class="toggle leaf">▶</span><span class="icon">🐍</span>
+          <span class="name ext-py">grounding.py</span>
+          <span class="desc">— Cart and catalog context: builds fenced block for shopping turns</span>
+        </div>
+        <div class="tree-row" data-tags="">
+          <span class="indent"></span><span class="indent"></span>
+          <span class="toggle leaf">▶</span><span class="icon">🐍</span>
+          <span class="name ext-py">memory.py</span>
+          <span class="desc">— Shopping memory facts: persists preferences, past orders</span>
+        </div>
+        <div class="tree-row" data-tags="">
+          <span class="indent"></span><span class="indent"></span>
+          <span class="toggle leaf">▶</span><span class="icon">🐍</span>
+          <span class="name ext-py">prompt.py</span>
+          <span class="desc">— Shopping agent system prompt (static; per-request data in fenced block)</span>
+        </div>
+        <div class="tree-row" data-tags="">
+          <span class="indent"></span><span class="indent"></span>
+          <span class="toggle leaf">▶</span><span class="icon">🐍</span>
+          <span class="name ext-py">serialization.py</span>
+          <span class="desc">— Request/response serialization for Messages API path</span>
+        </div>
+        <div class="tree-row" data-tags="">
+          <span class="indent"></span><span class="indent"></span>
+          <span class="toggle leaf">▶</span><span class="icon">🐍</span>
+          <span class="name ext-py">types.py</span>
+          <span class="desc">— ShoppingAgent-specific Pydantic types and request models</span>
+        </div>
+        <!-- tools -->
+        <div class="tree-row folder-row" data-tags="" data-folder="shopping-tools">
+          <span class="indent"></span><span class="indent"></span>
+          <span class="toggle">▶</span><span class="icon">📁</span>
+          <span class="name folder-name">tools/</span>
+          <span class="desc">— Shopping tool implementations</span>
+        </div>
+        <div class="children" id="shopping-tools">
+          <div class="tree-row" data-tags="">
+            <span class="indent"></span><span class="indent"></span><span class="indent"></span>
+            <span class="toggle leaf">▶</span><span class="icon">🐍</span>
+            <span class="name ext-py">registry.py</span>
+            <span class="desc">— Tool registry: search, add-to-cart, checkout, quote-request, etc.</span>
+          </div>
+          <div class="tree-row" data-tags="">
+            <span class="indent"></span><span class="indent"></span><span class="indent"></span>
+            <span class="toggle leaf">▶</span><span class="icon">🐍</span>
+            <span class="name ext-py">presentation.py</span>
+            <span class="desc">— Presentation tool calls: product-grid, cart-panel, confirmation UI</span>
+          </div>
+        </div>
+      </div><!-- /shopping-agent-core -->
+
+      <!-- shopping skills -->
+      <div class="tree-row folder-row" data-tags="" data-folder="shopping-skills">
+        <span class="indent"></span>
+        <span class="toggle">▶</span><span class="icon">📁</span>
+        <span class="name folder-name">skills/</span>
+        <span class="desc">— 10 shopping agent skill flows (one SKILL.md each)</span>
+      </div>
+      <div class="children" id="shopping-skills">
+        <div class="tree-row" data-tags=""><span class="indent"></span><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">📄</span><span class="name ext-md">approval-workflow/SKILL.md</span><span class="desc">— Quote approval flow with escalation and notifications</span></div>
+        <div class="tree-row" data-tags=""><span class="indent"></span><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">📄</span><span class="name ext-md">asset-management/SKILL.md</span><span class="desc">— Asset and subscription management for B2B accounts</span></div>
+        <div class="tree-row" data-tags=""><span class="indent"></span><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">📄</span><span class="name ext-md">customer-care/SKILL.md</span><span class="desc">— Returns, order tracking, issue resolution</span></div>
+        <div class="tree-row" data-tags=""><span class="indent"></span><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">📄</span><span class="name ext-md">memory-personalization/SKILL.md</span><span class="desc">— Personalized recommendations using stored preferences</span></div>
+        <div class="tree-row" data-tags=""><span class="indent"></span><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">📄</span><span class="name ext-md">planning-goals/SKILL.md</span><span class="desc">— Purchase planning, budget tracking, procurement goals</span></div>
+        <div class="tree-row" data-tags=""><span class="indent"></span><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">📄</span><span class="name ext-md">promotions/SKILL.md</span><span class="desc">— Promo code discovery, offer eligibility, discount application</span></div>
+        <div class="tree-row" data-tags=""><span class="indent"></span><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">📄</span><span class="name ext-md">purchase-research/SKILL.md</span><span class="desc">— Product comparison, spec lookup, recommendation research</span></div>
+        <div class="tree-row" data-tags=""><span class="indent"></span><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">📄</span><span class="name ext-md">quote-management/SKILL.md</span><span class="desc">— B2B quote request, negotiation, and status tracking</span></div>
+        <div class="tree-row" data-tags=""><span class="indent"></span><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">📄</span><span class="name ext-md">search-discovery/SKILL.md</span><span class="desc">— Search, browse, faceted filtering, category navigation</span></div>
+        <div class="tree-row" data-tags=""><span class="indent"></span><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">📄</span><span class="name ext-md">subscriptions/SKILL.md</span><span class="desc">— Subscription management: create, modify, cancel, reactivate</span></div>
+      </div><!-- /shopping-skills -->
+
+      <!-- shopping runtimes -->
+      <div class="tree-row folder-row" data-tags="" data-folder="shopping-runtime-messages">
+        <span class="indent"></span>
+        <span class="toggle">▶</span><span class="icon">📁</span>
+        <span class="name folder-name">runtime-messages-api/</span>
+        <span class="desc">— Messages API runtime path</span>
+      </div>
+      <div class="children" id="shopping-runtime-messages">
+        <div class="tree-row" data-tags="">
+          <span class="indent"></span><span class="indent"></span>
+          <span class="toggle leaf">▶</span><span class="icon">🐍</span>
+          <span class="name ext-py">shopping_agent_runtime/orchestrator.py</span>
+          <span class="desc">— ShoppingAgent class: stateful session manager for Messages API</span>
+        </div>
+      </div>
+
+      <div class="tree-row folder-row" data-tags="" data-folder="shopping-runtime-sdk">
+        <span class="indent"></span>
+        <span class="toggle">▶</span><span class="icon">📁</span>
+        <span class="name folder-name">runtime-agent-sdk/</span>
+        <span class="desc">— Agent SDK runtime path</span>
+      </div>
+      <div class="children" id="shopping-runtime-sdk">
+        <div class="tree-row" data-tags="">
+          <span class="indent"></span><span class="indent"></span>
+          <span class="toggle leaf">▶</span><span class="icon">🐍</span>
+          <span class="name ext-py">shopping_agent_sdk/agent.py</span>
+          <span class="desc">— ClaudeAgentOptions for shopping; configures tools, skills, model</span>
+        </div>
+        <div class="tree-row" data-tags="">
+          <span class="indent"></span><span class="indent"></span>
+          <span class="toggle leaf">▶</span><span class="icon">🐍</span>
+          <span class="name ext-py">shopping_agent_sdk/shopping_tools.py</span>
+          <span class="desc">— SDK tool wrappers: adapts tool registry for Agent SDK interface</span>
+        </div>
+      </div>
+
+      <!-- shopping managed agents -->
+      <div class="tree-row folder-row" data-tags="MCP" data-folder="shopping-managed">
+        <span class="indent"></span>
+        <span class="toggle">▶</span><span class="icon">📁</span>
+        <span class="name folder-name">managed-agents/</span>
+        <span class="desc">— Manifest + MCP server (managed-agents path)</span>
+        <div class="badges"><span class="badge badge-MCP">MCP</span></div>
+      </div>
+      <div class="children" id="shopping-managed">
+        <div class="tree-row" data-tags="">
+          <span class="indent"></span><span class="indent"></span>
+          <span class="toggle leaf">▶</span><span class="icon">📄</span>
+          <span class="name ext-yaml">shopping-agent/agent.yaml</span>
+          <span class="desc">— Managed agent manifest: tools, model, skills configuration</span>
+        </div>
+        <div class="tree-row" data-tags="">
+          <span class="indent"></span><span class="indent"></span>
+          <span class="toggle leaf">▶</span><span class="icon">📄</span>
+          <span class="name ext-md">shopping-agent/system.md</span>
+          <span class="desc">— Derived system prompt (do not edit manually; re-run check.py)</span>
+        </div>
+        <div class="tree-row" data-tags="MCP NEW">
+          <span class="indent"></span><span class="indent"></span>
+          <span class="toggle leaf">▶</span><span class="icon">🐍</span>
+          <span class="name ext-py">storefront-mcp-server/storefront_mcp_server.py</span>
+          <span class="desc">— MCP server: exposes shopping tools + ui:// resources over MCP</span>
+          <div class="badges"><span class="badge badge-MCP">MCP</span><span class="badge badge-NEW">NEW</span></div>
+        </div>
+        <div class="tree-row" data-tags="MCP NEW">
+          <span class="indent"></span><span class="indent"></span>
+          <span class="toggle leaf">▶</span><span class="icon">🌐</span>
+          <span class="name ext-html">storefront-mcp-server/product_grid_ui.html</span>
+          <span class="desc">— MCP Apps HTML iframe resource: product grid UI component</span>
+          <div class="badges"><span class="badge badge-MCP">MCP</span><span class="badge badge-NEW">NEW</span></div>
+        </div>
+        <div class="tree-row" data-tags="">
+          <span class="indent"></span><span class="indent"></span>
+          <span class="toggle leaf">▶</span><span class="icon">🐍</span>
+          <span class="name ext-py">storefront-mcp-server/tests/test_server.py</span>
+          <span class="desc">— MCP server unit tests</span>
+        </div>
+      </div><!-- /shopping-managed -->
+
+    </div><!-- /shopping-agent -->
+
+    <!-- merchant-agent -->
+    <div class="tree-row folder-row" data-tags="" data-folder="merchant-agent">
+      <span class="toggle">▶</span>
+      <span class="icon">📁</span>
+      <span class="name folder-name">merchant-agent/</span>
+      <span class="desc">— Merchant-facing agent: analytics, pricing, campaigns, inventory</span>
+    </div>
+    <div class="children" id="merchant-agent">
+
+      <div class="tree-row folder-row" data-tags="" data-folder="merchant-agent-core">
+        <span class="indent"></span>
+        <span class="toggle">▶</span><span class="icon">📁</span>
+        <span class="name folder-name">core/merchant_agent/</span>
+        <span class="desc">— Merchant agent Python package</span>
+      </div>
+      <div class="children" id="merchant-agent-core">
+        <div class="tree-row" data-tags=""><span class="indent"></span><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">🐍</span><span class="name ext-py">analysis.py</span><span class="desc">— Sales and inventory analysis: trend detection, metrics rollup</span></div>
+        <div class="tree-row" data-tags="Core"><span class="indent"></span><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">🐍</span><span class="name ext-py">backend.py</span><span class="desc">— MerchantBackend ABC: interface for merchant data sources</span><div class="badges"><span class="badge badge-Core">Core</span></div></div>
+        <div class="tree-row" data-tags=""><span class="indent"></span><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">🐍</span><span class="name ext-py">changes.py</span><span class="desc">— Change proposal + apply/discard: draft, review, commit merchant mutations</span></div>
+        <div class="tree-row" data-tags=""><span class="indent"></span><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">🐍</span><span class="name ext-py">config.py</span><span class="desc">— MerchantAgentConfig: model, feature flags, analysis settings</span></div>
+        <div class="tree-row" data-tags=""><span class="indent"></span><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">🐍</span><span class="name ext-py">enrichment.py</span><span class="desc">— Merchant data enrichment: augments metrics with computed context</span></div>
+        <div class="tree-row" data-tags=""><span class="indent"></span><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">🐍</span><span class="name ext-py">executor.py</span><span class="desc">— Merchant turn executor: routes merchant tool calls per turn</span></div>
+        <div class="tree-row" data-tags=""><span class="indent"></span><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">🐍</span><span class="name ext-py">fencing.py</span><span class="desc">— Merchant write fencing: host approval required for catalog changes</span></div>
+        <div class="tree-row" data-tags=""><span class="indent"></span><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">🐍</span><span class="name ext-py">gates.py</span><span class="desc">— Merchant action gates: price/inventory change limits</span></div>
+        <div class="tree-row" data-tags=""><span class="indent"></span><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">🐍</span><span class="name ext-py">grounding.py</span><span class="desc">— Merchant context: metrics, orders, inventory injected per turn</span></div>
+        <div class="tree-row" data-tags=""><span class="indent"></span><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">🐍</span><span class="name ext-py">memory.py</span><span class="desc">— Merchant memory facts: persists business rules, past decisions</span></div>
+        <div class="tree-row" data-tags=""><span class="indent"></span><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">🐍</span><span class="name ext-py">prompt.py</span><span class="desc">— Merchant system prompt (static; merchant context in fenced block)</span></div>
+        <div class="tree-row" data-tags=""><span class="indent"></span><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">🐍</span><span class="name ext-py">serialization.py</span><span class="desc">— Merchant request/response serialization for Messages API</span></div>
+        <div class="tree-row" data-tags=""><span class="indent"></span><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">🐍</span><span class="name ext-py">types.py</span><span class="desc">— Merchant-specific Pydantic types: metrics, campaign, change models</span></div>
+        <div class="tree-row folder-row" data-tags="" data-folder="merchant-tools">
+          <span class="indent"></span><span class="indent"></span>
+          <span class="toggle">▶</span><span class="icon">📁</span>
+          <span class="name folder-name">tools/</span>
+          <span class="desc">— Merchant tool implementations</span>
+        </div>
+        <div class="children" id="merchant-tools">
+          <div class="tree-row" data-tags="">
+            <span class="indent"></span><span class="indent"></span><span class="indent"></span>
+            <span class="toggle leaf">▶</span><span class="icon">🐍</span>
+            <span class="name ext-py">registry.py</span>
+            <span class="desc">— Tools: analyze-sales, update-price, send-campaign, reorder, etc.</span>
+          </div>
+          <div class="tree-row" data-tags="">
+            <span class="indent"></span><span class="indent"></span><span class="indent"></span>
+            <span class="toggle leaf">▶</span><span class="icon">🐍</span>
+            <span class="name ext-py">presentation.py</span>
+            <span class="desc">— Merchant presentation tools: metrics cards, chart data, tables</span>
+          </div>
+        </div>
+      </div><!-- /merchant-agent-core -->
+
+      <!-- merchant skills -->
+      <div class="tree-row folder-row" data-tags="" data-folder="merchant-skills">
+        <span class="indent"></span>
+        <span class="toggle">▶</span><span class="icon">📁</span>
+        <span class="name folder-name">skills/</span>
+        <span class="desc">— 5 merchant agent skill flows</span>
+      </div>
+      <div class="children" id="merchant-skills">
+        <div class="tree-row" data-tags=""><span class="indent"></span><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">📄</span><span class="name ext-md">catalog-listings/SKILL.md</span><span class="desc">— Product listing management: create, update, archive catalog entries</span></div>
+        <div class="tree-row" data-tags=""><span class="indent"></span><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">📄</span><span class="name ext-md">inventory-operations/SKILL.md</span><span class="desc">— Inventory alerts, reorder recommendations, stock management</span></div>
+        <div class="tree-row" data-tags=""><span class="indent"></span><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">📄</span><span class="name ext-md">marketing-campaigns/SKILL.md</span><span class="desc">— Campaign creation: audience targeting, content, scheduling</span></div>
+        <div class="tree-row" data-tags=""><span class="indent"></span><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">📄</span><span class="name ext-md">performance-insights/SKILL.md</span><span class="desc">— Sales metrics analysis: revenue trends, conversion, cohorts</span></div>
+        <div class="tree-row" data-tags=""><span class="indent"></span><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">📄</span><span class="name ext-md">pricing-promotions/SKILL.md</span><span class="desc">— Price management, promotional pricing, discount rules</span></div>
+      </div>
+
+      <!-- merchant runtimes -->
+      <div class="tree-row folder-row" data-tags="" data-folder="merchant-runtime-messages">
+        <span class="indent"></span>
+        <span class="toggle">▶</span><span class="icon">📁</span>
+        <span class="name folder-name">runtime-messages-api/</span>
+        <span class="desc">— Merchant Messages API path</span>
+      </div>
+      <div class="children" id="merchant-runtime-messages">
+        <div class="tree-row" data-tags="">
+          <span class="indent"></span><span class="indent"></span>
+          <span class="toggle leaf">▶</span><span class="icon">🐍</span>
+          <span class="name ext-py">merchant_agent_runtime/orchestrator.py</span>
+          <span class="desc">— MerchantAgent class: stateful session manager for Messages API</span>
+        </div>
+        <div class="tree-row" data-tags="">
+          <span class="indent"></span><span class="indent"></span>
+          <span class="toggle leaf">▶</span><span class="icon">🐍</span>
+          <span class="name ext-py">merchant_agent_runtime/analysis.py</span>
+          <span class="desc">— Analysis delegate: spawned sub-agent for long-running analytics</span>
+        </div>
+      </div>
+
+      <div class="tree-row folder-row" data-tags="" data-folder="merchant-runtime-sdk">
+        <span class="indent"></span>
+        <span class="toggle">▶</span><span class="icon">📁</span>
+        <span class="name folder-name">runtime-agent-sdk/</span>
+        <span class="desc">— Merchant Agent SDK path</span>
+      </div>
+      <div class="children" id="merchant-runtime-sdk">
+        <div class="tree-row" data-tags="">
+          <span class="indent"></span><span class="indent"></span>
+          <span class="toggle leaf">▶</span><span class="icon">🐍</span>
+          <span class="name ext-py">merchant_agent_sdk/agent.py</span>
+          <span class="desc">— ClaudeAgentOptions for merchant: tools, skills, model</span>
+        </div>
+        <div class="tree-row" data-tags="">
+          <span class="indent"></span><span class="indent"></span>
+          <span class="toggle leaf">▶</span><span class="icon">🐍</span>
+          <span class="name ext-py">merchant_agent_sdk/merchant_tools.py</span>
+          <span class="desc">— SDK tool wrappers for merchant role</span>
+        </div>
+      </div>
+
+      <!-- merchant managed -->
+      <div class="tree-row folder-row" data-tags="MCP" data-folder="merchant-managed">
+        <span class="indent"></span>
+        <span class="toggle">▶</span><span class="icon">📁</span>
+        <span class="name folder-name">managed-agents/</span>
+        <span class="desc">— Merchant manifest + MCP server + scheduled digest</span>
+        <div class="badges"><span class="badge badge-MCP">MCP</span></div>
+      </div>
+      <div class="children" id="merchant-managed">
+        <div class="tree-row" data-tags="">
+          <span class="indent"></span><span class="indent"></span>
+          <span class="toggle leaf">▶</span><span class="icon">📄</span>
+          <span class="name ext-yaml">merchant-agent/agent.yaml</span>
+          <span class="desc">— Managed agent manifest: merchant tools and skills config</span>
+        </div>
+        <div class="tree-row" data-tags="">
+          <span class="indent"></span><span class="indent"></span>
+          <span class="toggle leaf">▶</span><span class="icon">📄</span>
+          <span class="name ext-md">merchant-agent/system.md</span>
+          <span class="desc">— Derived merchant system prompt (generated by manifest.py)</span>
+        </div>
+        <div class="tree-row" data-tags="MCP">
+          <span class="indent"></span><span class="indent"></span>
+          <span class="toggle leaf">▶</span><span class="icon">🐍</span>
+          <span class="name ext-py">merchant-mcp-server/merchant_mcp_server.py</span>
+          <span class="desc">— Merchant MCP server: exposes merchant tools over MCP protocol</span>
+          <div class="badges"><span class="badge badge-MCP">MCP</span></div>
+        </div>
+        <div class="tree-row" data-tags="">
+          <span class="indent"></span><span class="indent"></span>
+          <span class="toggle leaf">▶</span><span class="icon">🐍</span>
+          <span class="name ext-py">scheduled-digest/run_morning_digest.py</span>
+          <span class="desc">— Scheduled merchant digest: daily summary report runner</span>
+        </div>
+      </div><!-- /merchant-managed -->
+
+    </div><!-- /merchant-agent -->
+
+  </div><!-- /agent roles tree -->
+
+  <!-- ============================================================ SECTION: Verticals & Examples ============================================================ -->
+  <div class="section-header">Verticals &amp; Examples</div>
+  <div class="tree">
+
+    <div class="tree-row folder-row" data-tags="" data-folder="examples">
+      <span class="toggle">▶</span>
+      <span class="icon">📁</span>
+      <span class="name folder-name">examples/</span>
+      <span class="desc">— npm workspace; 4 vertical examples with API + web frontends</span>
+    </div>
+    <div class="children" id="examples">
+
+      <div class="tree-row" data-tags="">
+        <span class="indent"></span>
+        <span class="toggle leaf">▶</span><span class="icon">📄</span>
+        <span class="name ext-json">package.json</span>
+        <span class="desc">— npm workspace root: defines all vertical web app workspaces</span>
+      </div>
+
+      <!-- demo_common -->
+      <div class="tree-row folder-row" data-tags="UCP" data-folder="demo-common">
+        <span class="indent"></span>
+        <span class="toggle">▶</span><span class="icon">📁</span>
+        <span class="name folder-name">demo_common/</span>
+        <span class="desc">— Shared FastAPI app, session store, fixtures, UCP router</span>
+        <div class="badges"><span class="badge badge-UCP">UCP</span></div>
+      </div>
+      <div class="children" id="demo-common">
+        <div class="tree-row" data-tags=""><span class="indent"></span><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">🐍</span><span class="name ext-py">host.py</span><span class="desc">— FastAPI base app: session middleware, /chat and /stream routes</span></div>
+        <div class="tree-row" data-tags=""><span class="indent"></span><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">🐍</span><span class="name ext-py">storefront.py</span><span class="desc">— StorefrontHost: cart state, product catalog, UI rendering</span></div>
+        <div class="tree-row" data-tags=""><span class="indent"></span><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">🐍</span><span class="name ext-py">merchant.py</span><span class="desc">— MerchantHost: metrics, orders, campaign state management</span></div>
+        <div class="tree-row" data-tags=""><span class="indent"></span><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">🐍</span><span class="name ext-py">sessions.py</span><span class="desc">— Session store: per-user conversation + cart state</span></div>
+        <div class="tree-row" data-tags=""><span class="indent"></span><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">🐍</span><span class="name ext-py">memory.py</span><span class="desc">— Memory seeder: populates initial preferences for demo users</span></div>
+        <div class="tree-row" data-tags=""><span class="indent"></span><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">🐍</span><span class="name ext-py">storefront_fixtures.py</span><span class="desc">— Storefront test fixtures: mock products, carts, orders</span></div>
+        <div class="tree-row" data-tags=""><span class="indent"></span><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">🐍</span><span class="name ext-py">merchant_fixtures.py</span><span class="desc">— Merchant test fixtures: mock metrics, campaigns, inventory</span></div>
+        <div class="tree-row" data-tags="UCP NEW">
+          <span class="indent"></span><span class="indent"></span>
+          <span class="toggle leaf">▶</span><span class="icon">🐍</span>
+          <span class="name ext-py">ucp.py</span>
+          <span class="desc">— UCP REST router: 5 endpoints (manifest, products, cart, checkout, orders)</span>
+          <div class="badges"><span class="badge badge-UCP">UCP</span><span class="badge badge-NEW">NEW</span></div>
+        </div>
+        <div class="tree-row" data-tags="Gemini UCP NEW">
+          <span class="indent"></span><span class="indent"></span>
+          <span class="toggle leaf">▶</span><span class="icon">🐍</span>
+          <span class="name ext-py">gemini_ucp_agent.py</span>
+          <span class="desc">— GeminiUCPAgent: auto-discovers UCP manifest and drives shopping via Gemini</span>
+          <div class="badges"><span class="badge badge-Gemini">Gemini</span><span class="badge badge-UCP">UCP</span><span class="badge badge-NEW">NEW</span></div>
+        </div>
+      </div><!-- /demo-common -->
+
+      <!-- salesforce vertical -->
+      <div class="tree-row folder-row" data-tags="Next.js UCP LWC" data-folder="examples-salesforce">
+        <span class="indent"></span>
+        <span class="toggle">▶</span><span class="icon">📁</span>
+        <span class="name folder-name">salesforce/</span>
+        <span class="desc">— Salesforce B2B vertical (ports 3005 / 8005)</span>
+        <div class="badges"><span class="badge badge-Nextjs">Next.js</span><span class="badge badge-UCP">UCP</span><span class="badge badge-LWC">LWC</span></div>
+      </div>
+      <div class="children" id="examples-salesforce">
+        <div class="tree-row" data-tags="UCP">
+          <span class="indent"></span><span class="indent"></span>
+          <span class="toggle leaf">▶</span><span class="icon">🐍</span>
+          <span class="name ext-py">api/main.py</span>
+          <span class="desc">— FastAPI + UCP router mounted at /ucp; Salesforce B2B backend</span>
+          <div class="badges"><span class="badge badge-UCP">UCP</span></div>
+        </div>
+        <div class="tree-row" data-tags="">
+          <span class="indent"></span><span class="indent"></span>
+          <span class="toggle leaf">▶</span><span class="icon">🐍</span>
+          <span class="name ext-py">api/agent_config.py</span>
+          <span class="desc">— SalesforceOMSBackend config: maps Salesforce OMS to agent interface</span>
+        </div>
+        <div class="tree-row" data-tags="">
+          <span class="indent"></span><span class="indent"></span>
+          <span class="toggle leaf">▶</span><span class="icon">📄</span>
+          <span class="name ext-json">data/catalog.json</span>
+          <span class="desc">— ACME B2B product catalog: industrial and business supplies</span>
+        </div>
+        <div class="tree-row" data-tags="Next.js NEW">
+          <span class="indent"></span><span class="indent"></span>
+          <span class="toggle leaf">▶</span><span class="icon">📄</span>
+          <span class="name ext-tsx">storefront-web/components/views/HomeView.tsx</span>
+          <span class="desc">— Main buyer view with embedded AI chat panel (recently updated)</span>
+          <div class="badges"><span class="badge badge-Nextjs">Next.js</span><span class="badge badge-NEW">NEW</span></div>
+        </div>
+        <div class="tree-row" data-tags="Next.js">
+          <span class="indent"></span><span class="indent"></span>
+          <span class="toggle leaf">▶</span><span class="icon">📁</span>
+          <span class="name folder-name">storefront-web/</span>
+          <span class="desc">— Next.js B2B buyer storefront (remaining pages + components)</span>
+          <div class="badges"><span class="badge badge-Nextjs">Next.js</span></div>
+        </div>
+        <div class="tree-row" data-tags="Next.js">
+          <span class="indent"></span><span class="indent"></span>
+          <span class="toggle leaf">▶</span><span class="icon">📁</span>
+          <span class="name folder-name">merchant-web/</span>
+          <span class="desc">— Next.js B2B merchant dashboard (metrics, orders, catalog)</span>
+          <div class="badges"><span class="badge badge-Nextjs">Next.js</span></div>
+        </div>
+      </div><!-- /examples-salesforce -->
+
+      <!-- retail vertical -->
+      <div class="tree-row folder-row" data-tags="Next.js" data-folder="examples-retail">
+        <span class="indent"></span>
+        <span class="toggle">▶</span><span class="icon">📁</span>
+        <span class="name folder-name">retail/</span>
+        <span class="desc">— Retail vertical (ports 3001 / 8001)</span>
+        <div class="badges"><span class="badge badge-Nextjs">Next.js</span></div>
+      </div>
+      <div class="children" id="examples-retail">
+        <div class="tree-row" data-tags=""><span class="indent"></span><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">🐍</span><span class="name ext-py">api/main.py</span><span class="desc">— FastAPI retail backend API server</span></div>
+        <div class="tree-row" data-tags=""><span class="indent"></span><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">🐍</span><span class="name ext-py">api/mock_retail.py</span><span class="desc">— Mock retail backend: in-memory product and order data</span></div>
+        <div class="tree-row" data-tags=""><span class="indent"></span><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">📄</span><span class="name ext-json">data/catalog.json</span><span class="desc">— ACME retail catalog: consumer goods</span></div>
+        <div class="tree-row" data-tags="Next.js"><span class="indent"></span><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">📁</span><span class="name folder-name">storefront-web/</span><span class="desc">— Next.js retail buyer storefront</span><div class="badges"><span class="badge badge-Nextjs">Next.js</span></div></div>
+        <div class="tree-row" data-tags="Next.js"><span class="indent"></span><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">📁</span><span class="name folder-name">merchant-web/</span><span class="desc">— Next.js retail merchant dashboard</span><div class="badges"><span class="badge badge-Nextjs">Next.js</span></div></div>
+      </div>
+
+      <!-- entertainment vertical -->
+      <div class="tree-row folder-row" data-tags="Next.js" data-folder="examples-entertainment">
+        <span class="indent"></span>
+        <span class="toggle">▶</span><span class="icon">📁</span>
+        <span class="name folder-name">entertainment/</span>
+        <span class="desc">— Entertainment / ticketing vertical (ports 3002 / 8002)</span>
+        <div class="badges"><span class="badge badge-Nextjs">Next.js</span></div>
+      </div>
+      <div class="children" id="examples-entertainment">
+        <div class="tree-row" data-tags=""><span class="indent"></span><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">🐍</span><span class="name ext-py">api/main.py</span><span class="desc">— FastAPI entertainment backend API</span></div>
+        <div class="tree-row" data-tags=""><span class="indent"></span><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">🐍</span><span class="name ext-py">api/ticketing.py</span><span class="desc">— Ticketing backend: seat availability, reservations, pricing tiers</span></div>
+        <div class="tree-row" data-tags=""><span class="indent"></span><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">🐍</span><span class="name ext-py">api/venue_map.py</span><span class="desc">— Venue map PresentationExtension: seat map layout + availability</span></div>
+        <div class="tree-row" data-tags=""><span class="indent"></span><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">🐍</span><span class="name ext-py">api/event_pacing.py</span><span class="desc">— Ticket pacing: controls sale rate, surge, hold-back logic</span></div>
+        <div class="tree-row" data-tags=""><span class="indent"></span><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">📄</span><span class="name ext-json">data/catalog.json</span><span class="desc">— ACME Entertainment event catalog</span></div>
+        <div class="tree-row" data-tags="Next.js">
+          <span class="indent"></span><span class="indent"></span>
+          <span class="toggle leaf">▶</span><span class="icon">📄</span>
+          <span class="name ext-tsx">storefront-web/components/generative/VenueMap.tsx</span>
+          <span class="desc">— Interactive venue seat map: generative UI rendered from tool call</span>
+          <div class="badges"><span class="badge badge-Nextjs">Next.js</span></div>
+        </div>
+        <div class="tree-row" data-tags="Next.js"><span class="indent"></span><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">📁</span><span class="name folder-name">storefront-web/</span><span class="desc">— Next.js event buyer storefront</span><div class="badges"><span class="badge badge-Nextjs">Next.js</span></div></div>
+        <div class="tree-row" data-tags="Next.js"><span class="indent"></span><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">📁</span><span class="name folder-name">merchant-web/</span><span class="desc">— Next.js event merchant dashboard</span><div class="badges"><span class="badge badge-Nextjs">Next.js</span></div></div>
+      </div>
+
+      <div class="tree-row" data-tags="Next.js">
+        <span class="indent"></span>
+        <span class="toggle leaf">▶</span><span class="icon">📁</span>
+        <span class="name folder-name">web-shared/</span>
+        <span class="desc">— Shared Next.js components used across verticals (chat UI, hooks)</span>
+        <div class="badges"><span class="badge badge-Nextjs">Next.js</span></div>
+      </div>
+
+    </div><!-- /examples -->
+
+  </div><!-- /verticals tree -->
+
+  <!-- ============================================================ SECTION: Salesforce Integration ============================================================ -->
+  <div class="section-header">Salesforce Integration</div>
+  <div class="tree">
+
+    <!-- embed/ -->
+    <div class="tree-row folder-row" data-tags="LWC" data-folder="embed">
+      <span class="toggle">▶</span>
+      <span class="icon">📁</span>
+      <span class="name folder-name">embed/</span>
+      <span class="desc">— LWC embed package: standalone deploy for Salesforce orgs</span>
+      <div class="badges"><span class="badge badge-LWC">LWC</span></div>
+    </div>
+    <div class="children" id="embed">
+      <div class="tree-row" data-tags="LWC">
+        <span class="indent"></span>
+        <span class="toggle leaf">▶</span><span class="icon">📄</span>
+        <span class="name ext-js">commerce-agent-embed.js</span>
+        <span class="desc">— Embed script: drops commerce agent chat into any web page</span>
+        <div class="badges"><span class="badge badge-LWC">LWC</span></div>
+      </div>
+      <div class="tree-row" data-tags="LWC">
+        <span class="indent"></span>
+        <span class="toggle leaf">▶</span><span class="icon">📄</span>
+        <span class="name ext-yaml">docker-compose.yml</span>
+        <span class="desc">— LiteLLM + commerce-api stack for local Salesforce testing</span>
+        <div class="badges"><span class="badge badge-LWC">LWC</span></div>
+      </div>
+      <div class="tree-row" data-tags="LWC">
+        <span class="indent"></span>
+        <span class="toggle leaf">▶</span><span class="icon">📄</span>
+        <span class="name ext-other">Dockerfile.litellm</span>
+        <span class="desc">— LiteLLM proxy container: routes Bedrock → Claude API</span>
+        <div class="badges"><span class="badge badge-LWC">LWC</span></div>
+      </div>
+      <div class="tree-row" data-tags="LWC">
+        <span class="indent"></span>
+        <span class="toggle leaf">▶</span><span class="icon">📄</span>
+        <span class="name ext-yaml">litellm-config.yaml</span>
+        <span class="desc">— LiteLLM model routing configuration (model aliases, keys)</span>
+        <div class="badges"><span class="badge badge-LWC">LWC</span></div>
+      </div>
+      <div class="tree-row" data-tags="LWC">
+        <span class="indent"></span>
+        <span class="toggle leaf">▶</span><span class="icon">📄</span>
+        <span class="name ext-other">package.xml</span>
+        <span class="desc">— Salesforce package manifest: declares LWC components for deploy</span>
+        <div class="badges"><span class="badge badge-LWC">LWC</span></div>
+      </div>
+
+      <!-- embed lwc -->
+      <div class="tree-row folder-row" data-tags="LWC" data-folder="embed-lwc">
+        <span class="indent"></span>
+        <span class="toggle">▶</span><span class="icon">📁</span>
+        <span class="name folder-name">lwc/</span>
+        <span class="desc">— Lightning Web Component implementations</span>
+        <div class="badges"><span class="badge badge-LWC">LWC</span></div>
+      </div>
+      <div class="children" id="embed-lwc">
+
+        <div class="tree-row folder-row" data-tags="LWC" data-folder="embed-panel">
+          <span class="indent"></span><span class="indent"></span>
+          <span class="toggle">▶</span><span class="icon">📁</span>
+          <span class="name folder-name">commerceAgentPanel/</span>
+          <span class="desc">— Buyer-facing chat panel LWC</span>
+          <div class="badges"><span class="badge badge-LWC">LWC</span></div>
+        </div>
+        <div class="children" id="embed-panel">
+          <div class="tree-row" data-tags="LWC"><span class="indent"></span><span class="indent"></span><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">📄</span><span class="name ext-js">commerceAgentPanel.js</span><span class="desc">— Chat panel controller: SSE consumer, message state, actions</span><div class="badges"><span class="badge badge-LWC">LWC</span></div></div>
+          <div class="tree-row" data-tags="LWC"><span class="indent"></span><span class="indent"></span><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">🌐</span><span class="name ext-html">commerceAgentPanel.html</span><span class="desc">— Chat panel template: message list, input, product card slots</span><div class="badges"><span class="badge badge-LWC">LWC</span></div></div>
+          <div class="tree-row" data-tags="LWC"><span class="indent"></span><span class="indent"></span><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">🎨</span><span class="name ext-css">commerceAgentPanel.css</span><span class="desc">— Chat panel styles</span><div class="badges"><span class="badge badge-LWC">LWC</span></div></div>
+        </div>
+
+        <div class="tree-row folder-row" data-tags="LWC" data-folder="embed-merchant">
+          <span class="indent"></span><span class="indent"></span>
+          <span class="toggle">▶</span><span class="icon">📁</span>
+          <span class="name folder-name">salesforceMerchant/</span>
+          <span class="desc">— Merchant portal LWC (Quote Approvals tab added)</span>
+          <div class="badges"><span class="badge badge-LWC">LWC</span></div>
+        </div>
+        <div class="children" id="embed-merchant">
+          <div class="tree-row" data-tags="LWC NEW"><span class="indent"></span><span class="indent"></span><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">📄</span><span class="name ext-js">salesforceMerchant.js</span><span class="desc">— Merchant portal controller with Quote Approvals tab</span><div class="badges"><span class="badge badge-LWC">LWC</span><span class="badge badge-NEW">NEW</span></div></div>
+          <div class="tree-row" data-tags="LWC"><span class="indent"></span><span class="indent"></span><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">🌐</span><span class="name ext-html">salesforceMerchant.html</span><span class="desc">— Merchant portal template: tabs, metrics, order table</span><div class="badges"><span class="badge badge-LWC">LWC</span></div></div>
+          <div class="tree-row" data-tags="LWC"><span class="indent"></span><span class="indent"></span><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">🎨</span><span class="name ext-css">salesforceMerchant.css</span><span class="desc">— Merchant portal styles</span><div class="badges"><span class="badge badge-LWC">LWC</span></div></div>
+        </div>
+
+        <div class="tree-row folder-row" data-tags="LWC" data-folder="embed-storefront">
+          <span class="indent"></span><span class="indent"></span>
+          <span class="toggle">▶</span><span class="icon">📁</span>
+          <span class="name folder-name">salesforceStorefront/</span>
+          <span class="desc">— Storefront LWC: product listing and cart inside Salesforce</span>
+          <div class="badges"><span class="badge badge-LWC">LWC</span></div>
+        </div>
+        <div class="children" id="embed-storefront">
+          <div class="tree-row" data-tags="LWC"><span class="indent"></span><span class="indent"></span><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">📄</span><span class="name ext-js">salesforceStorefront.js</span><span class="desc">— Storefront controller: product browsing, cart integration</span><div class="badges"><span class="badge badge-LWC">LWC</span></div></div>
+          <div class="tree-row" data-tags="LWC"><span class="indent"></span><span class="indent"></span><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">🌐</span><span class="name ext-html">salesforceStorefront.html</span><span class="desc">— Storefront template: product grid, cart panel</span><div class="badges"><span class="badge badge-LWC">LWC</span></div></div>
+          <div class="tree-row" data-tags="LWC"><span class="indent"></span><span class="indent"></span><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">🎨</span><span class="name ext-css">salesforceStorefront.css</span><span class="desc">— Storefront styles</span><div class="badges"><span class="badge badge-LWC">LWC</span></div></div>
+        </div>
+
+      </div><!-- /embed-lwc -->
+    </div><!-- /embed -->
+
+    <!-- salesforce/ DX project -->
+    <div class="tree-row folder-row" data-tags="LWC" data-folder="salesforce-dx">
+      <span class="toggle">▶</span>
+      <span class="icon">📁</span>
+      <span class="name folder-name">salesforce/</span>
+      <span class="desc">— Salesforce DX project: deploy Apex + LWC to org</span>
+      <div class="badges"><span class="badge badge-LWC">LWC</span></div>
+    </div>
+    <div class="children" id="salesforce-dx">
+      <div class="tree-row" data-tags="LWC">
+        <span class="indent"></span>
+        <span class="toggle leaf">▶</span><span class="icon">📄</span>
+        <span class="name ext-other">.forceignore</span>
+        <span class="desc">— Excludes test files and local config from Salesforce org deploy</span>
+        <div class="badges"><span class="badge badge-LWC">LWC</span></div>
+      </div>
+
+      <div class="tree-row folder-row" data-tags="LWC" data-folder="salesforce-apex">
+        <span class="indent"></span>
+        <span class="toggle">▶</span><span class="icon">📁</span>
+        <span class="name folder-name">force-app/main/default/classes/</span>
+        <span class="desc">— Apex classes (backend callout layer)</span>
+        <div class="badges"><span class="badge badge-LWC">LWC</span></div>
+      </div>
+      <div class="children" id="salesforce-apex">
+        <div class="tree-row" data-tags="LWC"><span class="indent"></span><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">📄</span><span class="name ext-cls">CommerceAgentController.cls</span><span class="desc">— Apex: HTTP callouts to commerce agent API from LWC</span><div class="badges"><span class="badge badge-LWC">LWC</span></div></div>
+        <div class="tree-row" data-tags="LWC"><span class="indent"></span><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">📄</span><span class="name ext-cls">CommerceAgentService.cls</span><span class="desc">— Apex: request/response mapping for agent API calls</span><div class="badges"><span class="badge badge-LWC">LWC</span></div></div>
+        <div class="tree-row" data-tags="LWC"><span class="indent"></span><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">📄</span><span class="name ext-cls">OrderService.cls</span><span class="desc">— Apex: order create, update, status operations</span><div class="badges"><span class="badge badge-LWC">LWC</span></div></div>
+        <div class="tree-row" data-tags="LWC"><span class="indent"></span><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">📄</span><span class="name ext-cls">OrderTriggerHandler.cls</span><span class="desc">— Apex trigger handler for order lifecycle events</span><div class="badges"><span class="badge badge-LWC">LWC</span></div></div>
+        <div class="tree-row" data-tags="LWC"><span class="indent"></span><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">📄</span><span class="name ext-cls">IHttpService.cls</span><span class="desc">— Apex interface for HTTP service (enables mocking in tests)</span><div class="badges"><span class="badge badge-LWC">LWC</span></div></div>
+      </div>
+
+      <div class="tree-row folder-row" data-tags="LWC" data-folder="salesforce-lwc-deployed">
+        <span class="indent"></span>
+        <span class="toggle">▶</span><span class="icon">📁</span>
+        <span class="name folder-name">force-app/main/default/lwc/</span>
+        <span class="desc">— Deployed LWC components (mirrors embed/lwc/)</span>
+        <div class="badges"><span class="badge badge-LWC">LWC</span></div>
+      </div>
+      <div class="children" id="salesforce-lwc-deployed">
+        <div class="tree-row" data-tags="LWC"><span class="indent"></span><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">📁</span><span class="name folder-name">commerceAgentPanel/</span><span class="desc">— Deployed buyer chat panel component</span><div class="badges"><span class="badge badge-LWC">LWC</span></div></div>
+        <div class="tree-row" data-tags="LWC"><span class="indent"></span><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">📁</span><span class="name folder-name">salesforceMerchant/</span><span class="desc">— Deployed merchant portal component</span><div class="badges"><span class="badge badge-LWC">LWC</span></div></div>
+      </div>
+
+      <div class="tree-row folder-row" data-tags="" data-folder="salesforce-docs">
+        <span class="indent"></span>
+        <span class="toggle">▶</span><span class="icon">📁</span>
+        <span class="name folder-name">docs/</span>
+        <span class="desc">— Salesforce-specific documentation</span>
+      </div>
+      <div class="children" id="salesforce-docs">
+        <div class="tree-row" data-tags=""><span class="indent"></span><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">🌐</span><span class="name ext-html">ai-workflow.html</span><span class="desc">— Salesforce AI workflow documentation</span></div>
+        <div class="tree-row" data-tags=""><span class="indent"></span><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">🌐</span><span class="name ext-html">reference-architecture.html</span><span class="desc">— Salesforce-specific architecture reference</span></div>
+      </div>
+
+    </div><!-- /salesforce-dx -->
+
+  </div><!-- /salesforce integration tree -->
+
+  <!-- ============================================================ SECTION: Scripts & Tools ============================================================ -->
+  <div class="section-header">Scripts &amp; Tools</div>
+  <div class="tree">
+
+    <div class="tree-row folder-row" data-tags="" data-folder="scripts">
+      <span class="toggle">▶</span>
+      <span class="icon">📁</span>
+      <span class="name folder-name">scripts/</span>
+      <span class="desc">— Developer utilities: install, run, test, verify, deploy</span>
+    </div>
+    <div class="children" id="scripts">
+      <div class="tree-row" data-tags=""><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">🐚</span><span class="name ext-sh">install.sh</span><span class="desc">— pip install all 7 packages with pinned dependencies</span></div>
+      <div class="tree-row" data-tags=""><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">🐍</span><span class="name ext-py">run_demo.py</span><span class="desc">— Main demo runner: --merchant, --all, --api-only flags; ports 8000-8003</span></div>
+      <div class="tree-row" data-tags=""><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">🐍</span><span class="name ext-py">smoke_chat.py</span><span class="desc">— Smoke test: sends one chat message and validates SSE response</span></div>
+      <div class="tree-row" data-tags=""><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">🐍</span><span class="name ext-py">screenshot_tour.py</span><span class="desc">— Automated screenshot tour of all vertical storefronts for docs</span></div>
+      <div class="tree-row" data-tags=""><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">🐍</span><span class="name ext-py">check.py</span><span class="desc">— Verifies system.md matches manifest derived from prompt + skills</span></div>
+      <div class="tree-row" data-tags=""><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">🐍</span><span class="name ext-py">verify_all.py</span><span class="desc">— Full verify: ruff + pytest + deploy dry-runs + web builds</span></div>
+      <div class="tree-row" data-tags=""><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">🐚</span><span class="name ext-sh">deploy_managed_agent.sh</span><span class="desc">— Deploys managed agent manifest to Anthropic platform</span></div>
+      <div class="tree-row" data-tags="LWC"><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">🐚</span><span class="name ext-sh">package_lwc.sh</span><span class="desc">— Packages LWC components for Salesforce deployment</span><div class="badges"><span class="badge badge-LWC">LWC</span></div></div>
+      <div class="tree-row" data-tags="Gemini UCP NEW">
+        <span class="indent"></span>
+        <span class="toggle leaf">▶</span><span class="icon">🐍</span>
+        <span class="name ext-py">gemini_ucp_demo.py</span>
+        <span class="desc">— Gemini × UCP terminal demo: runs shopping session with Gemini via UCP</span>
+        <div class="badges"><span class="badge badge-Gemini">Gemini</span><span class="badge badge-UCP">UCP</span><span class="badge badge-NEW">NEW</span></div>
+      </div>
+      <div class="tree-row" data-tags="Gemini MCP NEW">
+        <span class="indent"></span>
+        <span class="toggle leaf">▶</span><span class="icon">🐍</span>
+        <span class="name ext-py">gemini_mcp_ui_server.py</span>
+        <span class="desc">— Split-screen Gemini + MCP UI demo server</span>
+        <div class="badges"><span class="badge badge-Gemini">Gemini</span><span class="badge badge-MCP">MCP</span><span class="badge badge-NEW">NEW</span></div>
+      </div>
+    </div><!-- /scripts -->
+
+    <!-- tests -->
+    <div class="tree-row folder-row" data-tags="" data-folder="tests">
+      <span class="toggle">▶</span>
+      <span class="icon">📁</span>
+      <span class="name folder-name">tests/</span>
+      <span class="desc">— Cross-package integration test suites (both roles, all three paths)</span>
+    </div>
+    <div class="children" id="tests">
+      <div class="tree-row" data-tags="">
+        <span class="indent"></span>
+        <span class="toggle leaf">▶</span><span class="icon">📄</span>
+        <span class="name ext-other">…</span>
+        <span class="desc">— Integration tests: each package also keeps its own tests/ directory</span>
+      </div>
+    </div>
+
+    <!-- docs -->
+    <div class="tree-row folder-row" data-tags="" data-folder="docs">
+      <span class="toggle">▶</span>
+      <span class="icon">📁</span>
+      <span class="name folder-name">docs/</span>
+      <span class="desc">— Reference documentation for agents working in this repo</span>
+    </div>
+    <div class="children" id="docs">
+      <div class="tree-row" data-tags=""><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">📄</span><span class="name ext-md">safety.md</span><span class="desc">— Safety model: write fencing, provenance gates, checkout guarantees</span></div>
+      <div class="tree-row" data-tags=""><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">📄</span><span class="name ext-md">backends.md</span><span class="desc">— Backend implementation guide: how to extend StorefrontBackend</span></div>
+      <div class="tree-row" data-tags=""><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">📄</span><span class="name ext-md">deployment.md</span><span class="desc">— Deployment guide: managed agents, MCP connectors, platform targets</span></div>
+    </div>
+
+    <!-- referenceArch -->
+    <div class="tree-row" data-tags="">
+      <span class="toggle leaf">▶</span>
+      <span class="icon">📁</span>
+      <span class="name folder-name">referenceArch/</span>
+      <span class="desc">— Reference architecture assets (diagrams, design artifacts)</span>
+    </div>
+
+    <!-- Root HTML files -->
+    <div class="tree-row folder-row" data-tags="" data-folder="root-html">
+      <span class="toggle">▶</span>
+      <span class="icon">📁</span>
+      <span class="name folder-name">(HTML files at root)</span>
+      <span class="desc">— Standalone HTML documentation and architecture guides</span>
+    </div>
+    <div class="children" id="root-html">
+      <div class="tree-row" data-tags=""><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">🌐</span><span class="name ext-html">agentic-commerce-guide.html</span><span class="desc">— UCP + MCP demo guide and integration walkthrough</span></div>
+      <div class="tree-row" data-tags=""><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">🌐</span><span class="name ext-html">arch-highlevel.html</span><span class="desc">— High-level channel architecture diagram</span></div>
+      <div class="tree-row" data-tags=""><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">🌐</span><span class="name ext-html">arch-technical.html</span><span class="desc">— Technical channel architecture (Messages API / SDK / Managed paths)</span></div>
+      <div class="tree-row" data-tags=""><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">🌐</span><span class="name ext-html">directory-map.html</span><span class="desc">— This file: complete annotated directory map</span></div>
+      <div class="tree-row" data-tags=""><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">🌐</span><span class="name ext-html">agentic-b2b-commerce-architecture.html</span><span class="desc">— Agentic B2B commerce architecture overview</span></div>
+      <div class="tree-row" data-tags=""><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">🌐</span><span class="name ext-html">agent-features.html</span><span class="desc">— Agent features overview page</span></div>
+      <div class="tree-row" data-tags=""><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">🌐</span><span class="name ext-html">directory-structure.html</span><span class="desc">— Alternate directory structure view</span></div>
+    </div>
+
+  </div><!-- /scripts & tools tree -->
+
+  <!-- ============================================================ SECTION: Plugin ============================================================ -->
+  <div class="section-header">Plugin</div>
+  <div class="tree">
+
+    <div class="tree-row folder-row" data-tags="Plugin" data-folder="plugin">
+      <span class="toggle">▶</span>
+      <span class="icon">📁</span>
+      <span class="name folder-name">plugins/commerce-builder/</span>
+      <span class="desc">— Claude Code plugin for developers building commerce agents</span>
+      <div class="badges"><span class="badge badge-Plugin">Plugin</span></div>
+    </div>
+    <div class="children" id="plugin">
+      <div class="tree-row" data-tags="Plugin">
+        <span class="indent"></span>
+        <span class="toggle leaf">▶</span><span class="icon">📄</span>
+        <span class="name ext-json">.claude-plugin/plugin.json</span>
+        <span class="desc">— Plugin manifest: declares skills and commands for Claude Code marketplace</span>
+        <div class="badges"><span class="badge badge-Plugin">Plugin</span></div>
+      </div>
+
+      <div class="tree-row folder-row" data-tags="Plugin" data-folder="plugin-skills">
+        <span class="indent"></span>
+        <span class="toggle">▶</span><span class="icon">📁</span>
+        <span class="name folder-name">skills/</span>
+        <span class="desc">— 6 developer guidance skills</span>
+        <div class="badges"><span class="badge badge-Plugin">Plugin</span></div>
+      </div>
+      <div class="children" id="plugin-skills">
+        <div class="tree-row" data-tags="Plugin"><span class="indent"></span><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">📄</span><span class="name ext-md">commerce-architecture/SKILL.md</span><span class="desc">— Architecture guidance: design rules, module ownership, extension points</span><div class="badges"><span class="badge badge-Plugin">Plugin</span></div></div>
+        <div class="tree-row" data-tags="Plugin"><span class="indent"></span><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">📄</span><span class="name ext-md">commerce-evals/SKILL.md</span><span class="desc">— Eval authoring: how to write test scenarios for agent behaviors</span><div class="badges"><span class="badge badge-Plugin">Plugin</span></div></div>
+        <div class="tree-row" data-tags="Plugin"><span class="indent"></span><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">📄</span><span class="name ext-md">commerce-merchant-operations/SKILL.md</span><span class="desc">— Merchant ops guidance: change proposals, approval flows, analytics</span><div class="badges"><span class="badge badge-Plugin">Plugin</span></div></div>
+        <div class="tree-row" data-tags="Plugin"><span class="indent"></span><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">📄</span><span class="name ext-md">commerce-prompt-caching/SKILL.md</span><span class="desc">— Prompt caching guidance: cache breakpoints, cost reduction patterns</span><div class="badges"><span class="badge badge-Plugin">Plugin</span></div></div>
+        <div class="tree-row" data-tags="Plugin"><span class="indent"></span><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">📄</span><span class="name ext-md">commerce-trust-safety/SKILL.md</span><span class="desc">— Trust/safety guidance: fencing, write caps, third-party content rules</span><div class="badges"><span class="badge badge-Plugin">Plugin</span></div></div>
+        <div class="tree-row" data-tags="Plugin"><span class="indent"></span><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">📄</span><span class="name ext-md">commerce-ui-tools/SKILL.md</span><span class="desc">— UI tools guidance: presentation tool calls, PresentationExtension, streaming</span><div class="badges"><span class="badge badge-Plugin">Plugin</span></div></div>
+      </div>
+
+      <div class="tree-row folder-row" data-tags="Plugin" data-folder="plugin-commands">
+        <span class="indent"></span>
+        <span class="toggle">▶</span><span class="icon">📁</span>
+        <span class="name folder-name">commands/</span>
+        <span class="desc">— 4 Claude Code slash commands for developers</span>
+        <div class="badges"><span class="badge badge-Plugin">Plugin</span></div>
+      </div>
+      <div class="children" id="plugin-commands">
+        <div class="tree-row" data-tags="Plugin"><span class="indent"></span><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">📄</span><span class="name ext-md">scaffold-commerce-agent.md</span><span class="desc">— /scaffold: generates a new vertical from template (API + web + agent config)</span><div class="badges"><span class="badge badge-Plugin">Plugin</span></div></div>
+        <div class="tree-row" data-tags="Plugin"><span class="indent"></span><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">📄</span><span class="name ext-md">add-commerce-flow.md</span><span class="desc">— /add-flow: adds a new SKILL.md and wires it into the agent config</span><div class="badges"><span class="badge badge-Plugin">Plugin</span></div></div>
+        <div class="tree-row" data-tags="Plugin"><span class="indent"></span><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">📄</span><span class="name ext-md">review-commerce-agent.md</span><span class="desc">— /review: checks agent impl against design rules and conventions</span><div class="badges"><span class="badge badge-Plugin">Plugin</span></div></div>
+        <div class="tree-row" data-tags="Plugin"><span class="indent"></span><span class="indent"></span><span class="toggle leaf">▶</span><span class="icon">📄</span><span class="name ext-md">author-commerce-evals.md</span><span class="desc">— /author-evals: scaffolds eval scenarios for a given skill flow</span><div class="badges"><span class="badge badge-Plugin">Plugin</span></div></div>
+      </div>
+
+    </div><!-- /plugin -->
+
+  </div><!-- /plugin tree -->
+
+</main>
+
+<script>
+(function() {
+  // ── FOLDER TOGGLE ──────────────────────────────────────────────────────────
+  document.querySelectorAll('.folder-row').forEach(function(row) {
+    var folderId = row.getAttribute('data-folder');
+    var toggle   = row.querySelector('.toggle');
+    var children = document.getElementById(folderId);
+    if (!children || !toggle) return;
+
+    // Start expanded
+    toggle.classList.remove('collapsed');
+
+    row.addEventListener('click', function(e) {
+      var collapsed = children.classList.toggle('collapsed');
+      toggle.classList.toggle('collapsed', collapsed);
+    });
+  });
+
+  // ── COLLAPSE ALL ────────────────────────────────────────────────────────────
+  document.getElementById('collapseAllBtn').addEventListener('click', function() {
+    var allOpen = !document.querySelector('.children.collapsed');
+    document.querySelectorAll('.children').forEach(function(c) {
+      if (allOpen) c.classList.add('collapsed');
+      else c.classList.remove('collapsed');
+    });
+    document.querySelectorAll('.folder-row .toggle').forEach(function(t) {
+      if (allOpen) t.classList.add('collapsed');
+      else t.classList.remove('collapsed');
+    });
+    this.textContent = allOpen ? 'Expand All' : 'Collapse All';
+  });
+
+  // ── FILTER ─────────────────────────────────────────────────────────────────
+  var activeFilter = null;
+
+  document.querySelectorAll('.filter-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var tag = this.getAttribute('data-tag');
+      if (activeFilter === tag) {
+        activeFilter = null;
+        this.classList.remove('active');
+      } else {
+        document.querySelectorAll('.filter-btn').forEach(function(b) { b.classList.remove('active'); });
+        activeFilter = tag;
+        this.classList.add('active');
+      }
+      applyFilters();
+    });
+  });
+
+  // ── SEARCH ─────────────────────────────────────────────────────────────────
+  var searchInput = document.getElementById('search');
+  var searchClear = document.getElementById('searchClear');
+  var noResults   = document.getElementById('noResults');
+
+  searchInput.addEventListener('input', function() {
+    searchClear.style.display = this.value ? 'block' : 'none';
+    applyFilters();
+  });
+
+  searchClear.addEventListener('click', function() {
+    searchInput.value = '';
+    this.style.display = 'none';
+    applyFilters();
+  });
+
+  function applyFilters() {
+    var query  = searchInput.value.trim().toLowerCase();
+    var filter = activeFilter;
+    var rows   = document.querySelectorAll('.tree-row');
+    var visibleCount = 0;
+
+    // Remove all existing marks
+    rows.forEach(function(row) {
+      var name = row.querySelector('.name');
+      var desc = row.querySelector('.desc');
+      if (name) name.innerHTML = name.textContent;
+      if (desc) desc.innerHTML = desc.textContent;
+    });
+
+    rows.forEach(function(row) {
+      var tags     = row.getAttribute('data-tags') || '';
+      var nameEl   = row.querySelector('.name');
+      var descEl   = row.querySelector('.desc');
+      var nameText = nameEl ? nameEl.textContent.toLowerCase() : '';
+      var descText = descEl ? descEl.textContent.toLowerCase() : '';
+
+      var tagMatch    = !filter || tags.split(' ').indexOf(filter) !== -1;
+      var searchMatch = !query  || nameText.indexOf(query) !== -1 || descText.indexOf(query) !== -1;
+
+      var visible = tagMatch && searchMatch;
+      row.classList.toggle('hidden', !visible);
+
+      if (visible) {
+        visibleCount++;
+        row.classList.toggle('search-highlight', !!query && searchMatch);
+
+        // Highlight search term
+        if (query && nameEl) {
+          nameEl.innerHTML = highlight(nameEl.textContent, query);
+        }
+        if (query && descEl) {
+          descEl.innerHTML = highlight(descEl.textContent, query);
+        }
+
+        // Ensure parent folders are visible
+        ensureParentsVisible(row);
+      }
+    });
+
+    noResults.classList.toggle('visible', visibleCount === 0);
+  }
+
+  function highlight(text, query) {
+    var idx = text.toLowerCase().indexOf(query);
+    if (idx === -1) return text;
+    return text.slice(0, idx) + '<mark>' + text.slice(idx, idx + query.length) + '</mark>' + text.slice(idx + query.length);
+  }
+
+  function ensureParentsVisible(row) {
+    // Walk up DOM to make sure containing children containers and folder rows are visible
+    var el = row.parentElement;
+    while (el) {
+      if (el.classList && el.classList.contains('children')) {
+        // Find the folder-row that controls this children container
+        var id = el.id;
+        var folderRow = document.querySelector('[data-folder="' + id + '"]');
+        if (folderRow) {
+          folderRow.classList.remove('hidden');
+          el.classList.remove('collapsed');
+          var toggle = folderRow.querySelector('.toggle');
+          if (toggle) toggle.classList.remove('collapsed');
+        }
+      }
+      el = el.parentElement;
+    }
+  }
+
+})();
+</script>
+</body>
+</html>

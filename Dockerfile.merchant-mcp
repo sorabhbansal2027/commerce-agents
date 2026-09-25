@@ -1,0 +1,31 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install dependencies first (layer-cached)
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy repo source
+COPY commerce-common/ commerce-common/
+COPY shopping-agent/core/ shopping-agent/core/
+COPY merchant-agent/core/ merchant-agent/core/
+COPY merchant-agent/runtime-messages-api/ merchant-agent/runtime-messages-api/
+COPY merchant-agent/managed-agents/ merchant-agent/managed-agents/
+COPY examples/demo_common/ examples/demo_common/
+COPY examples/salesforce/ examples/salesforce/
+COPY examples/sfcc/ examples/sfcc/
+COPY scripts/merchant_mcp_server_sfcc.py scripts/merchant_mcp_server_sfcc.py
+COPY conftest.py conftest.py
+
+# Railway injects PORT; default matches local dev convention
+ENV MERCHANT_MCP_HOST=0.0.0.0
+ENV MERCHANT_MCP_PORT=8201
+# Required — set in Railway environment, not here:
+# SFCC_INSTANCE_URL, SFCC_CLIENT_ID, SFCC_CLIENT_SECRET, SFCC_SITE_ID
+# Set this once your authenticating gateway (Railway private network / token) is in place:
+ENV MERCHANT_MCP_UNSAFE_ALLOW_NO_AUTH=1
+
+EXPOSE 8201
+
+CMD ["python", "scripts/merchant_mcp_server_sfcc.py"]

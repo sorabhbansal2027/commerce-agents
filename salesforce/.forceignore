@@ -1,0 +1,32 @@
+# Salesforce DX .forceignore
+# Files and directories listed here are excluded from source push/pull
+
+# OS artifacts
+.DS_Store
+*.dup
+
+# Workbench deploy artifacts
+package.xml
+
+# Node.js
+node_modules/
+.nyc_output/
+coverage/
+
+# Build outputs
+.sfdx/
+.sf/
+
+# IDE
+.vscode/.browse.*.json
+.vscode/*.launch.json
+
+# Scratch org auth files — never commit
+*.sfdxurl
+
+# Python
+__pycache__/
+*.pyc
+
+# LWC unit tests — not deployable to org
+**/__tests__/**

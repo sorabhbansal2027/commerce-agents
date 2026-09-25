@@ -1,0 +1,9 @@
+{
+  "extends": ["@salesforce/eslint-config-lwc/recommended"],
+  "plugins": ["@salesforce/eslint-plugin-lightning"],
+  "rules": {
+    "no-console": "warn",
+    "@salesforce/lightning/no-inner-html": "error",
+    "@salesforce/lightning/consistent-component-name": "error"
+  }
+}

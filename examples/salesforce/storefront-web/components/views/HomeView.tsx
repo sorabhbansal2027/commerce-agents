@@ -24,10 +24,10 @@ import type { Product } from "@/lib/types";
 import ProductTile from "../ProductTile";
 
 const STARTERS: Starter[] = [
-  { icon: "search", prompt: "I want to register for the TOEFL iBT exam" },
-  { icon: "home", prompt: "What score reporting options are available after my test?" },
-  { icon: "tag", prompt: "What's the difference between TOEFL iBT and TOEFL Essentials?" },
-  { icon: "edit", prompt: "I need to send my scores to three universities" },
+  { icon: "search", prompt: "Show me configurable workstations" },
+  { icon: "tag", prompt: "What laptops do you have under $1,500?" },
+  { icon: "home", prompt: "I need networking equipment for a new office" },
+  { icon: "edit", prompt: "Create a quote for 10 ProBook laptops" },
 ];
 
 /** What the store is featuring: labelled bestseller or new, photographed ones first. */

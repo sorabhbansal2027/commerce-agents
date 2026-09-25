@@ -13,6 +13,7 @@ const nextConfig: NextConfig = {
   experimental: {
     serverActions: {
       allowedOrigins: [
+        "merchant-web-v2-production.up.railway.app",
         "merchant-web-production-e806.up.railway.app",
         "*.up.railway.app",
         "*.commercecloud.salesforce.com",

@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ontology in Gemini Shopping Agent</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0d1117; color: #e6edf3; }
+  .page { max-width: 1100px; margin: 0 auto; padding: 36px 24px 64px; }
+
+  h1 { font-size: 21px; font-weight: 700; }
+  h2 { font-size: 12px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: #7d8590; margin-bottom: 14px; }
+
+  .hero { text-align: center; margin-bottom: 40px; }
+  .hero p { font-size: 13px; color: #8b949e; margin-top: 6px; }
+
+  .section { margin-bottom: 48px; }
+
+  .mono { font-family: 'Cascadia Code','Fira Code',monospace; font-size: 10px;
+          background: #0d1117; border: 1px solid #21262d; border-radius: 4px;
+          padding: 1px 5px; color: #a5b4fc; display: inline-block; }
+
+  /* ── WHERE ONTOLOGY SITS ── */
+  .arch-stack { display: flex; flex-direction: column; gap: 0; }
+  .arch-row {
+    display: flex; align-items: stretch; gap: 0;
+    border-bottom: 1px solid #21262d;
+  }
+  .arch-row:last-child { border-bottom: none; }
+  .arch-layer {
+    flex: 1; padding: 14px 16px;
+    border-right: 1px solid #21262d;
+  }
+  .arch-layer:last-child { border-right: none; }
+  .arch-label { font-size: 9px; font-weight: 700; letter-spacing: .08em;
+                text-transform: uppercase; margin-bottom: 4px; }
+  .arch-name  { font-size: 13px; font-weight: 700; margin-bottom: 3px; }
+  .arch-sub   { font-size: 11px; color: #8b949e; line-height: 1.5; }
+
+  .layer-user    { background: #161b22; }
+  .layer-gemini  { background: #1a1000; }
+  .layer-onto    { background: #0d2a0d; border: 2px solid #1e6a1e !important; }
+  .layer-ucp     { background: #0d1117; }
+  .layer-sf      { background: #1a0d1a; }
+
+  /* ── 3 INTEGRATION POINTS ── */
+  .points { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+  .point-card {
+    border-radius: 12px; border: 1px solid #30363d; overflow: hidden;
+  }
+  .point-header {
+    padding: 12px 14px; border-bottom: 1px solid #30363d;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .point-num {
+    width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700;
+  }
+  .point-title { font-size: 12px; font-weight: 700; }
+  .point-body  { padding: 12px 14px; font-size: 11px; color: #8b949e; line-height: 1.7; }
+
+  /* ── QUERY FLOW ── */
+  .flow { display: flex; flex-direction: column; gap: 0; }
+  .flow-step {
+    display: flex; gap: 14px; padding: 14px 0;
+    border-bottom: 1px solid #21262d; position: relative;
+  }
+  .flow-step:last-child { border-bottom: none; }
+  .flow-step::before {
+    content: ''; position: absolute; left: 15px; top: 44px;
+    bottom: -14px; width: 1px; background: #21262d;
+  }
+  .flow-step:last-child::before { display: none; }
+  .flow-num {
+    width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 700; z-index: 1;
+  }
+  .flow-body { flex: 1; }
+  .flow-actor { font-size: 9px; font-weight: 700; letter-spacing: .08em;
+                text-transform: uppercase; margin-bottom: 3px; }
+  .flow-desc  { font-size: 12px; color: #c9d1d9; line-height: 1.5; }
+  .flow-box {
+    margin-top: 6px; background: #0d1117; border: 1px solid #21262d;
+    border-radius: 6px; padding: 6px 10px;
+    font-family: 'Cascadia Code','Fira Code',monospace; font-size: 10px;
+    color: #a5b4fc; line-height: 1.6;
+  }
+  .flow-box.green { border-color: #1e4a1e; color: #56d364; background: #0d1f0d; }
+  .flow-box.orange { border-color: #4a3800; color: #e3b341; background: #1a1000; }
+
+  /* ── ONTOLOGY DATA EXAMPLES ── */
+  .onto-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .onto-card {
+    background: #161b22; border: 1px solid #30363d; border-radius: 10px; overflow: hidden;
+  }
+  .onto-card-title {
+    padding: 9px 13px; background: #0d2a0d; border-bottom: 1px solid #1e4a1e;
+    font-size: 11px; font-weight: 700; color: #56d364;
+  }
+  .onto-card-body { padding: 10px 13px; }
+  .onto-row { display: flex; gap: 8px; padding: 4px 0; border-bottom: 1px solid #21262d; font-size: 11px; }
+  .onto-row:last-child { border-bottom: none; }
+  .onto-key   { color: #8b949e; min-width: 90px; flex-shrink: 0; }
+  .onto-val   { color: #c9d1d9; }
+  .onto-arrow { color: #56d364; margin: 0 4px; }
+
+  /* ── WHERE IT LIVES IN CODE ── */
+  .code-map { background: #161b22; border: 1px solid #30363d; border-radius: 12px; overflow: hidden; }
+  table { width: 100%; border-collapse: collapse; }
+  thead tr { background: #1c2128; }
+  th { padding: 9px 13px; font-size: 10px; font-weight: 700; text-transform: uppercase;
+       letter-spacing: .06em; color: #7d8590; text-align: left; border-bottom: 1px solid #30363d; }
+  td { padding: 9px 13px; font-size: 12px; color: #c9d1d9; border-bottom: 1px solid #21262d; vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  tbody tr:hover { background: #1c2128; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- HERO -->
+  <div class="hero">
+    <div style="font-size:28px; margin-bottom:8px;">🧠 + 🤖</div>
+    <h1>How Ontology Plugs into the Gemini Shopping Agent</h1>
+    <p>Three integration points — startup, query time, and tool call time</p>
+  </div>
+
+  <!-- ── WHERE ONTOLOGY SITS IN THE STACK ── -->
+  <div class="section">
+    <h2>Where Ontology Sits in the Architecture</h2>
+    <div style="background:#161b22; border:1px solid #30363d; border-radius:14px; overflow:hidden;">
+      <div class="arch-stack">
+
+        <div class="arch-row">
+          <div class="arch-layer layer-user" style="max-width:100%;">
+            <div class="arch-label" style="color:#58a6ff;">User</div>
+            <div class="arch-name">"I need a laptop for heavy work under $1,500"</div>
+            <div class="arch-sub">Natural language — no product knowledge required</div>
+          </div>
+        </div>
+
+        <div class="arch-row">
+          <div class="arch-layer layer-gemini">
+            <div class="arch-label" style="color:#f97316;">Gemini Agent (Google Cloud)</div>
+            <div class="arch-name">gemini-2.0-flash — Decision Maker</div>
+            <div class="arch-sub">Understands intent. Calls tools. Generates reply.<br>
+            Reads ontology facts from <strong style="color:#e3b341;">system prompt</strong> + <strong style="color:#e3b341;">agent_hints</strong></div>
+          </div>
+          <div style="display:flex;align-items:center;padding:0 12px;color:#30363d;font-size:18px;">⟷</div>
+          <div class="arch-layer layer-onto" style="border-color:#1e6a1e;">
+            <div class="arch-label" style="color:#56d364;">🌿 ONTOLOGY LAYER (NEW — GCP)</div>
+            <div class="arch-name" style="color:#56d364;">ACOS Ontology</div>
+            <div class="arch-sub">
+              Schema.org/Product + GoodRelations + WordNet + custom<br>
+              Stored in <strong style="color:#56d364;">BigQuery / Neo4j on GCP</strong><br>
+              Queried at startup and per-request for term enrichment
+            </div>
+          </div>
+        </div>
+
+        <div class="arch-row">
+          <div class="arch-layer layer-ucp">
+            <div class="arch-label" style="color:#a5b4fc;">UCP Endpoints (Railway)</div>
+            <div class="arch-name">GET /ucp/products</div>
+            <div class="arch-sub">Receives <strong>structured</strong> query params — already enriched by ontology.<br>
+            No natural language parsing needed here.</div>
+          </div>
+        </div>
+
+        <div class="arch-row">
+          <div class="arch-layer layer-sf">
+            <div class="arch-label" style="color:#d2a8ff;">Salesforce B2B (External)</div>
+            <div class="arch-name">Product Catalog + Orders</div>
+            <div class="arch-sub">SOQL runs against structured fields — ontology did the translation upstream</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 3 INTEGRATION POINTS ── -->
+  <div class="section">
+    <h2>3 Integration Points</h2>
+    <div class="points">
+
+      <!-- Point 1 -->
+      <div class="point-card">
+        <div class="point-header" style="background:#0d1f33; border-color:#1e4976;">
+          <div class="point-num" style="background:#1e4976; color:#79c0ff;">1</div>
+          <div>
+            <div class="point-title" style="color:#79c0ff;">Startup — System Prompt</div>
+            <div style="font-size:10px; color:#8b949e; margin-top:1px;">once per server boot</div>
+          </div>
+        </div>
+        <div class="point-body">
+          Ontology key facts are injected into the UCP manifest's <span class="mono">agent_hints</span> field.<br><br>
+          <span class="mono">build_ucp_manifest()</span> reads from ontology store and adds:<br><br>
+          <em style="color:#c9d1d9;">"heavy work = RAM &gt;= 16GB, processor i7/i9. notebook = laptop = ultrabook. category: Gaming &gt; Workstation &gt; Business"</em><br><br>
+          Gemini reads this before every conversation — no runtime lookup needed for common terms.
+        </div>
+      </div>
+
+      <!-- Point 2 -->
+      <div class="point-card">
+        <div class="point-header" style="background:#0d2a0d; border-color:#1e6a1e;">
+          <div class="point-num" style="background:#1e6a1e; color:#56d364;">2</div>
+          <div>
+            <div class="point-title" style="color:#56d364;">Query Time — Term Enrichment</div>
+            <div style="font-size:10px; color:#8b949e; margin-top:1px;">per user message</div>
+          </div>
+        </div>
+        <div class="point-body">
+          Before Gemini's tool args reach <span class="mono">GET /ucp/products</span>, a middleware layer queries the ontology to expand terms.<br><br>
+          <em style="color:#c9d1d9;">User says: "gaming machine"</em><br>
+          Ontology returns: <span class="mono">category=Gaming, RAM&gt;=16GB, GPU=required</span><br><br>
+          Gemini's <span class="mono">FunctionCall</span> args are enriched before the UCP HTTP call is made — Salesforce receives clean structured filters.
+        </div>
+      </div>
+
+      <!-- Point 3 -->
+      <div class="point-card">
+        <div class="point-header" style="background:#1a1000; border-color:#4a3800;">
+          <div class="point-num" style="background:#4a3800; color:#e3b341;">3</div>
+          <div>
+            <div class="point-title" style="color:#e3b341;">Result Time — Product Enrichment</div>
+            <div style="font-size:10px; color:#8b949e; margin-top:1px;">per product returned</div>
+          </div>
+        </div>
+        <div class="point-body">
+          After Salesforce returns products, ontology enriches each product with related concepts before Gemini generates the reply.<br><br>
+          Product: HP ProBook 440<br>
+          Ontology adds: <span class="mono">related_to=[EliteBook, ZBook], good_for=[business travel, remote work], accessories=[USB-C dock, ProBook sleeve]</span><br><br>
+          Gemini uses this to give smarter recommendations and cross-sell suggestions.
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── QUERY TRACE ── -->
+  <div class="section">
+    <h2>Full Query Trace — "I need a laptop for heavy work under $1,500"</h2>
+    <div class="flow">
+
+      <div class="flow-step">
+        <div class="flow-num" style="background:#161b22; border:1.5px solid #30363d; color:#8b949e;">1</div>
+        <div class="flow-body">
+          <div class="flow-actor" style="color:#58a6ff;">User → React Frontend</div>
+          <div class="flow-desc">Types natural language message</div>
+          <div class="flow-box">"I need a laptop for heavy work under $1,500"</div>
+        </div>
+      </div>
+
+      <div class="flow-step">
+        <div class="flow-num" style="background:#0d1f33; border:1.5px solid #1e4976; color:#79c0ff;">2</div>
+        <div class="flow-body">
+          <div class="flow-actor" style="color:#79c0ff;">FastAPI → Gemini</div>
+          <div class="flow-desc">Sends message to Gemini with system prompt that includes ontology hints injected at startup</div>
+          <div class="flow-box orange">system_prompt includes:
+"heavy work = RAM &gt;= 16GB, processor i7/i9/Ryzen9
+ laptop = notebook = ultrabook
+ categories: Workstation &gt; Gaming &gt; Business"</div>
+        </div>
+      </div>
+
+      <div class="flow-step">
+        <div class="flow-num" style="background:#1a1000; border:1.5px solid #4a3800; color:#e3b341;">3</div>
+        <div class="flow-body">
+          <div class="flow-actor" style="color:#f97316;">Gemini Model</div>
+          <div class="flow-desc">Uses ontology facts from system prompt to understand "heavy work". Generates FunctionCall:</div>
+          <div class="flow-box">FunctionCall: search_products
+  query = "laptop workstation"
+  category = "Workstation"
+  max_price = 1500</div>
+        </div>
+      </div>
+
+      <div class="flow-step">
+        <div class="flow-num" style="background:#0d2a0d; border:1.5px solid #1e6a1e; color:#56d364;">4</div>
+        <div class="flow-body">
+          <div class="flow-actor" style="color:#56d364;">Ontology Layer — Query Enrichment (Point 2)</div>
+          <div class="flow-desc">Before calling UCP, <span class="mono">_call_ucp()</span> runs args through ontology enricher on GCP:</div>
+          <div class="flow-box green">Input:  { query:"laptop workstation", category:"Workstation", max_price:1500 }
+
+Ontology lookup:
+  "workstation" → min_ram=16, processor_tier="i7|i9|Ryzen9"
+  "Workstation" category → also include "Gaming" category
+
+Output: { query:"laptop", category:["Workstation","Gaming"],
+          max_price:1500, min_ram:16,
+          processor_keywords:["i7","i9","Ryzen 9"] }</div>
+        </div>
+      </div>
+
+      <div class="flow-step">
+        <div class="flow-num" style="background:#0d1117; border:1.5px solid #252566; color:#a5b4fc;">5</div>
+        <div class="flow-body">
+          <div class="flow-actor" style="color:#a5b4fc;">UCP Endpoint → Salesforce</div>
+          <div class="flow-desc">Enriched params reach Salesforce as structured SOQL — no guesswork</div>
+          <div class="flow-box">SELECT Id, Name, UnitPrice FROM ProductCatalog
+WHERE UnitPrice &lt; 1500
+AND Category__c IN ('Workstation','Gaming')
+AND RAM_GB__c &gt;= 16
+AND Processor__c LIKE '%i7%' OR '%i9%' OR '%Ryzen 9%'</div>
+        </div>
+      </div>
+
+      <div class="flow-step">
+        <div class="flow-num" style="background:#0d2a0d; border:1.5px solid #1e6a1e; color:#56d364;">6</div>
+        <div class="flow-body">
+          <div class="flow-actor" style="color:#56d364;">Ontology Layer — Result Enrichment (Point 3)</div>
+          <div class="flow-desc">Products returned from Salesforce are enriched before Gemini generates the reply:</div>
+          <div class="flow-box green">HP ZBook Fury G10 — $1,449
+  + good_for: ["3D rendering", "data science", "video editing"]
+  + related: ["HP ZBook Studio", "Dell Precision 3580"]
+  + accessories: ["HP Thunderbolt dock", "extended warranty"]</div>
+        </div>
+      </div>
+
+      <div class="flow-step">
+        <div class="flow-num" style="background:#1a1000; border:1.5px solid #4a3800; color:#e3b341;">7</div>
+        <div class="flow-body">
+          <div class="flow-actor" style="color:#f97316;">Gemini → User</div>
+          <div class="flow-desc">Generates a rich, context-aware reply using both Salesforce data and ontology enrichment</div>
+          <div class="flow-box orange">"For heavy work under $1,500, the HP ZBook Fury G10 ($1,449)
+is your best match — it has an Intel i9, 32GB RAM, and is
+built for 3D rendering and data science. You might also
+consider pairing it with an HP Thunderbolt dock."</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── ONTOLOGY DATA EXAMPLES ── -->
+  <div class="section">
+    <h2>What Ontology Data Looks Like</h2>
+    <div class="onto-grid">
+
+      <div class="onto-card">
+        <div class="onto-card-title">Synonyms (WordNet / custom)</div>
+        <div class="onto-card-body">
+          <div class="onto-row"><span class="onto-key">laptop</span><span class="onto-arrow">→</span><span class="onto-val">notebook, ultrabook, portable computer</span></div>
+          <div class="onto-row"><span class="onto-key">heavy work</span><span class="onto-arrow">→</span><span class="onto-val">workstation, high performance, RAM ≥ 16GB</span></div>
+          <div class="onto-row"><span class="onto-key">gaming machine</span><span class="onto-arrow">→</span><span class="onto-val">gaming laptop, GPU required, high refresh</span></div>
+          <div class="onto-row"><span class="onto-key">fragrance (future)</span><span class="onto-arrow">→</span><span class="onto-val">perfume, cologne, scent, eau de toilette</span></div>
+          <div class="onto-row"><span class="onto-key">woody (future)</span><span class="onto-arrow">→</span><span class="onto-val">scent_family: Cedarwood, Sandalwood, Oud</span></div>
+        </div>
+      </div>
+
+      <div class="onto-card">
+        <div class="onto-card-title">Category Hierarchy (Google Product Taxonomy)</div>
+        <div class="onto-card-body">
+          <div class="onto-row"><span class="onto-key">Electronics</span><span class="onto-arrow">→</span><span class="onto-val">Computers &gt; Laptops &gt; Workstations</span></div>
+          <div class="onto-row"><span class="onto-key">Workstation</span><span class="onto-arrow">→</span><span class="onto-val">min_ram=16, processor_tier=i7+</span></div>
+          <div class="onto-row"><span class="onto-key">Gaming</span><span class="onto-arrow">→</span><span class="onto-val">GPU required, refresh_rate ≥ 120Hz</span></div>
+          <div class="onto-row"><span class="onto-key">Business</span><span class="onto-arrow">→</span><span class="onto-val">weight &lt; 1.8kg, battery &gt; 10h</span></div>
+          <div class="onto-row"><span class="onto-key">Health &amp; Beauty</span><span class="onto-arrow">→</span><span class="onto-val">Fragrances &gt; EDP / EDT / Parfum</span></div>
+        </div>
+      </div>
+
+      <div class="onto-card">
+        <div class="onto-card-title">Attribute Rules (Schema.org/Product)</div>
+        <div class="onto-card-body">
+          <div class="onto-row"><span class="onto-key">RAM</span><span class="onto-arrow">→</span><span class="onto-val">type: integer, unit: GB, values: 8/16/32/64</span></div>
+          <div class="onto-row"><span class="onto-key">Processor</span><span class="onto-arrow">→</span><span class="onto-val">brand: Intel/AMD, tier: i5&lt;i7&lt;i9</span></div>
+          <div class="onto-row"><span class="onto-key">Storage</span><span class="onto-arrow">→</span><span class="onto-val">type: SSD/HDD, unit: GB/TB</span></div>
+          <div class="onto-row"><span class="onto-key">Price</span><span class="onto-arrow">→</span><span class="onto-val">currency: USD, unit: per item or per volume</span></div>
+        </div>
+      </div>
+
+      <div class="onto-card">
+        <div class="onto-card-title">Relationships (GoodRelations)</div>
+        <div class="onto-card-body">
+          <div class="onto-row"><span class="onto-key">HP ZBook</span><span class="onto-arrow">→</span><span class="onto-val">compatible_with: HP Thunderbolt Dock</span></div>
+          <div class="onto-row"><span class="onto-key">Workstation</span><span class="onto-arrow">→</span><span class="onto-val">often_bought_with: external monitor, dock</span></div>
+          <div class="onto-row"><span class="onto-key">Gaming Laptop</span><span class="onto-arrow">→</span><span class="onto-val">related_to: gaming mouse, gaming headset</span></div>
+          <div class="onto-row"><span class="onto-key">Brand: HP</span><span class="onto-arrow">→</span><span class="onto-val">product_lines: ProBook, EliteBook, ZBook</span></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── WHERE IN CODE ── -->
+  <div class="section">
+    <h2>Where It Plugs into the Code</h2>
+    <div class="code-map">
+      <table>
+        <thead>
+          <tr>
+            <th>Integration Point</th>
+            <th>File to Change</th>
+            <th>What to Add</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong style="color:#79c0ff;">1 — Startup / System Prompt</strong></td>
+            <td><span class="mono">examples/demo_common/ucp.py</span><br><span style="font-size:10px;color:#8b949e;">build_ucp_manifest() → agent_hints</span></td>
+            <td>Query ontology store at startup, inject key synonym/category facts into <span class="mono">agent_hints</span> string. Gemini reads this as system prompt context.</td>
+          </tr>
+          <tr>
+            <td><strong style="color:#56d364;">2 — Query Enrichment</strong></td>
+            <td><span class="mono">examples/demo_common/gemini_ucp_agent.py</span><br><span style="font-size:10px;color:#8b949e;">_call_ucp() method</span></td>
+            <td>Before the httpx call to <span class="mono">/ucp/products</span>, pass args through an <span class="mono">OntologyEnricher.expand(args)</span> call that queries GCP ontology store and returns expanded structured params.</td>
+          </tr>
+          <tr>
+            <td><strong style="color:#e3b341;">3 — Result Enrichment</strong></td>
+            <td><span class="mono">examples/demo_common/ucp.py</span><br><span style="font-size:10px;color:#8b949e;">ucp_search_products() endpoint</span></td>
+            <td>After Salesforce returns products, call <span class="mono">OntologyEnricher.enrich_products(results)</span> to add <span class="mono">good_for</span>, <span class="mono">related</span>, and <span class="mono">accessories</span> fields before returning to Gemini.</td>
+          </tr>
+          <tr>
+            <td><strong style="color:#d2a8ff;">Ontology Store (new)</strong></td>
+            <td><span class="mono">New: ontology/ontology_client.py</span><br><span style="font-size:10px;color:#8b949e;">GCP project (GECX)</span></td>
+            <td>Client that queries BigQuery or Neo4j on GCP. Methods: <span class="mono">expand_query(terms)</span>, <span class="mono">get_synonyms(term)</span>, <span class="mono">get_category_rules(category)</span>, <span class="mono">enrich_products(products)</span>. Shared across all three integration points.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div style="text-align:center; color:#586069; font-size:11px; margin-top:8px;">
+    commerce-agents · ACOS Ontology integration · Schema.org + GoodRelations + WordNet · GCP (GECX project)
+  </div>
+
+</div>
+</body>
+</html>

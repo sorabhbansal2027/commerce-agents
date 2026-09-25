@@ -1,0 +1,1481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agentic Commerce — Technical Architecture</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --navy:      #0d1117;
+    --navy2:     #161b22;
+    --navy3:     #21262d;
+    --navy4:     #30363d;
+    --text:      #e6edf3;
+    --muted:     #8b949e;
+    --border:    #30363d;
+
+    --amber:     #f0883e;
+    --amber-bg:  #3d1f00;
+    --amber-dim: #7a3f10;
+    --blue:      #58a6ff;
+    --blue-bg:   #051d4d;
+    --blue-dim:  #1f4d8a;
+    --purple:    #bc8cff;
+    --purple-bg: #1f1040;
+    --purple-dim:#5a3a9a;
+    --green:     #3fb950;
+    --green-bg:  #0a2d14;
+    --green-dim: #1d6030;
+    --teal:      #39d0d0;
+    --teal-bg:   #002828;
+    --teal-dim:  #0d5a5a;
+
+    --code-bg:   #0d1117;
+    --code-border:#30363d;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    background: var(--navy);
+    color: var(--text);
+    line-height: 1.6;
+    font-size: 14px;
+  }
+
+  /* ── Header ── */
+  header {
+    background: linear-gradient(135deg, #0d1117 0%, #161b22 40%, #1a1f2e 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 28px 40px 22px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  header h1 {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.3px;
+    color: #fff;
+  }
+  header h1 span { color: var(--blue); }
+  header p {
+    margin-top: 4px;
+    color: var(--muted);
+    font-size: 13px;
+  }
+
+  /* ── Tab nav ── */
+  .tab-nav {
+    display: flex;
+    gap: 2px;
+    padding: 0 40px;
+    background: var(--navy2);
+    border-bottom: 1px solid var(--border);
+    overflow-x: auto;
+  }
+  .tab-btn {
+    padding: 12px 20px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--muted);
+    background: none;
+    border: none;
+    border-bottom: 3px solid transparent;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: color 0.15s, border-color 0.15s;
+    letter-spacing: 0.2px;
+  }
+  .tab-btn:hover { color: var(--text); }
+  .tab-btn.active { color: var(--text); }
+  .tab-btn[data-tab="overview"].active  { border-bottom-color: var(--blue); }
+  .tab-btn[data-tab="lwc"].active       { border-bottom-color: var(--amber); }
+  .tab-btn[data-tab="nextjs"].active    { border-bottom-color: var(--blue); }
+  .tab-btn[data-tab="ucp"].active       { border-bottom-color: var(--purple); }
+  .tab-btn[data-tab="mcp"].active       { border-bottom-color: var(--green); }
+  .tab-btn[data-tab="plugin"].active    { border-bottom-color: var(--teal); }
+
+  /* ── Tab panels ── */
+  .tab-panel { display: none; padding: 36px 40px; max-width: 1200px; }
+  .tab-panel.active { display: block; }
+
+  /* ── Section headers ── */
+  .channel-banner {
+    border-radius: 8px;
+    padding: 24px 28px;
+    margin-bottom: 32px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .channel-banner .icon {
+    font-size: 32px;
+    flex-shrink: 0;
+  }
+  .channel-banner h2 { font-size: 22px; font-weight: 700; }
+  .channel-banner p  { color: rgba(255,255,255,0.75); margin-top: 4px; font-size: 13px; }
+
+  .banner-amber  { background: linear-gradient(135deg, var(--amber-bg), #5a2e00); border: 1px solid var(--amber-dim); }
+  .banner-blue   { background: linear-gradient(135deg, var(--blue-bg), #0a2d6b); border: 1px solid var(--blue-dim); }
+  .banner-purple { background: linear-gradient(135deg, var(--purple-bg), #2e1a5e); border: 1px solid var(--purple-dim); }
+  .banner-green  { background: linear-gradient(135deg, var(--green-bg), #103d1e); border: 1px solid var(--green-dim); }
+  .banner-teal   { background: linear-gradient(135deg, var(--teal-bg), #053636); border: 1px solid var(--teal-dim); }
+
+  /* ── Section blocks ── */
+  .section { margin-bottom: 40px; }
+  .section-title {
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--muted);
+    margin-bottom: 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  /* ── Two-column layout ── */
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  .three-col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+  @media (max-width: 900px) {
+    .two-col, .three-col { grid-template-columns: 1fr; }
+  }
+
+  /* ── Cards ── */
+  .card {
+    background: var(--navy2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px;
+  }
+  .card h4 {
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 12px;
+    color: var(--text);
+  }
+
+  /* ── Flow steps ── */
+  .flow-steps { display: flex; flex-direction: column; gap: 8px; }
+  .flow-step {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    background: var(--navy2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 12px 16px;
+  }
+  .flow-step .num {
+    background: var(--navy3);
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+  .flow-step .content { flex: 1; }
+  .flow-step .content .label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 2px;
+  }
+  .flow-step .content .detail {
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  /* ── Port badge ── */
+  .port {
+    display: inline-block;
+    background: var(--navy3);
+    border: 1px solid var(--border);
+    border-radius: 100px;
+    padding: 1px 8px;
+    font-size: 11px;
+    font-family: "SFMono-Regular", Consolas, monospace;
+    color: var(--blue);
+    margin-left: 6px;
+    vertical-align: middle;
+  }
+  .port.amber  { color: var(--amber); }
+  .port.purple { color: var(--purple); }
+  .port.green  { color: var(--green); }
+  .port.teal   { color: var(--teal); }
+
+  /* ── Method badge ── */
+  .method {
+    display: inline-block;
+    padding: 1px 7px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 700;
+    font-family: "SFMono-Regular", Consolas, monospace;
+    margin-right: 6px;
+  }
+  .method.GET    { background: #0d3521; color: #3fb950; }
+  .method.POST   { background: #1c2d0d; color: #7ee787; }
+  .method.DELETE { background: #3d0d0d; color: #f85149; }
+
+  /* ── Code blocks ── */
+  .code-block {
+    background: var(--code-bg);
+    border: 1px solid var(--code-border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .code-block .code-header {
+    background: var(--navy3);
+    border-bottom: 1px solid var(--border);
+    padding: 8px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 11px;
+    color: var(--muted);
+    font-family: "SFMono-Regular", Consolas, monospace;
+  }
+  .code-block pre {
+    padding: 16px;
+    overflow-x: auto;
+    font-family: "SFMono-Regular", Consolas, monospace;
+    font-size: 12px;
+    line-height: 1.65;
+    color: var(--text);
+  }
+
+  /* ── Syntax colors ── */
+  .kw  { color: #ff7b72; }
+  .str { color: #a5d6ff; }
+  .cmt { color: #8b949e; }
+  .fn  { color: #d2a8ff; }
+  .num { color: #79c0ff; }
+  .key { color: #7ee787; }
+  .pth { color: #ffa657; }
+  .typ { color: #ffa657; }
+
+  /* ── File tree ── */
+  .file-tree {
+    background: var(--code-bg);
+    border: 1px solid var(--code-border);
+    border-radius: 8px;
+    padding: 16px;
+    font-family: "SFMono-Regular", Consolas, monospace;
+    font-size: 12px;
+    line-height: 1.8;
+  }
+  .file-tree .dir  { color: var(--blue); }
+  .file-tree .file { color: var(--text); }
+  .file-tree .ann  { color: var(--muted); font-style: italic; }
+  .file-tree .imp  { color: var(--amber); }
+
+  /* ── Endpoint table ── */
+  .endpoint-list { display: flex; flex-direction: column; gap: 8px; }
+  .endpoint-item {
+    background: var(--navy2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 14px;
+  }
+  .endpoint-item .path {
+    font-family: "SFMono-Regular", Consolas, monospace;
+    font-size: 12px;
+    color: var(--text);
+    margin-bottom: 3px;
+  }
+  .endpoint-item .desc {
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .endpoint-item .schema {
+    font-family: "SFMono-Regular", Consolas, monospace;
+    font-size: 11px;
+    color: var(--purple);
+    margin-top: 4px;
+  }
+
+  /* ── Tool list ── */
+  .tool-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .tool-item {
+    background: var(--navy3);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 14px;
+  }
+  .tool-item .name {
+    font-family: "SFMono-Regular", Consolas, monospace;
+    font-size: 12px;
+    color: var(--green);
+    margin-bottom: 3px;
+    font-weight: 600;
+  }
+  .tool-item .tdesc {
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .tool-item .perm {
+    display: inline-block;
+    margin-top: 4px;
+    font-size: 10px;
+    padding: 1px 6px;
+    border-radius: 4px;
+  }
+  .perm.allow { background: #0a2d14; color: #3fb950; }
+  .perm.ask   { background: #3d1800; color: #f0883e; }
+
+  /* ── Info pills ── */
+  .pill-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+  .pill {
+    background: var(--navy3);
+    border: 1px solid var(--border);
+    border-radius: 100px;
+    padding: 3px 12px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .pill.hl { color: var(--text); }
+
+  /* ── Vertical table ── */
+  .vtable { width: 100%; border-collapse: collapse; }
+  .vtable th {
+    background: var(--navy3);
+    padding: 8px 12px;
+    text-align: left;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+  }
+  .vtable td {
+    padding: 8px 12px;
+    font-size: 12px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  .vtable td:first-child { font-weight: 600; color: var(--text); }
+  .vtable td code {
+    font-family: "SFMono-Regular", Consolas, monospace;
+    font-size: 11px;
+    color: var(--blue);
+  }
+  .vtable tr:last-child td { border-bottom: none; }
+
+  /* ── SVG Overview ── */
+  #overview-svg-wrap {
+    background: var(--navy2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 24px;
+    overflow-x: auto;
+  }
+
+  /* ── Run-it blocks ── */
+  .run-block {
+    background: var(--code-bg);
+    border: 1px solid var(--green-dim);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .run-block .run-header {
+    background: var(--green-bg);
+    border-bottom: 1px solid var(--green-dim);
+    padding: 7px 14px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--green);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .run-block pre {
+    padding: 14px 16px;
+    font-family: "SFMono-Regular", Consolas, monospace;
+    font-size: 12px;
+    line-height: 1.65;
+    color: var(--text);
+    overflow-x: auto;
+  }
+  .run-block .prompt { color: var(--green); user-select: none; }
+  .run-block .cmd    { color: var(--text); }
+  .run-block .arg    { color: var(--amber); }
+  .run-block .rem    { color: var(--muted); }
+
+  /* ── Notice box ── */
+  .notice {
+    background: var(--navy3);
+    border-left: 3px solid var(--amber);
+    border-radius: 0 6px 6px 0;
+    padding: 12px 16px;
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 20px;
+  }
+  .notice strong { color: var(--amber); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Agentic Commerce <span>—</span> Technical Architecture</h1>
+  <p>Deep reference: ports, protocols, key files, auth model, request flows, tool schemas — five delivery channels</p>
+</header>
+
+<nav class="tab-nav">
+  <button class="tab-btn active" data-tab="overview">Overview</button>
+  <button class="tab-btn" data-tab="lwc">LWC</button>
+  <button class="tab-btn" data-tab="nextjs">Next.js</button>
+  <button class="tab-btn" data-tab="ucp">UCP</button>
+  <button class="tab-btn" data-tab="mcp">MCP</button>
+  <button class="tab-btn" data-tab="plugin">Plugin</button>
+</nav>
+
+<!-- ═══════════════════════════════════════════════════════ OVERVIEW -->
+<div class="tab-panel active" id="tab-overview">
+
+  <div class="section">
+    <div class="section-title">System Map — Five Delivery Channels</div>
+    <div id="overview-svg-wrap">
+      <svg viewBox="0 0 1060 620" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;min-width:700px;">
+        <defs>
+          <marker id="arr" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#8b949e"/>
+          </marker>
+          <marker id="arr-amber" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#f0883e"/>
+          </marker>
+          <marker id="arr-blue" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#58a6ff"/>
+          </marker>
+          <marker id="arr-purple" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#bc8cff"/>
+          </marker>
+          <marker id="arr-green" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#3fb950"/>
+          </marker>
+          <marker id="arr-teal" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#39d0d0"/>
+          </marker>
+        </defs>
+
+        <!-- ── Claude Agent core (center) ── -->
+        <rect x="380" y="250" width="300" height="120" rx="10" fill="#1a1f2e" stroke="#58a6ff" stroke-width="2"/>
+        <text x="530" y="293" text-anchor="middle" fill="#58a6ff" font-size="14" font-weight="700">Claude Agent Core</text>
+        <text x="530" y="312" text-anchor="middle" fill="#8b949e" font-size="11">shopping_agent / merchant_agent</text>
+        <text x="530" y="328" text-anchor="middle" fill="#8b949e" font-size="11">commerce_common · skills/</text>
+        <text x="530" y="345" text-anchor="middle" fill="#8b949e" font-size="10">claude-sonnet-5 · SSE streaming</text>
+
+        <!-- ── LWC box (top-left) ── -->
+        <rect x="20" y="20" width="200" height="110" rx="8" fill="#1f1200" stroke="#f0883e" stroke-width="1.5"/>
+        <text x="120" y="46" text-anchor="middle" fill="#f0883e" font-size="12" font-weight="700">LWC (Salesforce)</text>
+        <text x="120" y="63" text-anchor="middle" fill="#c9a060" font-size="10">commerceAgentPanel</text>
+        <text x="120" y="78" text-anchor="middle" fill="#c9a060" font-size="10">salesforceMerchant</text>
+        <text x="120" y="93" text-anchor="middle" fill="#8b949e" font-size="10">Apex → Named Cred</text>
+        <text x="120" y="108" text-anchor="middle" fill="#8b949e" font-size="10">LiteLLM proxy :4000</text>
+        <rect x="65" y="116" width="50" height="16" rx="8" fill="#21262d" stroke="#30363d"/>
+        <text x="90" y="128" text-anchor="middle" fill="#f0883e" font-size="10" font-family="monospace">:8000</text>
+
+        <!-- LWC → Core arrow -->
+        <line x1="220" y1="75" x2="374" y2="280" stroke="#f0883e" stroke-width="1.5" marker-end="url(#arr-amber)"/>
+        <text x="280" y="168" fill="#f0883e" font-size="9" transform="rotate(-38,280,168)">HTTPS/SSE · fetch()</text>
+
+        <!-- ── Next.js box (bottom-left) ── -->
+        <rect x="20" y="480" width="220" height="120" rx="8" fill="#051d4d" stroke="#58a6ff" stroke-width="1.5"/>
+        <text x="130" y="504" text-anchor="middle" fill="#58a6ff" font-size="12" font-weight="700">Next.js Storefronts</text>
+        <text x="130" y="521" text-anchor="middle" fill="#7aa8e8" font-size="10">retail · entertainment</text>
+        <text x="130" y="536" text-anchor="middle" fill="#7aa8e8" font-size="10">telecom · travel</text>
+        <text x="130" y="552" text-anchor="middle" fill="#8b949e" font-size="10">Chat.tsx → SSE → host.py</text>
+        <rect x="40" y="560" width="50" height="16" rx="8" fill="#21262d" stroke="#30363d"/>
+        <text x="65" y="572" text-anchor="middle" fill="#58a6ff" font-size="10" font-family="monospace">:3000+</text>
+        <rect x="105" y="560" width="50" height="16" rx="8" fill="#21262d" stroke="#30363d"/>
+        <text x="130" y="572" text-anchor="middle" fill="#58a6ff" font-size="10" font-family="monospace">:8000+</text>
+        <text x="130" y="590" text-anchor="middle" fill="#8b949e" font-size="9">storefront · api</text>
+
+        <!-- Next.js → Core arrow -->
+        <line x1="240" y1="540" x2="374" y2="370" stroke="#58a6ff" stroke-width="1.5" marker-end="url(#arr-blue)"/>
+        <text x="255" y="468" fill="#58a6ff" font-size="9" transform="rotate(-55,255,468)">SSE /api/shopping-agent/</text>
+
+        <!-- ── UCP box (top-right) ── -->
+        <rect x="840" y="20" width="200" height="120" rx="8" fill="#1f1040" stroke="#bc8cff" stroke-width="1.5"/>
+        <text x="940" y="46" text-anchor="middle" fill="#bc8cff" font-size="12" font-weight="700">UCP</text>
+        <text x="940" y="63" text-anchor="middle" fill="#bc8cff" font-size="10">/.well-known/ucp manifest</text>
+        <text x="940" y="78" text-anchor="middle" fill="#a07ad0" font-size="10">GeminiUCPAgent</text>
+        <text x="940" y="93" text-anchor="middle" fill="#8b949e" font-size="10">gemini-3.6-flash</text>
+        <text x="940" y="108" text-anchor="middle" fill="#8b949e" font-size="10">Railway deployment</text>
+        <rect x="910" y="116" width="60" height="16" rx="8" fill="#21262d" stroke="#30363d"/>
+        <text x="940" y="128" text-anchor="middle" fill="#bc8cff" font-size="10" font-family="monospace">:8000+</text>
+
+        <!-- UCP → Core arrow -->
+        <line x1="840" y1="80" x2="686" y2="280" stroke="#bc8cff" stroke-width="1.5" marker-end="url(#arr-purple)"/>
+        <text x="770" y="168" fill="#bc8cff" font-size="9" transform="rotate(38,770,168)">REST /ucp/products</text>
+
+        <!-- ── MCP box (bottom-right) ── -->
+        <rect x="820" y="480" width="220" height="120" rx="8" fill="#0a2d14" stroke="#3fb950" stroke-width="1.5"/>
+        <text x="930" y="504" text-anchor="middle" fill="#3fb950" font-size="12" font-weight="700">MCP Server</text>
+        <text x="930" y="521" text-anchor="middle" fill="#60c070" font-size="10">storefront_mcp_server.py</text>
+        <text x="930" y="536" text-anchor="middle" fill="#60c070" font-size="10">Streamable HTTP transport</text>
+        <text x="930" y="552" text-anchor="middle" fill="#8b949e" font-size="10">search_products · add_to_cart</text>
+        <text x="930" y="567" text-anchor="middle" fill="#8b949e" font-size="10">ui://storefront/product-grid</text>
+        <rect x="900" y="576" width="60" height="16" rx="8" fill="#21262d" stroke="#30363d"/>
+        <text x="930" y="588" text-anchor="middle" fill="#3fb950" font-size="10" font-family="monospace">:8200</text>
+
+        <!-- MCP → Core arrow -->
+        <line x1="820" y1="540" x2="686" y2="370" stroke="#3fb950" stroke-width="1.5" marker-end="url(#arr-green)"/>
+        <text x="790" y="468" fill="#3fb950" font-size="9" transform="rotate(55,790,468)">MCP tools /mcp</text>
+
+        <!-- ── Plugin box (bottom-center) ── -->
+        <rect x="380" y="490" width="300" height="110" rx="8" fill="#002828" stroke="#39d0d0" stroke-width="1.5"/>
+        <text x="530" y="515" text-anchor="middle" fill="#39d0d0" font-size="12" font-weight="700">Claude Code Plugin</text>
+        <text x="530" y="533" text-anchor="middle" fill="#39d0d0" font-size="10">commerce-builder</text>
+        <text x="530" y="549" text-anchor="middle" fill="#8b949e" font-size="10">6 skills · 4 commands</text>
+        <text x="530" y="565" text-anchor="middle" fill="#8b949e" font-size="10">/scaffold-commerce-agent · /add-commerce-flow</text>
+        <text x="530" y="581" text-anchor="middle" fill="#8b949e" font-size="10">/review-commerce-agent · /author-commerce-evals</text>
+
+        <!-- Plugin ↔ Core double arrow -->
+        <line x1="530" y1="370" x2="530" y2="484" stroke="#39d0d0" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#arr-teal)"/>
+        <text x="537" y="430" fill="#39d0d0" font-size="9">dev-time / codegen</text>
+
+        <!-- ── Anthropic API box (far right center) ── -->
+        <rect x="860" y="260" width="180" height="100" rx="8" fill="#161b22" stroke="#30363d" stroke-width="1.5"/>
+        <text x="950" y="285" text-anchor="middle" fill="#e6edf3" font-size="12" font-weight="700">Anthropic API</text>
+        <text x="950" y="303" text-anchor="middle" fill="#8b949e" font-size="10">api.anthropic.com</text>
+        <text x="950" y="318" text-anchor="middle" fill="#8b949e" font-size="10">claude-sonnet-5</text>
+        <text x="950" y="333" text-anchor="middle" fill="#8b949e" font-size="10">or LiteLLM proxy</text>
+        <rect x="910" y="340" width="80" height="16" rx="8" fill="#21262d" stroke="#30363d"/>
+        <text x="950" y="352" text-anchor="middle" fill="#8b949e" font-size="10" font-family="monospace">HTTPS :443</text>
+
+        <!-- Core → Anthropic API arrow -->
+        <line x1="680" y1="310" x2="854" y2="310" stroke="#8b949e" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr)"/>
+        <text x="740" y="305" fill="#8b949e" font-size="9">Messages API</text>
+
+        <!-- Legend -->
+        <rect x="20" y="200" width="200" height="220" rx="6" fill="#161b22" stroke="#30363d"/>
+        <text x="120" y="222" text-anchor="middle" fill="#8b949e" font-size="11" font-weight="600">LEGEND</text>
+        <line x1="35" y1="240" x2="80" y2="240" stroke="#f0883e" stroke-width="1.5" marker-end="url(#arr-amber)"/>
+        <text x="88" y="244" fill="#e6edf3" font-size="10">LWC / Salesforce</text>
+        <line x1="35" y1="260" x2="80" y2="260" stroke="#58a6ff" stroke-width="1.5" marker-end="url(#arr-blue)"/>
+        <text x="88" y="264" fill="#e6edf3" font-size="10">Next.js headless</text>
+        <line x1="35" y1="280" x2="80" y2="280" stroke="#bc8cff" stroke-width="1.5" marker-end="url(#arr-purple)"/>
+        <text x="88" y="284" fill="#e6edf3" font-size="10">UCP (Gemini)</text>
+        <line x1="35" y1="300" x2="80" y2="300" stroke="#3fb950" stroke-width="1.5" marker-end="url(#arr-green)"/>
+        <text x="88" y="304" fill="#e6edf3" font-size="10">MCP tools</text>
+        <line x1="35" y1="320" x2="80" y2="320" stroke="#39d0d0" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#arr-teal)"/>
+        <text x="88" y="324" fill="#e6edf3" font-size="10">Plugin (dev-time)</text>
+        <line x1="35" y1="340" x2="80" y2="340" stroke="#8b949e" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr)"/>
+        <text x="88" y="344" fill="#e6edf3" font-size="10">Anthropic API call</text>
+        <text x="35" y="372" fill="#8b949e" font-size="10">All UI is streamed SSE</text>
+        <text x="35" y="388" fill="#8b949e" font-size="10">events; no polling.</text>
+        <text x="35" y="404" fill="#8b949e" font-size="10">Third-party content is</text>
+        <text x="35" y="420" fill="#8b949e" font-size="10">fenced; writes gated.</text>
+      </svg>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Channel Quick Reference</div>
+    <div style="overflow-x:auto;">
+      <table class="vtable" style="background:var(--navy2);border:1px solid var(--border);border-radius:8px;overflow:hidden;">
+        <thead>
+          <tr>
+            <th>Channel</th><th>Protocol</th><th>Frontend Port</th><th>Backend Port</th><th>Auth</th><th>Key Constraint</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="color:var(--amber)">LWC</td>
+            <td>HTTPS / SSE</td>
+            <td><code>SF Org</code></td>
+            <td><code>:8000</code></td>
+            <td>Named Credential</td>
+            <td>Apex callout 15s timeout; no AbortController in Lightning Web Security</td>
+          </tr>
+          <tr>
+            <td style="color:var(--blue)">Next.js</td>
+            <td>HTTP / SSE</td>
+            <td><code>:3000–3003</code></td>
+            <td><code>:8000–8003</code></td>
+            <td>None (localhost only)</td>
+            <td>TrustedHostMiddleware blocks non-loopback; CORS only to localhost origins</td>
+          </tr>
+          <tr>
+            <td style="color:var(--purple)">UCP</td>
+            <td>HTTPS REST</td>
+            <td>Any UCP agent</td>
+            <td><code>:8000</code></td>
+            <td>UCP-Agent header</td>
+            <td>Checkout sessions are pending stubs — no charge; no server-side persistence</td>
+          </tr>
+          <tr>
+            <td style="color:var(--green)">MCP</td>
+            <td>Streamable HTTP</td>
+            <td>Claude / host app</td>
+            <td><code>:8200</code></td>
+            <td>localhost-only bind</td>
+            <td>Writes (add_to_cart, save_memory) use <code>always_ask</code> permission policy</td>
+          </tr>
+          <tr>
+            <td style="color:var(--teal)">Plugin</td>
+            <td>Claude Code SDK</td>
+            <td>IDE / Claude Code</td>
+            <td>—</td>
+            <td>Claude Code install</td>
+            <td>Dev-time only; codegen output must pass ruff + check.py</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ LWC -->
+<div class="tab-panel" id="tab-lwc">
+  <div class="channel-banner banner-amber">
+    <div class="icon">⚡</div>
+    <div>
+      <h2>LWC — Lightning Web Components</h2>
+      <p>Buyer-facing chat panel and merchant portal embedded in the Salesforce experience. Apex callout layer behind Named Credentials. Bedrock path via LiteLLM proxy.</p>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Components</div>
+    <div class="two-col">
+      <div class="card">
+        <h4>commerceAgentPanel <span class="port amber">buyer</span></h4>
+        <p style="font-size:12px;color:var(--muted);margin-bottom:10px;">Embeds the agent chat in a Salesforce storefront or account page. Handles SSE stream, UI events (kv_list, ranked_list, change_update), optimistic change apply/discard.</p>
+        <div class="file-tree">
+<span class="dir">salesforce/force-app/main/default/lwc/</span>
+<span class="file">  commerceAgentPanel/
+    <span class="imp">commerceAgentPanel.js</span>   <span class="ann">← main logic</span>
+    commerceAgentPanel.html  <span class="ann">← template</span>
+    commerceAgentPanel.css   <span class="ann">← styles</span>
+    commerceAgentPanel.js-meta.xml</span>
+        </div>
+      </div>
+      <div class="card">
+        <h4>salesforceMerchant <span class="port amber">merchant</span></h4>
+        <p style="font-size:12px;color:var(--muted);margin-bottom:10px;">Full merchant portal: Overview, Orders, Catalog, Campaigns, Inventory, Quote Approvals tabs. Direct REST callouts to Railway API. MetricsCard / DigestCard / ChangePreviewCard rendering.</p>
+        <div class="file-tree">
+<span class="dir">salesforce/force-app/main/default/lwc/</span>
+<span class="file">  salesforceMerchant/
+    <span class="imp">salesforceMerchant.js</span>   <span class="ann">← tabs + agent panel</span>
+    salesforceMerchant.html
+    salesforceMerchant.css</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Apex Layer</div>
+    <div class="two-col">
+      <div class="card">
+        <h4>CommerceAgentController.cls</h4>
+        <div class="code-block" style="margin-top:8px;">
+          <div class="code-header"><span>Apex</span><span>@AuraEnabled methods</span></div>
+          <pre><span class="kw">public with sharing class</span> <span class="fn">CommerceAgentController</span> {
+
+  <span class="cmt">// One-time session init; result not cached</span>
+  <span class="kw">@AuraEnabled</span>
+  <span class="kw">public static</span> String <span class="fn">getSessionToken</span>(String userId) {
+    <span class="kw">return</span> service.createSession(userId);
+  }
+
+  <span class="cmt">// Cacheable by Salesforce CDN</span>
+  <span class="kw">@AuraEnabled(cacheable=true)</span>
+  <span class="kw">public static</span> List&lt;Map&lt;String,Object&gt;&gt;
+      <span class="fn">getProducts</span>(String sessionId, Integer pageSize) { ... }
+
+  <span class="kw">@AuraEnabled(cacheable=true)</span>
+  <span class="kw">public static</span> List&lt;Map&lt;String,Object&gt;&gt;
+      <span class="fn">getOrderSummaries</span>(String sessionId, Integer limit) { ... }
+}</pre>
+        </div>
+      </div>
+      <div class="card">
+        <h4>CommerceAgentService.cls — Named Credential</h4>
+        <div class="code-block" style="margin-top:8px;">
+          <div class="code-header"><span>Apex</span><span>HTTP callout</span></div>
+          <pre><span class="cmt">// Named credential: Commerce_Agent_API</span>
+<span class="cmt">// No hardcoded URLs or secrets in code.</span>
+req.setEndpoint(
+  <span class="str">'callout:Commerce_Agent_API'</span> + path
+);
+req.setHeader(<span class="str">'X-Session-Id'</span>, sessionId);
+req.setTimeout(<span class="num">15000</span>); <span class="cmt">// 15 s max</span>
+
+<span class="cmt">// Paths used:</span>
+<span class="cmt">//   POST /api/session</span>
+<span class="cmt">//   GET  /api/products?page_size=N</span>
+<span class="cmt">//   GET  /api/orders?limit=N</span></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Request Flow — commerceAgentPanel (buyer chat)</div>
+    <div class="flow-steps">
+      <div class="flow-step"><div class="num" style="color:var(--amber)">1</div><div class="content"><div class="label">User opens Salesforce page</div><div class="detail">LWC <code>connectedCallback()</code> fires → <code>_createSession()</code> → POST <code>{apiUrl}{apiPrefix}/session</code></div></div></div>
+      <div class="flow-step"><div class="num" style="color:var(--amber)">2</div><div class="content"><div class="label">Session created → <code>session_id</code> stored</div><div class="detail">Subsequent requests carry <code>X-Session-Id</code> header. Error displayed inline on failure.</div></div></div>
+      <div class="flow-step"><div class="num" style="color:var(--amber)">3</div><div class="content"><div class="label">User types message → Enter / Send</div><div class="detail"><code>_submit(text)</code> → pushes USER bubble, calls <code>_startTurn(text)</code>, renders SKELETON placeholder</div></div></div>
+      <div class="flow-step"><div class="num" style="color:var(--amber)">4</div><div class="content"><div class="label">POST <code>{apiUrl}{apiPrefix}/chat</code> with SSE response</div><div class="detail">Body: <code>{"message": text}</code>. Headers: <code>Accept: text/event-stream, application/json</code>. AbortController disabled inside LWS.</div></div></div>
+      <div class="flow-step"><div class="num" style="color:var(--amber)">5</div><div class="content"><div class="label">Stream decoded line-by-line via ReadableStream</div><div class="detail">Events: <code>text_delta</code>, <code>progress</code>, <code>ui</code>, <code>ui_partial</code>, <code>change_update</code>, <code>suggestions</code>, <code>turn_complete</code>, <code>error</code></div></div></div>
+      <div class="flow-step"><div class="num" style="color:var(--amber)">6</div><div class="content"><div class="label">UI events render generative components</div><div class="detail"><code>kv_list</code>/<code>stat_group</code> → KV card; <code>ranked_list</code>/<code>product_list</code> → ranked rows card; <code>change_update</code> → approve/discard widget</div></div></div>
+      <div class="flow-step"><div class="num" style="color:var(--amber)">7</div><div class="content"><div class="label">Change approve/discard → POST changes/{id}/apply|discard</div><div class="detail">Merchant writes gate: backend applies only after host confirmation. Status updates inline.</div></div></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Embed — Docker Compose (Bedrock via LiteLLM)</div>
+    <div class="two-col">
+      <div>
+        <div class="code-block">
+          <div class="code-header"><span>embed/docker-compose.yml</span><span>two-service stack</span></div>
+          <pre><span class="key">services:</span>
+  <span class="key">litellm:</span>           <span class="cmt"># Bedrock proxy</span>
+    <span class="key">image:</span> <span class="str">ghcr.io/berriai/litellm:main-stable</span>
+    <span class="key">ports:</span> [<span class="str">"4000:4000"</span>]
+    <span class="key">environment:</span>
+      <span class="key">AWS_ACCESS_KEY_ID:</span>     ${AWS_ACCESS_KEY_ID}
+      <span class="key">AWS_SECRET_ACCESS_KEY:</span> ${AWS_SECRET_ACCESS_KEY}
+      <span class="key">AWS_DEFAULT_REGION:</span>    us-east-1
+
+  <span class="key">commerce-api:</span>       <span class="cmt"># FastAPI agent server</span>
+    <span class="key">build:</span> ..
+    <span class="key">ports:</span> [<span class="str">"8000:8000"</span>]
+    <span class="key">environment:</span>
+      <span class="cmt"># SDK reads these; no source changes needed</span>
+      <span class="key">ANTHROPIC_BASE_URL:</span> http://litellm:4000
+      <span class="key">ANTHROPIC_API_KEY:</span>  sk-litellm-key
+      <span class="cmt"># Open CORS for Salesforce org URLs</span>
+      <span class="key">DEMO_ALLOWED_HOSTS:</span> "*.salesforce.com,..."</pre>
+        </div>
+      </div>
+      <div>
+        <div class="card">
+          <h4>Bedrock Path</h4>
+          <div class="flow-steps">
+            <div class="flow-step"><div class="num">1</div><div class="content"><div class="label">LWC fetch → Railway :8000</div><div class="detail">Or local docker-compose stack</div></div></div>
+            <div class="flow-step"><div class="num">2</div><div class="content"><div class="label">commerce-api → LiteLLM :4000</div><div class="detail"><code>ANTHROPIC_BASE_URL=http://litellm:4000</code></div></div></div>
+            <div class="flow-step"><div class="num">3</div><div class="content"><div class="label">LiteLLM → Bedrock</div><div class="detail">AWS credentials from env; task IAM role in Fargate</div></div></div>
+          </div>
+        </div>
+        <div class="card" style="margin-top:16px;">
+          <h4>Key Files — embed/</h4>
+          <div class="file-tree">
+<span class="file"><span class="imp">commerce-agent-embed.js</span>  <span class="ann">embed script</span>
+docker-compose.yml       <span class="ann">LiteLLM + API stack</span>
+litellm-config.yaml      <span class="ann">Bedrock model map</span>
+package.xml              <span class="ann">SFDX deploy manifest</span></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Run It</div>
+    <div class="run-block">
+      <div class="run-header">Deploy + Start</div>
+      <pre><span class="rem"># Deploy LWC to Salesforce org</span>
+<span class="prompt">$ </span><span class="cmd">sf project deploy start</span> <span class="arg">--source-dir salesforce/force-app --target-org b2bpoc</span>
+
+<span class="rem"># Start local API (direct Anthropic API)</span>
+<span class="prompt">$ </span><span class="cmd">uvicorn salesforce.api.main:app</span> <span class="arg">--app-dir examples --reload --port 8000</span>
+
+<span class="rem"># Start full Bedrock stack (LiteLLM + API)</span>
+<span class="prompt">$ </span><span class="cmd">export</span> <span class="arg">AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=... AWS_DEFAULT_REGION=us-east-1</span>
+<span class="prompt">$ </span><span class="cmd">docker compose up</span> <span class="arg">--project-directory embed/</span>
+
+<span class="rem"># Run Apex tests</span>
+<span class="prompt">$ </span><span class="cmd">sf apex run test</span> <span class="arg">--class-names CommerceAgentControllerTest --target-org b2bpoc</span></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ NEXT.JS -->
+<div class="tab-panel" id="tab-nextjs">
+  <div class="channel-banner banner-blue">
+    <div class="icon">🔷</div>
+    <div>
+      <h2>Next.js Headless Storefronts</h2>
+      <p>Four verticals, each a matched pair: storefront-web (buyer) + merchant-web. TypeScript + Tailwind. Chat.tsx streams SSE from FastAPI. Generative UI components render tool results.</p>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Vertical Port Map</div>
+    <div style="overflow-x:auto;">
+      <table class="vtable" style="background:var(--navy2);border:1px solid var(--border);border-radius:8px;overflow:hidden;">
+        <thead><tr><th>Vertical</th><th>Storefront</th><th>Merchant Web</th><th>API (uvicorn)</th><th>Entry point</th></tr></thead>
+        <tbody>
+          <tr><td style="color:var(--blue)">retail</td><td><span class="port">:3000</span></td><td><span class="port">:3100</span></td><td><span class="port">:8000</span></td><td><code>examples/retail/api/main.py</code></td></tr>
+          <tr><td style="color:var(--blue)">entertainment</td><td><span class="port">:3001</span></td><td><span class="port">:3101</span></td><td><span class="port">:8001</span></td><td><code>examples/entertainment/api/main.py</code></td></tr>
+          <tr><td style="color:var(--blue)">telecom</td><td><span class="port">:3002</span></td><td><span class="port">:3102</span></td><td><span class="port">:8002</span></td><td><code>examples/telecom/api/main.py</code></td></tr>
+          <tr><td style="color:var(--blue)">travel</td><td><span class="port">:3003</span></td><td><span class="port">:3103</span></td><td><span class="port">:8003</span></td><td><code>examples/travel/api/main.py</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Key Files</div>
+    <div class="two-col">
+      <div>
+        <p style="font-size:12px;color:var(--muted);margin-bottom:8px;">Per-vertical storefront (buyer)</p>
+        <div class="file-tree">
+<span class="dir">examples/retail/storefront-web/</span>
+<span class="file">  components/
+    <span class="imp">Chat.tsx</span>         <span class="ann">← SSE consumer, main chat</span>
+    CartPanel.tsx    <span class="ann">← live cart sidebar</span>
+    ProductTile.tsx
+    generative/
+      <span class="imp">ProductCarousel.tsx</span>
+      ComparisonGrid.tsx
+      GuideCard.tsx
+      OrderStatusCard.tsx
+      PlanChecklist.tsx
+      CheckoutSummary.tsx
+    views/HomeView.tsx</span>
+<span class="dir">examples/web-shared/</span>
+<span class="file">  <span class="imp">protocol.ts</span>       <span class="ann">← SSE event types</span>
+  generative.tsx    <span class="ann">← component router
+  api.ts            ← fetch helpers
+  session.ts        ← session store</span>
+        </div>
+      </div>
+      <div>
+        <p style="font-size:12px;color:var(--muted);margin-bottom:8px;">Per-vertical merchant web</p>
+        <div class="file-tree">
+<span class="dir">examples/retail/merchant-web/</span>
+<span class="file">  components/
+    <span class="imp">AssistantPanel.tsx</span>  <span class="ann">← merchant agent chat</span>
+    generative/
+      <span class="imp">MetricsCard.tsx</span>
+      DigestCard.tsx
+      ChangePreviewCard.tsx</span>
+<span class="dir">examples/demo_common/</span>
+<span class="file">  <span class="imp">host.py</span>    <span class="ann">← FastAPI base, SSE routes</span>
+  <span class="imp">ucp.py</span>     <span class="ann">← UCP router (mounted at /)</span>
+  storefront.py
+  merchant.py
+  sessions.py
+  memory.py</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Request Flow — Buyer Chat (storefront)</div>
+    <div class="flow-steps">
+      <div class="flow-step"><div class="num" style="color:var(--blue)">1</div><div class="content"><div class="label">User opens storefront <span class="port">:3000</span></div><div class="detail">Next.js app loads. Session created via <code>POST /api/shopping-agent/session</code></div></div></div>
+      <div class="flow-step"><div class="num" style="color:var(--blue)">2</div><div class="content"><div class="label">Chat.tsx sends message</div><div class="detail"><code>POST /api/shopping-agent/chat</code> with <code>X-Session-Id</code> header. Expects <code>text/event-stream</code> response.</div></div></div>
+      <div class="flow-step"><div class="num" style="color:var(--blue)">3</div><div class="content"><div class="label">host.py <code>stream_turn()</code> on <span class="port">:8000</span></div><div class="detail">FastAPI <code>StreamingResponse</code> wraps <code>agent.stream_turn()</code>. <code>BackgroundTask</code> writes session back after stream ends.</div></div></div>
+      <div class="flow-step"><div class="num" style="color:var(--blue)">4</div><div class="content"><div class="label">Agent calls tools → Anthropic Messages API</div><div class="detail">Tool results from <code>StorefrontBackend</code> (mock data). Memory reads/writes via <code>JsonFileMemoryStore</code>.</div></div></div>
+      <div class="flow-step"><div class="num" style="color:var(--blue)">5</div><div class="content"><div class="label"><code>ui</code> SSE events streamed</div><div class="detail">Each <code>present_*</code> tool call emits <code>{"type":"ui","component":"products","payload":{...}}</code>. Frontend routes to matching React component.</div></div></div>
+      <div class="flow-step"><div class="num" style="color:var(--blue)">6</div><div class="content"><div class="label">Generative UI renders from tool schema</div><div class="detail"><code>present_products</code> → <code>ProductCarousel</code>; <code>present_comparison</code> → <code>ComparisonGrid</code>; <code>checkout</code> → <code>CheckoutSummary</code></div></div></div>
+      <div class="flow-step"><div class="num" style="color:var(--blue)">7</div><div class="content"><div class="label"><code>turn_complete</code> fires; memory extraction spawned</div><div class="detail"><code>spawn_background(agent.update_memory(...))</code> runs async after response is fully streamed.</div></div></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Generative UI — Presentation Tool → Component Map</div>
+    <table class="vtable" style="background:var(--navy2);border:1px solid var(--border);border-radius:8px;overflow:hidden;">
+      <thead><tr><th>Tool call</th><th>SSE component</th><th>React component</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td><code>present_products</code></td><td><code>products</code></td><td>ProductCarousel</td><td>carousel / grid / list of product cards</td></tr>
+        <tr><td><code>present_comparison</code></td><td><code>comparison</code></td><td>ComparisonGrid</td><td>2–4 finalists side-by-side with pros/cons</td></tr>
+        <tr><td><code>present_plan</code></td><td><code>plan</code></td><td>PlanChecklist</td><td>goal steps with attached products</td></tr>
+        <tr><td><code>present_guide</code></td><td><code>guide</code></td><td>GuideCard</td><td>how-to / itinerary sections</td></tr>
+        <tr><td><code>present_order_status</code></td><td><code>order_status</code></td><td>OrderStatusCard</td><td>single order status card</td></tr>
+        <tr><td><code>checkout</code></td><td><code>checkout</code></td><td>CheckoutSummary</td><td>cart summary for confirmation (no charge)</td></tr>
+        <tr><td><code>present_suggestions</code></td><td><code>suggestions</code></td><td>inline chips</td><td>1–4 follow-up chip buttons</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="section">
+    <div class="section-title">FastAPI Security Model (host.py)</div>
+    <div class="two-col">
+      <div class="code-block">
+        <div class="code-header"><span>host.py</span><span>middleware stack</span></div>
+        <pre><span class="cmt"># Stops DNS-rebinding (CORS alone does not)</span>
+app.add_middleware(
+  <span class="fn">TrustedHostMiddleware</span>,
+  allowed_hosts=[
+    <span class="str">"localhost"</span>, <span class="str">"127.0.0.1"</span>,
+    <span class="cmt"># + DEMO_ALLOWED_HOSTS env var</span>
+  ]
+)
+<span class="cmt"># CORS: only localhost origins pass</span>
+app.add_middleware(
+  <span class="fn">CORSMiddleware</span>,
+  allow_origin_regex=
+    <span class="str">r"http://(localhost|127\.0\.0\.1):\d+"</span>,
+  allow_methods=[<span class="str">"*"</span>],
+  allow_headers=[<span class="str">"*"</span>],
+)</pre>
+      </div>
+      <div class="card">
+        <h4>Env-var overrides</h4>
+        <table class="vtable">
+          <thead><tr><th>Variable</th><th>Effect</th></tr></thead>
+          <tbody>
+            <tr><td><code>ANTHROPIC_API_KEY</code></td><td>direct API auth</td></tr>
+            <tr><td><code>ANTHROPIC_BASE_URL</code></td><td>redirect to LiteLLM proxy</td></tr>
+            <tr><td><code>COMMERCE_DEMO_AUTH=sdk</code></td><td>SDK credential chain</td></tr>
+            <tr><td><code>DEMO_ALLOWED_HOSTS</code></td><td>extra trusted hosts</td></tr>
+            <tr><td><code>DEMO_LOG_LEVEL</code></td><td>INFO=one line/call, DEBUG=bodies</td></tr>
+            <tr><td><code>MERCHANT_REQUIRE_HOST_APPROVAL=0</code></td><td>disable write gating</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Run It</div>
+    <div class="run-block">
+      <div class="run-header">Start retail vertical</div>
+      <pre><span class="rem"># API backend</span>
+<span class="prompt">$ </span><span class="cmd">uvicorn retail.api.main:app</span> <span class="arg">--app-dir examples --reload --port 8000</span>
+
+<span class="rem"># Storefront (buyer)</span>
+<span class="prompt">$ </span><span class="cmd">cd examples/retail/storefront-web && npm run dev</span>   <span class="rem"># → :3000</span>
+
+<span class="rem"># Merchant web</span>
+<span class="prompt">$ </span><span class="cmd">cd examples/retail/merchant-web && npm run dev</span>      <span class="rem"># → :3100</span>
+
+<span class="rem"># Install all node deps first (monorepo workspace)</span>
+<span class="prompt">$ </span><span class="cmd">cd examples && npm install</span></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ UCP -->
+<div class="tab-panel" id="tab-ucp">
+  <div class="channel-banner banner-purple">
+    <div class="icon">🔗</div>
+    <div>
+      <h2>UCP — Universal Commerce Protocol</h2>
+      <p>Cross-agent discovery via /.well-known/ucp manifest. Any UCP-compatible AI (Gemini, etc.) auto-discovers capabilities and shops through standard REST primitives. Live on Railway.</p>
+    </div>
+  </div>
+
+  <div class="notice"><strong>Live URL:</strong> https://diligent-flow-production-afd7.up.railway.app — UCP manifest at <code>/.well-known/ucp</code></div>
+
+  <div class="section">
+    <div class="section-title">Endpoints (ucp.py)</div>
+    <div class="endpoint-list">
+      <div class="endpoint-item">
+        <div class="path"><span class="method GET">GET</span><code>/.well-known/ucp</code></div>
+        <div class="desc">Capability manifest. Cached <code>max-age=300</code>. Describes product_discovery, cart_management, checkout, payment_handlers, REST + MCP transport hints.</div>
+        <div class="schema">→ {schema_version, business, capabilities, payment_handlers, transport, agent_hints}</div>
+      </div>
+      <div class="endpoint-item">
+        <div class="path"><span class="method GET">GET</span><code>/ucp/products?q=&amp;category=&amp;min_price=&amp;max_price=&amp;in_stock=&amp;limit=</code></div>
+        <div class="desc">Sessionless product search. Max limit=50. Supports full_text_search, category_filter, price_range_filter, availability_filter.</div>
+        <div class="schema">→ {products: [{product_id, title, price, currency, in_stock, brand?, image_url?, rating?, category?}], total, query}</div>
+      </div>
+      <div class="endpoint-item">
+        <div class="path"><span class="method GET">GET</span><code>/ucp/products/{product_id}</code></div>
+        <div class="desc">Product detail. <code>product_id</code> may contain slashes. Returns 404 with <code>{error: "product_not_found"}</code> if not found.</div>
+        <div class="schema">→ same UCP product schema as search row</div>
+      </div>
+      <div class="endpoint-item">
+        <div class="path"><span class="method POST">POST</span><code>/ucp/checkout-sessions</code> <span style="font-size:11px;color:var(--muted)">201</span></div>
+        <div class="desc">Create a pending checkout session from line items. No charge made. Buyer must confirm through storefront or agent.</div>
+        <div class="schema">body: {line_items: [{product_id, quantity}], buyer: {name, email}, payment_handler}<br>→ {checkout_session_id, status:"pending", line_items, subtotal, currency, payment_handler, buyer, agent_note}</div>
+      </div>
+      <div class="endpoint-item">
+        <div class="path"><span class="method GET">GET</span><code>/ucp/checkout-sessions/{session_id}</code></div>
+        <div class="desc">Session status lookup. Reference implementation does not persist sessions — integrate with OMS for live status.</div>
+        <div class="schema">→ {checkout_session_id, status:"pending", note}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">GeminiUCPAgent (examples/demo_common/gemini_ucp_agent.py)</div>
+    <div class="two-col">
+      <div class="code-block">
+        <div class="code-header"><span>gemini_ucp_agent.py</span><span>auto-discovery loop</span></div>
+        <pre><span class="kw">class</span> <span class="fn">GeminiUCPAgent</span>:
+  <span class="kw">def</span> <span class="fn">__init__</span>(self, ucp_base, *, model=<span class="str">"gemini-3.6-flash"</span>):
+    <span class="cmt"># 1. Fetch manifest at init</span>
+    resp = self._http.get(f<span class="str">"{ucp_base}/.well-known/ucp"</span>)
+    self.manifest = resp.json()
+
+    <span class="cmt"># 2. Build Gemini FunctionDeclaration objects</span>
+    self._tools = self._build_tools()
+
+    <span class="cmt"># 3. Init Gemini client with tool config</span>
+    self._config = gtypes.GenerateContentConfig(
+      tools=self._tools,
+      system_instruction=self._system_prompt(),
+    )
+    self._contents = []  <span class="cmt"># stateful history</span>
+
+  <span class="kw">def</span> <span class="fn">send</span>(self, message: str) -> str:
+    <span class="cmt"># Agentic loop: Gemini decides which UCP</span>
+    <span class="cmt"># endpoints to call; agent executes HTTP;</span>
+    <span class="cmt"># function results sent back as role="user"</span>
+    ...</pre>
+      </div>
+      <div>
+        <div class="card">
+          <h4>Auto-discovered Tools</h4>
+          <div class="pill-row">
+            <span class="pill hl">search_products</span>
+            <span class="pill hl">get_product</span>
+            <span class="pill hl">create_checkout_session</span>
+            <span class="pill hl">get_checkout_session</span>
+          </div>
+          <p style="font-size:12px;color:var(--muted);margin-top:12px;">Built dynamically from <code>capabilities</code> block in manifest. Any UCP-compliant storefront works without code changes.</p>
+        </div>
+        <div class="card" style="margin-top:12px;">
+          <h4>Demo Server (scripts/gemini_mcp_ui_server.py) <span class="port purple">:8099</span></h4>
+          <table class="vtable">
+            <thead><tr><th>Route</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td><code>GET /</code></td><td>split-screen HTML (chat + iframe)</td></tr>
+              <tr><td><code>GET /ui/product-grid</code></td><td>product_grid_ui.html iframe</td></tr>
+              <tr><td><code>POST /api/chat</code></td><td>TrackedAgent.send()</td></tr>
+              <tr><td><code>POST /api/cart</code></td><td>add to cart via UCP</td></tr>
+              <tr><td><code>POST /api/reset</code></td><td>reset agent state</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">UCP Manifest Schema (abbreviated)</div>
+    <div class="code-block">
+      <div class="code-header"><span>GET /.well-known/ucp</span><span>application/json · Cache-Control: max-age=300</span></div>
+      <pre>{
+  <span class="key">"schema_version"</span>: <span class="str">"1.0"</span>,
+  <span class="key">"business"</span>: { <span class="key">"name"</span>: <span class="str">"ACME Commerce"</span>, <span class="key">"description"</span>: <span class="str">"..."</span> },
+  <span class="key">"capabilities"</span>: {
+    <span class="key">"product_discovery"</span>: {
+      <span class="key">"supported"</span>: <span class="num">true</span>,
+      <span class="key">"endpoints"</span>: { <span class="key">"search"</span>: <span class="str">"{base}/ucp/products"</span>, <span class="key">"detail"</span>: <span class="str">"{base}/ucp/products/{id}"</span> },
+      <span class="key">"features"</span>: [<span class="str">"full_text_search"</span>, <span class="str">"category_filter"</span>, <span class="str">"price_range_filter"</span>, <span class="str">"availability_filter"</span>],
+      <span class="key">"pagination"</span>: { <span class="key">"supported"</span>: <span class="num">true</span>, <span class="key">"max_limit"</span>: <span class="num">50</span> }
+    },
+    <span class="key">"checkout"</span>: {
+      <span class="key">"endpoints"</span>: { <span class="key">"create_session"</span>: <span class="str">"{base}/ucp/checkout-sessions"</span> },
+      <span class="key">"note"</span>: <span class="str">"No charge is made here; buyer confirms through storefront."</span>
+    }
+  },
+  <span class="key">"transport"</span>: {
+    <span class="key">"rest"</span>: { <span class="key">"base_url"</span>: <span class="str">"{base}"</span>, <span class="key">"auth"</span>: <span class="str">"UCP-Agent"</span> },
+    <span class="key">"mcp"</span>: { <span class="key">"protocol"</span>: <span class="str">"streamable-http"</span>, <span class="key">"note"</span>: <span class="str">"Set STOREFRONT_MCP_URL"</span> }
+  },
+  <span class="key">"agent_hints"</span>: <span class="str">"Prefer MCP for complex journeys; REST for single-turn lookups."</span>
+}</pre>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Run It</div>
+    <div class="run-block">
+      <div class="run-header">UCP demo commands</div>
+      <pre><span class="rem"># 4-turn canned demo</span>
+<span class="prompt">$ </span><span class="cmd">GEMINI_API_KEY=your-key python scripts/gemini_ucp_demo.py</span>
+
+<span class="rem"># Interactive REPL</span>
+<span class="prompt">$ </span><span class="cmd">GEMINI_API_KEY=your-key python scripts/gemini_ucp_demo.py</span> <span class="arg">--interactive</span>
+
+<span class="rem"># Split-screen MCP + UCP UI server</span>
+<span class="prompt">$ </span><span class="cmd">GEMINI_API_KEY=your-key python scripts/gemini_mcp_ui_server.py</span>
+<span class="rem"># open http://localhost:8099</span>
+
+<span class="rem"># Query live Railway manifest</span>
+<span class="prompt">$ </span><span class="cmd">curl</span> <span class="arg">https://diligent-flow-production-afd7.up.railway.app/.well-known/ucp</span> | jq .</pre>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ MCP -->
+<div class="tab-panel" id="tab-mcp">
+  <div class="channel-banner banner-green">
+    <div class="icon">🔌</div>
+    <div>
+      <h2>MCP — Model Context Protocol + MCP Apps SEP-1865</h2>
+      <p>Streamable HTTP MCP server at :8200. Full shopping toolkit over a StorefrontBackend. UI resource at ui://storefront/product-grid for hosts that support MCP Apps.</p>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Tool Registry (storefront_mcp_server.py)</div>
+    <div class="tool-grid">
+      <div class="tool-item"><div class="name">search_products</div><div class="tdesc">Catalog search with SearchFilters + limit. Returns fenced data.</div><span class="perm allow">always_allow</span></div>
+      <div class="tool-item"><div class="name">search_products_ui</div><div class="tdesc">Same as search_products + attaches _meta.ui.resourceUri for MCP Apps hosts.</div><span class="perm allow">always_allow</span></div>
+      <div class="tool-item"><div class="name">get_product_details</div><div class="tdesc">Full product object by product_id.</div><span class="perm allow">always_allow</span></div>
+      <div class="tool-item"><div class="name">get_cart</div><div class="tdesc">Current session cart contents.</div><span class="perm allow">always_allow</span></div>
+      <div class="tool-item"><div class="name">add_to_cart</div><div class="tdesc">Add product_id + quantity to cart.</div><span class="perm ask">always_ask</span></div>
+      <div class="tool-item"><div class="name">update_cart_item</div><div class="tdesc">Change quantity for an existing cart line.</div><span class="perm ask">always_ask</span></div>
+      <div class="tool-item"><div class="name">remove_from_cart</div><div class="tdesc">Remove a product from cart.</div><span class="perm ask">always_ask</span></div>
+      <div class="tool-item"><div class="name">get_preferences</div><div class="tdesc">Inline context: user preferences from memory.</div><span class="perm allow">always_allow</span></div>
+      <div class="tool-item"><div class="name">save_memory</div><div class="tdesc">Persist key/value/category to memory store.</div><span class="perm ask">always_ask</span></div>
+      <div class="tool-item"><div class="name">recall_memories</div><div class="tdesc">Semantic memory lookup by topic.</div><span class="perm allow">always_allow</span></div>
+      <div class="tool-item"><div class="name">get_orders</div><div class="tdesc">Recent order history (limit N).</div><span class="perm allow">always_allow</span></div>
+      <div class="tool-item"><div class="name">get_order_status</div><div class="tdesc">Single order status by order_id.</div><span class="perm allow">always_allow</span></div>
+      <div class="tool-item"><div class="name">search_policies</div><div class="tdesc">Policy document search by query string.</div><span class="perm allow">always_allow</span></div>
+      <div class="tool-item"><div class="name">get_fulfillment_options</div><div class="tdesc">Fulfillment choices for a list of product_ids.</div><span class="perm allow">always_allow</span></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">MCP Apps — SEP-1865 UI Resource</div>
+    <div class="two-col">
+      <div class="code-block">
+        <div class="code-header"><span>storefront_mcp_server.py</span><span>resource + search_products_ui</span></div>
+        <pre><span class="cmt"># Register HTML as a ui:// resource</span>
+<span class="kw">@server.resource</span>(
+  <span class="str">"ui://storefront/product-grid"</span>,
+  name=<span class="str">"Product Grid"</span>,
+  mime_type=<span class="str">"text/html"</span>,
+)
+<span class="kw">def</span> <span class="fn">product_grid_ui</span>() -> str:
+  <span class="kw">return</span> _PRODUCT_GRID_HTML
+
+<span class="cmt"># Tool that attaches the UI resource</span>
+<span class="kw">async def</span> <span class="fn">search_products_ui</span>(query, ctx, ...):
+  result_text = <span class="kw">await</span> executors.call(ctx,
+    <span class="str">"search_products"</span>, {<span class="str">"query"</span>: query, ...})
+  <span class="kw">return</span> mcp_types.CallToolResult(
+    content=[mcp_types.TextContent(
+      type=<span class="str">"text"</span>, text=result_text)],
+    <span class="cmt"># Older hosts ignore _meta safely</span>
+    meta={<span class="str">"ui"</span>: {
+      <span class="str">"resourceUri"</span>:
+        <span class="str">"ui://storefront/product-grid"</span>
+    }},
+  )</pre>
+      </div>
+      <div>
+        <div class="card">
+          <h4>product_grid_ui.html (iframe)</h4>
+          <p style="font-size:12px;color:var(--muted);margin-bottom:10px;">Interactive card grid. Hosts that support MCP Apps render it in a sandboxed iframe alongside the tool result.</p>
+          <table class="vtable">
+            <thead><tr><th>Message In</th><th>Effect</th></tr></thead>
+            <tbody>
+              <tr><td><code>postMessage({type:"products", products:[...]})</code></td><td>Renders product card grid</td></tr>
+            </tbody>
+          </table>
+          <table class="vtable" style="margin-top:8px;">
+            <thead><tr><th>Message Out</th><th>Effect</th></tr></thead>
+            <tbody>
+              <tr><td><code>postMessage({jsonrpc:"2.0", method:"mcp/call_tool", params:{name:"add_to_cart",...}})</code></td><td>Fires add-to-cart back to host</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="card" style="margin-top:12px;">
+          <h4>Server env vars <span class="port green">:8200</span></h4>
+          <table class="vtable">
+            <thead><tr><th>Variable</th><th>Default</th></tr></thead>
+            <tbody>
+              <tr><td><code>STOREFRONT_MCP_HOST</code></td><td>127.0.0.1</td></tr>
+              <tr><td><code>STOREFRONT_MCP_PORT</code></td><td>8200</td></tr>
+              <tr><td><code>STOREFRONT_MCP_USER_ID</code></td><td>demo-user</td></tr>
+              <tr><td><code>STOREFRONT_MCP_SESSION_ID</code></td><td>managed-agent-demo</td></tr>
+              <tr><td><code>STOREFRONT_MCP_MEMORY_FILE</code></td><td>.storefront_memory.json</td></tr>
+              <tr><td><code>STOREFRONT_MCP_UNSAFE_ALLOW_NO_AUTH</code></td><td>—</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Managed Agent Manifest (agent.yaml)</div>
+    <div class="two-col">
+      <div class="code-block">
+        <div class="code-header"><span>shopping-agent/managed-agents/shopping-agent/agent.yaml</span></div>
+        <pre><span class="key">name:</span> ACME Shopping Agent
+<span class="key">model:</span> claude-sonnet-5
+<span class="key">system_file:</span> system.md   <span class="cmt"># derived by scripts/check.py</span>
+
+<span class="key">skills:</span>
+  - path: ../../skills/search-discovery
+  - path: ../../skills/planning-goals
+  - path: ../../skills/purchase-research
+  - path: ../../skills/memory-personalization
+  - path: ../../skills/customer-care
+
+<span class="key">mcp_servers:</span>
+  - type: url
+    name: storefront
+    <span class="cmt"># credential registered in vault at deploy time</span>
+    url: ${STOREFRONT_MCP_URL}
+
+<span class="key">tools:</span>
+  <span class="cmt"># reads: always_allow; writes: always_ask</span>
+  - type: mcp_toolset
+    mcp_server_name: storefront
+    default_config: { enabled: false }
+    configs:
+      - { name: search_products, enabled: true,
+          permission_policy: { type: always_allow } }
+      - { name: add_to_cart, enabled: true,
+          permission_policy: { type: always_ask } }
+      <span class="cmt"># ... 12 more tools</span></pre>
+      </div>
+      <div>
+        <div class="card">
+          <h4>Three Agent Runtime Paths</h4>
+          <div class="flow-steps" style="gap:6px;">
+            <div class="flow-step"><div class="num" style="color:var(--green)">1</div><div class="content"><div class="label">Messages API</div><div class="detail"><code>shopping-agent/runtime-messages-api/</code> — ShoppingAgent wraps Anthropic Messages API directly</div></div></div>
+            <div class="flow-step"><div class="num" style="color:var(--green)">2</div><div class="content"><div class="label">Agent SDK</div><div class="detail"><code>shopping-agent/runtime-agent-sdk/</code> — ClaudeAgentOptions; includes console runner</div></div></div>
+            <div class="flow-step"><div class="num" style="color:var(--green)">3</div><div class="content"><div class="label">Managed Agents</div><div class="detail"><code>shopping-agent/managed-agents/</code> — agent.yaml manifest + this MCP server</div></div></div>
+          </div>
+        </div>
+        <div class="card" style="margin-top:12px;">
+          <h4>Key Files</h4>
+          <div class="file-tree">
+<span class="dir">shopping-agent/managed-agents/</span>
+<span class="file">  <span class="imp">storefront-mcp-server/
+    storefront_mcp_server.py</span>
+    product_grid_ui.html
+  shopping-agent/
+    <span class="imp">agent.yaml</span>
+    system.md</span>
+<span class="dir">merchant-agent/managed-agents/</span>
+<span class="file">  merchant-mcp-server/
+    <span class="imp">merchant_mcp_server.py</span>
+  merchant-agent/agent.yaml</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Run It</div>
+    <div class="run-block">
+      <div class="run-header">MCP server + demo</div>
+      <pre><span class="rem"># Start MCP server (default: localhost:8200)</span>
+<span class="prompt">$ </span><span class="cmd">python shopping-agent/managed-agents/storefront-mcp-server/storefront_mcp_server.py</span>
+
+<span class="rem"># Custom port / host</span>
+<span class="prompt">$ </span><span class="cmd">STOREFRONT_MCP_PORT=9000 python storefront_mcp_server.py</span>
+
+<span class="rem"># MCP Apps split-screen UI (Gemini + product-grid iframe)</span>
+<span class="prompt">$ </span><span class="cmd">GEMINI_API_KEY=your-key python scripts/gemini_mcp_ui_server.py</span>
+<span class="rem"># open http://localhost:8099</span>
+
+<span class="rem"># Deploy managed agent (resolves agent.yaml + uploads skills)</span>
+<span class="prompt">$ </span><span class="cmd">bash scripts/deploy_managed_agent.sh</span></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ PLUGIN -->
+<div class="tab-panel" id="tab-plugin">
+  <div class="channel-banner banner-teal">
+    <div class="icon">🧩</div>
+    <div>
+      <h2>Claude Code Plugin — commerce-builder</h2>
+      <p>Installable plugin for Claude Code. Six skills covering architecture, evals, merchant ops, prompt caching, trust/safety, and UI tools. Four scaffold commands for developer workflows.</p>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Plugin Manifest</div>
+    <div class="two-col">
+      <div class="code-block">
+        <div class="code-header"><span>plugins/commerce-builder/.claude-plugin/plugin.json</span></div>
+        <pre>{
+  <span class="key">"name"</span>: <span class="str">"commerce-builder"</span>,
+  <span class="key">"description"</span>: <span class="str">"Skills and scaffolding commands
+    for building shopping and merchant agents
+    on Claude, covering architecture, prompt
+    caching, UI tools, trust and safety, evals,
+    and merchant operations."</span>,
+  <span class="key">"version"</span>: <span class="str">"0.1.0"</span>,
+  <span class="key">"author"</span>: { <span class="key">"name"</span>: <span class="str">"Anthropic"</span> }
+}</pre>
+      </div>
+      <div>
+        <div class="card">
+          <h4>Directory Layout</h4>
+          <div class="file-tree">
+<span class="dir">plugins/commerce-builder/</span>
+<span class="file">  .claude-plugin/
+    <span class="imp">plugin.json</span>      <span class="ann">← marketplace manifest</span>
+  skills/
+    <span class="imp">commerce-architecture/</span>
+    commerce-evals/
+    commerce-merchant-operations/
+    commerce-prompt-caching/
+    commerce-trust-safety/
+    <span class="imp">commerce-ui-tools/</span>
+  commands/
+    <span class="imp">scaffold-commerce-agent.md</span>
+    add-commerce-flow.md
+    review-commerce-agent.md
+    author-commerce-evals.md</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Six Skills</div>
+    <div class="three-col">
+      <div class="card">
+        <h4 style="color:var(--teal)">commerce-architecture</h4>
+        <p style="font-size:12px;color:var(--muted);">Explains the channel topology, role separation, backend contract, and extension points. Used when reasoning about adding a new vertical or modifying routing.</p>
+      </div>
+      <div class="card">
+        <h4 style="color:var(--teal)">commerce-evals</h4>
+        <p style="font-size:12px;color:var(--muted);">Eval harness conventions: writing test cases against tool calls, grading criteria, and running the pytest eval suites in <code>tests/</code>.</p>
+      </div>
+      <div class="card">
+        <h4 style="color:var(--teal)">commerce-merchant-operations</h4>
+        <p style="font-size:12px;color:var(--muted);">Merchant agent patterns: change staging, host-approval gate, analysis delegate, merchant-side skill descriptions.</p>
+      </div>
+      <div class="card">
+        <h4 style="color:var(--teal)">commerce-prompt-caching</h4>
+        <p style="font-size:12px;color:var(--muted);">How the static prompt + tools bytes are kept identical per turn to hit Anthropic prompt cache. Cache-control header placement.</p>
+      </div>
+      <div class="card">
+        <h4 style="color:var(--teal)">commerce-trust-safety</h4>
+        <p style="font-size:12px;color:var(--muted);">Third-party content fencing rules, provenance gating on writes, the checkout no-charge invariant, and the loopback guard in host.py.</p>
+      </div>
+      <div class="card">
+        <h4 style="color:var(--teal)">commerce-ui-tools</h4>
+        <p style="font-size:12px;color:var(--muted);">Presentation tool schema design: PresentationExtension, component routing in generative.tsx, the validation → fill → render pipeline.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Four Commands</div>
+    <div class="two-col">
+      <div class="card">
+        <h4>/scaffold-commerce-agent</h4>
+        <p style="font-size:12px;color:var(--muted);margin-bottom:10px;">Generates a new vertical: creates <code>examples/{vertical}/api/</code>, <code>storefront-web/</code>, <code>merchant-web/</code>, wires up mock backend, registers in the npm workspace.</p>
+        <div class="pill-row">
+          <span class="pill hl">api/ stub</span>
+          <span class="pill hl">Next.js app</span>
+          <span class="pill hl">mock backend</span>
+          <span class="pill hl">port assignment</span>
+        </div>
+      </div>
+      <div class="card">
+        <h4>/add-commerce-flow</h4>
+        <p style="font-size:12px;color:var(--muted);margin-bottom:10px;">Adds a new skill flow to an existing vertical — creates the <code>SKILL.md</code>, registers it in the skill directory, updates prompt derivation.</p>
+        <div class="pill-row">
+          <span class="pill hl">SKILL.md</span>
+          <span class="pill hl">tool descriptions</span>
+          <span class="pill hl">check.py compat</span>
+        </div>
+      </div>
+      <div class="card">
+        <h4>/review-commerce-agent</h4>
+        <p style="font-size:12px;color:var(--muted);margin-bottom:10px;">Reviews an agent implementation against the design rules in CLAUDE.md: fencing, gating, prompt/tool invariant, no real brands.</p>
+        <div class="pill-row">
+          <span class="pill hl">design rule check</span>
+          <span class="pill hl">trust/safety audit</span>
+        </div>
+      </div>
+      <div class="card">
+        <h4>/author-commerce-evals</h4>
+        <p style="font-size:12px;color:var(--muted);margin-bottom:10px;">Scaffolds eval test cases for a specified flow: generates pytest fixtures, grading assertions against tool call sequences.</p>
+        <div class="pill-row">
+          <span class="pill hl">pytest fixtures</span>
+          <span class="pill hl">tool-call grading</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Developer Workflow</div>
+    <div class="flow-steps">
+      <div class="flow-step"><div class="num" style="color:var(--teal)">1</div><div class="content"><div class="label">Install plugin in Claude Code</div><div class="detail">Point Claude Code at <code>plugins/commerce-builder/.claude-plugin/plugin.json</code>. Skills and commands become available.</div></div></div>
+      <div class="flow-step"><div class="num" style="color:var(--teal)">2</div><div class="content"><div class="label">Run <code>/scaffold-commerce-agent</code></div><div class="detail">Claude Code generates the new vertical directory tree, assigns ports, creates mock backend stub and Next.js apps.</div></div></div>
+      <div class="flow-step"><div class="num" style="color:var(--teal)">3</div><div class="content"><div class="label">Implement domain-specific backend + PresentationExtension</div><div class="detail">Add generative UI components in <code>components/generative/</code>. Use <code>/add-commerce-flow</code> to add skill flows.</div></div></div>
+      <div class="flow-step"><div class="num" style="color:var(--teal)">4</div><div class="content"><div class="label">Run <code>/review-commerce-agent</code></div><div class="detail">Plugin checks fencing rules, provenance gating, tool description conventions, fictional-content requirement.</div></div></div>
+      <div class="flow-step"><div class="num" style="color:var(--teal)">5</div><div class="content"><div class="label">Verify: <code>ruff check . &amp;&amp; pytest &amp;&amp; python scripts/check.py</code></div><div class="detail"><code>check.py</code> validates that <code>system.md</code> matches the derived prompt + tool descriptions. CI gate.</div></div></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Design Rules Enforced by Plugin Skills</div>
+    <div class="code-block">
+      <div class="code-header"><span>CLAUDE.md — core invariants</span></div>
+      <pre><span class="cmt"># One model owns the conversation</span>
+<span class="cmt"># A rule goes in a tool description, the prompt, or a skill by how often it applies</span>
+
+<span class="cmt"># Static prompt and tools[] are the same bytes on every turn (cache hit)</span>
+<span class="cmt"># Per-request data goes in the fenced block after the breakpoint</span>
+
+<span class="cmt"># UI is presentation tool calls; validated and filled on server; streamed as "ui" events</span>
+<span class="cmt"># Third-party content is fenced data; writes are provenance-gated and capped in code</span>
+<span class="cmt"># checkout charges nothing; merchant writes apply only through host approval</span>
+
+<span class="cmt"># Core is domain-neutral; a vertical adds UI through PresentationExtension</span>
+<span class="cmt"># Each mechanism is defined once, in commerce_common or a role core</span>
+
+<span class="cmt"># A change to prompt text, tool description, skill, or fence notice</span>
+<span class="cmt"># re-derives system.md; scripts/check.py compares them</span></pre>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Run It</div>
+    <div class="run-block">
+      <div class="run-header">Verify everything</div>
+      <pre><span class="rem"># Lint + format check + unit tests + prompt derivation check</span>
+<span class="prompt">$ </span><span class="cmd">ruff check . && ruff format --check . && pytest && python scripts/check.py</span>
+
+<span class="rem"># Full verify: adds deploy dry-runs and web builds</span>
+<span class="prompt">$ </span><span class="cmd">python scripts/verify_all.py</span>
+
+<span class="rem"># Install Python packages (7 packages + pinned deps)</span>
+<span class="prompt">$ </span><span class="cmd">bash scripts/install.sh</span>
+
+<span class="rem"># Install Node deps (npm workspace)</span>
+<span class="prompt">$ </span><span class="cmd">cd examples && npm install</span></pre>
+    </div>
+  </div>
+</div>
+
+<script>
+  (function() {
+    var buttons = document.querySelectorAll('.tab-btn');
+    var panels  = document.querySelectorAll('.tab-panel');
+
+    buttons.forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var tab = btn.getAttribute('data-tab');
+
+        buttons.forEach(function(b) { b.classList.remove('active'); });
+        panels.forEach(function(p)  { p.classList.remove('active'); });
+
+        btn.classList.add('active');
+        document.getElementById('tab-' + tab).classList.add('active');
+      });
+    });
+  })();
+</script>
+</body>
+</html>

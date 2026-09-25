@@ -9,16 +9,22 @@
 FROM node:20-slim AS builder
 WORKDIR /app
 
+# NEXT_PUBLIC_ vars are baked into the client bundle at build time.
+# Railway does NOT auto-pass env vars as Docker build args, so set the value
+# directly here. To change the backend URL, update this line and redeploy.
+ENV NEXT_PUBLIC_API_URL=https://merchant-api-production-54c0.up.railway.app
+
 # Mirror the repo layout so file:../../web-shared resolves at install time.
 COPY examples/web-shared                   ./examples/web-shared
 COPY examples/salesforce/merchant-web      ./examples/salesforce/merchant-web
 
 WORKDIR /app/examples/salesforce/merchant-web
 RUN npm install
+# npm creates node_modules/web-shared as a symlink; Turbopack doesn't follow symlinks
+# in production builds, so replace it with a real copy of the source files.
+RUN rm -rf node_modules/web-shared \
+    && cp -rL /app/examples/web-shared node_modules/web-shared
 
-# turbopack (Next.js 16 production bundler) sees the npm symlink for web-shared
-# and resolves CSS/TS through transpilePackages — no manual copy needed after the
-# CSS imports were changed from ../../../web-shared/... to bare "web-shared/..." paths.
 RUN npm run build
 
 # ── Stage 2: serve (standalone — minimal footprint, no full node_modules copy) ─

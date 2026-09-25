@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Merchant AI Agent — SitePreferences values
+  Import AFTER importing system-objecttype-extensions.xml.
+  Import via: Administration > Site Development > Import & Export > Site Data
+  (wrap this file inside a site zip, or paste values manually in BM)
+
+  Update the merchantAgentWebUrl value below to match your deployed Railway URL.
+-->
+<preferences xmlns="http://www.demandware.com/xml/impex/preferences/2007-03-31">
+    <custom-preferences>
+        <all-instances>
+            <preference preference-id="merchantAgentWebUrl">https://merchant-web-production-e806.up.railway.app</preference>
+            <preference preference-id="merchantAgentMcpUrl"></preference>
+        </all-instances>
+    </custom-preferences>
+</preferences>

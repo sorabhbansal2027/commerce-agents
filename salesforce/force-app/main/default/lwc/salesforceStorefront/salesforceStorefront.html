@@ -1,0 +1,746 @@
+<template>
+
+    <!-- ── Toggle button (closed state) ─────────────────────────────────────── -->
+    <template lwc:if={isOpen}></template>
+    <template lwc:else>
+        <button class={toggleClass} onclick={handleToggle} aria-label="Open shopping assistant">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+                <line x1="3" y1="6" x2="21" y2="6" stroke="currentColor" stroke-width="2"/>
+                <path d="M16 10a4 4 0 01-8 0" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+            <span>{brandName}</span>
+            <template lwc:if={hasCartCount}>
+                <span class="sfs-toggle-count" aria-label="items in cart">{cartCountText}</span>
+            </template>
+            <span class="sfs-toggle-ping" aria-hidden="true"></span>
+        </button>
+    </template>
+
+    <!-- ── Full panel (open state) ───────────────────────────────────────────── -->
+    <template lwc:if={isOpen}>
+        <div class="sfs-outer" role="dialog" aria-label={assistantName}>
+
+            <!-- ═══ HEADER ════════════════════════════════════════════════════ -->
+            <header class="sfs-header">
+
+                <!-- Brand -->
+                <div class="sfs-brand">
+                    <div class="sfs-brand-mark" aria-hidden="true">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                            <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/>
+                            <line x1="3" y1="6" x2="21" y2="6" stroke="currentColor" stroke-width="2.2"/>
+                            <path d="M16 10a4 4 0 01-8 0" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+                        </svg>
+                    </div>
+                    <span class="sfs-brand-name">{brandName}</span>
+                </div>
+
+                <!-- View tabs -->
+                <nav class="sfs-tabs" aria-label="Store sections">
+                    <button class={assistantTabClass} onclick={handleViewAssistant} aria-label="Assistant">
+                        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                            <path d="M8 1.5l1.6 4.9H14l-3.8 2.8 1.4 4.3L8 10.7l-3.6 2.8 1.4-4.3L2 6.4h4.4L8 1.5z" fill="currentColor"/>
+                        </svg>
+                        Assistant
+                    </button>
+                    <button class={ordersTabClass} onclick={handleViewOrders} aria-label="Orders">
+                        Orders
+                        <template lwc:if={hasOrdersAlert}>
+                            <span class="sfs-tab-badge" aria-label="delayed orders">{ordersAlertText}</span>
+                        </template>
+                    </button>
+                    <button class={cartTabClass} onclick={handleViewCart} aria-label="Cart">
+                        Cart
+                        <template lwc:if={hasCartCount}>
+                            <span class="sfs-tab-badge" aria-label="items in cart">{cartCountText}</span>
+                        </template>
+                    </button>
+                </nav>
+
+                <!-- Status + close -->
+                <div class="sfs-header-right">
+                    <div class="sfs-act-badge">
+                        <span class={actDotClass} aria-hidden="true"></span>
+                        <span>{actLabel}</span>
+                    </div>
+                    <button class="sfs-icon-btn" onclick={handleClose} aria-label="Close">
+                        <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
+                            <path d="M1 1l11 11M12 1L1 12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                        </svg>
+                    </button>
+                </div>
+
+            </header>
+
+            <!-- ═══ MAIN SCROLL AREA ══════════════════════════════════════════ -->
+            <div class="sfs-scroll" role="main" aria-live="polite" aria-atomic="false">
+
+                <!-- ─── HOME VIEW ────────────────────────────────────────────── -->
+                <template lwc:if={showHome}>
+
+                    <!-- Greeting -->
+                    <div class="sfs-greeting">
+                        <div class="sfs-greeting-date">{dateText}</div>
+                        <h2 class="sfs-greeting-title">{greetingText}, {shopperName}</h2>
+                        <p class="sfs-greeting-brief">{briefText}</p>
+                    </div>
+
+                    <!-- Intro + starters -->
+                    <p class="sfs-intro">{introText}</p>
+                    <div class="sfs-starters" role="list" aria-label="Suggested prompts">
+                        <template for:each={starters} for:item="s">
+                            <button key={s.id}
+                                    role="listitem"
+                                    class="sfs-starter"
+                                    data-label={s.label}
+                                    disabled={s.disabled}
+                                    onclick={handleStarter}>
+                                <svg width="13" height="13" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                                    <rect x="1" y="7" width="2.5" height="6" rx=".8" fill="currentColor" opacity=".4"/>
+                                    <rect x="5.5" y="4" width="2.5" height="9" rx=".8" fill="currentColor" opacity=".7"/>
+                                    <rect x="10" y="1" width="2.5" height="12" rx=".8" fill="currentColor"/>
+                                </svg>
+                                <span>{s.label}</span>
+                                <svg class="sfs-starter-arrow" width="10" height="10" viewBox="0 0 11 11" fill="none" aria-hidden="true">
+                                    <path d="M2 5.5h7M6 2.5l3 3-3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                            </button>
+                        </template>
+                    </div>
+
+                    <!-- Arriving orders panel -->
+                    <template lwc:if={hasArrivingOrders}>
+                        <div class="sfs-home-section sfs-arriving">
+                            <div class="sfs-section-hdr">
+                                <span class="sfs-section-title">On the way</span>
+                                <button class="sfs-link-btn" onclick={handleSeeAllOrders}>All orders →</button>
+                            </div>
+                            <ul class="sfs-arriving-list" role="list">
+                                <template for:each={arrivingOrders} for:item="order">
+                                    <li key={order.uid} class="sfs-arriving-item">
+                                        <div class="sfs-arriving-info">
+                                            <div class="sfs-arriving-id">{order.id}</div>
+                                            <div class="sfs-arriving-meta">{order.meta}</div>
+                                        </div>
+                                        <span class={order.statusClass}>{order.status}</span>
+                                        <button class="sfs-arriving-ask"
+                                                data-id={order.id}
+                                                onclick={handleArrivingOrderAsk}
+                                                aria-label="Ask about this order">Ask →</button>
+                                    </li>
+                                </template>
+                            </ul>
+                        </div>
+                    </template>
+
+                    <!-- Featured products -->
+                    <template lwc:if={hasFeaturedProducts}>
+                        <div class="sfs-home-section">
+                            <div class="sfs-section-hdr">
+                                <span class="sfs-section-title">Popular right now</span>
+                                <span class="sfs-section-sub">Bestsellers and new arrivals</span>
+                            </div>
+                            <div class="sfs-tile-grid">
+                                <template for:each={featuredProducts} for:item="product">
+                                    <div key={product.uid} class="sfs-product-tile">
+                                        <!-- Image or initial fallback -->
+                                        <div class="sfs-tile-img-wrap">
+                                            <template lwc:if={product.hasImage}>
+                                                <img class="sfs-tile-img" src={product.image_url} alt={product.title} loading="lazy"/>
+                                            </template>
+                                            <template lwc:else>
+                                                <div class="sfs-tile-initial" aria-hidden="true">{product.initial}</div>
+                                            </template>
+                                            <template lwc:if={product.hasBadge}>
+                                                <span class={product.badgeClass}>{product.badge}</span>
+                                            </template>
+                                        </div>
+                                        <div class="sfs-tile-body">
+                                            <template lwc:if={product.hasBrand}>
+                                                <div class="sfs-tile-brand">{product.brand}</div>
+                                            </template>
+                                            <div class="sfs-tile-title">{product.title}</div>
+                                            <div class="sfs-tile-price">{product.price}</div>
+                                        </div>
+                                        <button class="sfs-tile-ask"
+                                                data-title={product.title}
+                                                onclick={handleFeaturedAsk}
+                                                aria-label="Ask about this product">
+                                            Ask →
+                                        </button>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                    </template>
+
+                </template>
+                <!-- /HOME VIEW -->
+
+                <!-- ─── CHAT VIEW (transcript) ────────────────────────────── -->
+                <template lwc:if={showChat}>
+                    <div class="sfs-transcript">
+                        <template for:each={itemViews} for:item="item">
+                            <div key={item.uid} class="sfs-item">
+
+                                <!-- User bubble -->
+                                <template lwc:if={item.isUser}>
+                                    <div class="sfs-user-row">
+                                        <div class="sfs-user-bubble">{item.text}</div>
+                                    </div>
+                                </template>
+
+                                <!-- Assistant text -->
+                                <template lwc:if={item.isText}>
+                                    <div class="sfs-turn">
+                                        <div class={item.textClass}>{item.text}</div>
+                                    </div>
+                                </template>
+
+                                <!-- Activity indicator -->
+                                <template lwc:if={item.isActivity}>
+                                    <div class="sfs-activity" aria-live="polite">
+                                        <span class="sfs-activity-pulse" aria-hidden="true"></span>
+                                        <span class="sfs-activity-label">{item.label}</span>
+                                    </div>
+                                </template>
+
+                                <!-- Loading skeleton -->
+                                <template lwc:if={item.isSkeleton}>
+                                    <div class="sfs-skeleton-wrap" aria-label="Loading response">
+                                        <div class="sfs-skeleton"></div>
+                                        <div class="sfs-skeleton w70"></div>
+                                        <div class="sfs-skeleton w50"></div>
+                                    </div>
+                                </template>
+
+                                <!-- Error -->
+                                <template lwc:if={item.isError}>
+                                    <div class="sfs-error-msg" role="alert">{item.text}</div>
+                                </template>
+
+                                <!-- Suggestion chips -->
+                                <template lwc:if={item.isChips}>
+                                    <div class="sfs-chips" role="group" aria-label="Follow-up suggestions">
+                                        <template for:each={item.chips} for:item="chip">
+                                            <button key={chip.id}
+                                                    class="sfs-chip"
+                                                    data-label={chip.label}
+                                                    disabled={isBusy}
+                                                    onclick={handleChip}>{chip.label}</button>
+                                        </template>
+                                    </div>
+                                </template>
+
+                                <!-- Products block -->
+                                <template lwc:if={item.isProducts}>
+                                    <div class="sfs-block">
+                                        <template lwc:if={item.hasTitle}>
+                                            <div class="sfs-block-title">{item.blockTitle}</div>
+                                        </template>
+                                        <div class="sfs-product-row">
+                                            <template for:each={item.productCards} for:item="card">
+                                                <div key={card.uid} class="sfs-product-card">
+                                                    <div class="sfs-pc-img-wrap">
+                                                        <template lwc:if={card.hasImage}>
+                                                            <img class="sfs-pc-img" src={card.image_url} alt={card.title} loading="lazy"/>
+                                                        </template>
+                                                        <template lwc:else>
+                                                            <div class="sfs-pc-initial" aria-hidden="true">{card.initial}</div>
+                                                        </template>
+                                                        <template lwc:if={card.outOfStock}>
+                                                            <span class="sfs-oos-badge">Out of stock</span>
+                                                        </template>
+                                                    </div>
+                                                    <div class="sfs-pc-body">
+                                                        <template lwc:if={card.hasBrand}>
+                                                            <div class="sfs-pc-brand">{card.brand}</div>
+                                                        </template>
+                                                        <div class="sfs-pc-title">{card.title}</div>
+                                                        <div class="sfs-pc-price">{card.price}</div>
+                                                        <template lwc:if={card.hasReason}>
+                                                            <div class="sfs-pc-reason">{card.reason}</div>
+                                                        </template>
+                                                    </div>
+                                                    <div class="sfs-pc-actions">
+                                                        <button class="sfs-pc-btn-secondary"
+                                                                data-title={card.title}
+                                                                onclick={handleProductAsk}
+                                                                aria-label="Ask about this product">Details</button>
+                                                        <button class="sfs-pc-btn-primary"
+                                                                data-title={card.title}
+                                                                disabled={card.outOfStock}
+                                                                onclick={handleProductAdd}
+                                                                aria-label="Add to cart">Add to cart</button>
+                                                    </div>
+                                                </div>
+                                            </template>
+                                        </div>
+                                    </div>
+                                </template>
+
+                                <!-- Comparison block -->
+                                <template lwc:if={item.isComparison}>
+                                    <div class="sfs-block">
+                                        <div class="sfs-block-title">{item.blockTitle}</div>
+                                        <div class="sfs-compare-row">
+                                            <template for:each={item.compareCards} for:item="card">
+                                                <div key={card.uid} class="sfs-compare-card">
+                                                    <template lwc:if={card.isRecommended}>
+                                                        <div class="sfs-compare-rec-badge">Recommended</div>
+                                                    </template>
+                                                    <div class="sfs-compare-img-wrap">
+                                                        <template lwc:if={card.hasImage}>
+                                                            <img class="sfs-compare-img" src={card.image_url} alt={card.title} loading="lazy"/>
+                                                        </template>
+                                                        <template lwc:else>
+                                                            <div class="sfs-compare-initial" aria-hidden="true">{card.initial}</div>
+                                                        </template>
+                                                    </div>
+                                                    <div class="sfs-compare-title">{card.title}</div>
+                                                    <div class="sfs-compare-price">{card.price}</div>
+                                                    <template lwc:if={card.hasBestFor}>
+                                                        <div class="sfs-compare-best">Best for: {card.bestFor}</div>
+                                                    </template>
+                                                    <template lwc:if={card.hasPros}>
+                                                        <ul class="sfs-compare-pros">
+                                                            <template for:each={card.pros} for:item="pro">
+                                                                <li key={pro.uid}>{pro.text}</li>
+                                                            </template>
+                                                        </ul>
+                                                    </template>
+                                                    <template lwc:if={card.hasCons}>
+                                                        <ul class="sfs-compare-cons">
+                                                            <template for:each={card.cons} for:item="con">
+                                                                <li key={con.uid}>{con.text}</li>
+                                                            </template>
+                                                        </ul>
+                                                    </template>
+                                                    <button class="sfs-pc-btn-primary sfs-compare-add"
+                                                            data-title={card.title}
+                                                            onclick={handleProductAdd}
+                                                            aria-label="Add to cart">Add to cart</button>
+                                                </div>
+                                            </template>
+                                        </div>
+                                    </div>
+                                </template>
+
+                                <!-- Plan block -->
+                                <template lwc:if={item.isPlan}>
+                                    <div class="sfs-block">
+                                        <div class="sfs-block-title">{item.blockTitle}</div>
+                                        <template lwc:if={item.hasPlanIntro}>
+                                            <p class="sfs-plan-intro">{item.planIntro}</p>
+                                        </template>
+                                        <ol class="sfs-plan-steps">
+                                            <template for:each={item.planSteps} for:item="step">
+                                                <li key={step.uid} class="sfs-plan-step">
+                                                    <div class="sfs-plan-num" aria-hidden="true">{step.num}</div>
+                                                    <div class="sfs-plan-body">
+                                                        <div class="sfs-plan-label">{step.label}</div>
+                                                        <template lwc:if={step.hasDetail}>
+                                                            <div class="sfs-plan-detail">{step.detail}</div>
+                                                        </template>
+                                                        <template lwc:if={step.hasStepProducts}>
+                                                            <div class="sfs-plan-products">
+                                                                <template for:each={step.stepProducts} for:item="sp">
+                                                                    <span key={sp.uid} class="sfs-plan-product-chip">
+                                                                        {sp.title} · {sp.price}
+                                                                        <button class="sfs-plan-add-btn"
+                                                                                data-title={sp.title}
+                                                                                onclick={handleStepProductAdd}
+                                                                                aria-label="Add to cart">+</button>
+                                                                    </span>
+                                                                </template>
+                                                            </div>
+                                                        </template>
+                                                    </div>
+                                                </li>
+                                            </template>
+                                        </ol>
+                                    </div>
+                                </template>
+
+                                <!-- Guide block -->
+                                <template lwc:if={item.isGuide}>
+                                    <div class="sfs-block">
+                                        <div class="sfs-block-title">{item.blockTitle}</div>
+                                        <div class="sfs-guide-sections">
+                                            <template for:each={item.guideSections} for:item="sec">
+                                                <div key={sec.uid} class="sfs-guide-section">
+                                                    <div class="sfs-guide-heading">{sec.heading}</div>
+                                                    <div class="sfs-guide-body">{sec.body}</div>
+                                                </div>
+                                            </template>
+                                        </div>
+                                        <template lwc:if={item.hasRelated}>
+                                            <div class="sfs-guide-related">
+                                                <div class="sfs-guide-related-label">Related products</div>
+                                                <div class="sfs-guide-related-items">
+                                                    <template for:each={item.relatedProducts} for:item="rp">
+                                                        <button key={rp.uid}
+                                                                class="sfs-guide-related-btn"
+                                                                data-title={rp.title}
+                                                                onclick={handleRelatedProductAsk}>
+                                                            {rp.title} · {rp.price} →
+                                                        </button>
+                                                    </template>
+                                                </div>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </template>
+
+                                <!-- Order status block -->
+                                <template lwc:if={item.isOrderStatus}>
+                                    <div class="sfs-block sfs-order-block">
+                                        <div class="sfs-ob-header">
+                                            <div class="sfs-ob-id">Order {item.orderId}</div>
+                                            <span class={item.statusClass}>{item.orderStatus}</span>
+                                        </div>
+                                        <p class="sfs-ob-summary">{item.summary}</p>
+                                        <div class="sfs-ob-meta">
+                                            <template lwc:if={item.placedDate}>
+                                                <span class="sfs-ob-meta-item">Placed {item.placedDate}</span>
+                                            </template>
+                                            <template lwc:if={item.hasDelivery}>
+                                                <span class="sfs-ob-meta-sep" aria-hidden="true">·</span>
+                                                <span class="sfs-ob-meta-item">Est. delivery {item.delivery}</span>
+                                            </template>
+                                        </div>
+                                        <template lwc:if={item.hasOrderLineItems}>
+                                            <ul class="sfs-ob-items">
+                                                <template for:each={item.orderLineItems} for:item="li">
+                                                    <li key={li.uid} class="sfs-ob-line">
+                                                        <span class="sfs-ob-line-title">{li.title}</span>
+                                                        <span class="sfs-ob-line-qty">× {li.qty}</span>
+                                                        <span class="sfs-ob-line-price">{li.price}</span>
+                                                    </li>
+                                                </template>
+                                            </ul>
+                                        </template>
+                                        <template lwc:if={item.hasNextStep}>
+                                            <p class="sfs-ob-next">{item.nextStep}</p>
+                                        </template>
+                                        <template lwc:if={item.hasTracking}>
+                                            <a class="sfs-ob-track" href={item.trackingUrl} target="_blank" rel="noopener">Track shipment →</a>
+                                        </template>
+                                    </div>
+                                </template>
+
+                                <!-- Checkout block -->
+                                <template lwc:if={item.isCheckout}>
+                                    <div class="sfs-block sfs-checkout-block">
+                                        <div class="sfs-co-title">Order summary · {item.checkoutCount} items</div>
+                                        <ul class="sfs-co-items">
+                                            <template for:each={item.checkoutItems} for:item="ci">
+                                                <li key={ci.uid} class="sfs-co-line">
+                                                    <div class="sfs-co-img-wrap">
+                                                        <template lwc:if={ci.hasImage}>
+                                                            <img class="sfs-co-img" src={ci.image_url} alt={ci.title} loading="lazy"/>
+                                                        </template>
+                                                        <template lwc:else>
+                                                            <div class="sfs-co-initial" aria-hidden="true">{ci.initial}</div>
+                                                        </template>
+                                                    </div>
+                                                    <span class="sfs-co-line-title">{ci.title}</span>
+                                                    <span class="sfs-co-line-qty">× {ci.qty}</span>
+                                                    <span class="sfs-co-line-total">{ci.total}</span>
+                                                </li>
+                                            </template>
+                                        </ul>
+                                        <div class="sfs-co-total">
+                                            <span>Total</span>
+                                            <span class="sfs-co-total-value">{item.checkoutTotal}</span>
+                                        </div>
+                                        <template lwc:if={item.hasNote}>
+                                            <p class="sfs-co-note">{item.checkoutNote}</p>
+                                        </template>
+                                        <template lwc:if={item.hasHandoffs}>
+                                            <div class="sfs-co-handoffs">
+                                                <template for:each={item.handoffs} for:item="ho">
+                                                    <a key={ho.uid}
+                                                       class="sfs-co-handoff-btn"
+                                                       href={ho.url}
+                                                       target="_blank"
+                                                       rel="noopener">{ho.label} →</a>
+                                                </template>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </template>
+
+                                <!-- Quote block -->
+                                <template lwc:if={item.isQuote}>
+                                    <div class="sfs-block sfs-quote-block">
+                                        <div class="sfs-quote-hdr">
+                                            <span class="sfs-quote-name">{item.quoteName}</span>
+                                            <span class={item.quoteStatusCls}>{item.quoteStatus}</span>
+                                        </div>
+                                        <template lwc:if={item.hasExpiry}>
+                                            <div class="sfs-quote-meta">Expires {item.quoteExpiry}</div>
+                                        </template>
+                                        <template lwc:if={item.hasQuoteItems}>
+                                            <ul class="sfs-quote-lines">
+                                                <template for:each={item.quoteLineItems} for:item="ql">
+                                                    <li key={ql.uid} class="sfs-quote-line">
+                                                        <div class="sfs-cart-img-wrap">
+                                                            <template lwc:if={ql.hasImage}>
+                                                                <img class="sfs-cart-img" src={ql.image_url} alt={ql.title} loading="lazy"/>
+                                                            </template>
+                                                            <template lwc:else>
+                                                                <div class="sfs-cart-initial" aria-hidden="true">{ql.initial}</div>
+                                                            </template>
+                                                        </div>
+                                                        <div class="sfs-cart-info">
+                                                            <div class="sfs-cart-title">{ql.title}</div>
+                                                            <div class="sfs-cart-price">{ql.price}</div>
+                                                        </div>
+                                                        <div class="sfs-qty-ctrl">
+                                                            <button class="sfs-qty-btn"
+                                                                data-quote-id={ql.quoteId}
+                                                                data-line-id={ql.lineItemId}
+                                                                data-title={ql.title}
+                                                                data-qty={ql.qtyMinus}
+                                                                onclick={handleQtyMinus}
+                                                                disabled={ql.atMin}>−</button>
+                                                            <span class="sfs-qty-val">{ql.qty}</span>
+                                                            <button class="sfs-qty-btn"
+                                                                data-quote-id={ql.quoteId}
+                                                                data-line-id={ql.lineItemId}
+                                                                data-title={ql.title}
+                                                                data-qty={ql.qtyPlus}
+                                                                onclick={handleQtyPlus}>+</button>
+                                                        </div>
+                                                        <div class="sfs-cart-total">{ql.total}</div>
+                                                    </li>
+                                                </template>
+                                            </ul>
+                                        </template>
+                                        <div class="sfs-quote-subtotal">
+                                            <span>Subtotal</span>
+                                            <span class="sfs-quote-subtotal-value">{item.quoteSubtotal}</span>
+                                        </div>
+                                        <template lwc:if={item.hasQuoteNext}>
+                                            <p class="sfs-co-note">{item.quoteNextStep}</p>
+                                        </template>
+                                        <template lwc:if={item.canAct}>
+                                            <div class="sfs-quote-actions">
+                                                <button class="sfs-quote-action-btn sfs-quote-action-primary"
+                                                    data-quote-id={item.quoteId}
+                                                    data-quote-name={item.quoteName}
+                                                    data-action={item.quoteActionKey}
+                                                    onclick={handleQuoteAction}>{item.quoteActionLabel}</button>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </template>
+
+                                <!-- Assets block -->
+                                <template lwc:if={item.isAssets}>
+                                    <div class="sfs-block sfs-assets-block">
+                                        <div class="sfs-assets-title">{item.assetsTitle}</div>
+                                        <template lwc:if={item.hasWarning}>
+                                            <div class="sfs-assets-alert">⚠ {item.warrantyAlert}</div>
+                                        </template>
+                                        <template lwc:if={item.hasAssets}>
+                                            <ul class="sfs-asset-list">
+                                                <template for:each={item.assetCards} for:item="a">
+                                                    <li key={a.uid} class="sfs-asset-row">
+                                                        <div class="sfs-asset-info">
+                                                            <div class="sfs-asset-name">{a.name}</div>
+                                                            <template lwc:if={a.hasSerial}>
+                                                                <div class="sfs-asset-serial">S/N: {a.serial}</div>
+                                                            </template>
+                                                            <template lwc:if={a.hasHighlight}>
+                                                                <div class="sfs-asset-highlight">{a.highlight}</div>
+                                                            </template>
+                                                        </div>
+                                                        <div class={a.warnCls}>
+                                                            <template lwc:if={a.expired}>
+                                                                <span class="sfs-badge sfs-badge-red">Expired</span>
+                                                            </template>
+                                                            <template lwc:elseif={a.expiringSoon}>
+                                                                <span class="sfs-badge sfs-badge-orange">Expires {a.warranty}</span>
+                                                            </template>
+                                                            <template lwc:else>
+                                                                <span class="sfs-asset-warranty">Until {a.warranty}</span>
+                                                            </template>
+                                                        </div>
+                                                    </li>
+                                                </template>
+                                            </ul>
+                                        </template>
+                                    </div>
+                                </template>
+
+                                <!-- Subscriptions block -->
+                                <template lwc:if={item.isSubscriptions}>
+                                    <div class="sfs-block sfs-subs-block">
+                                        <div class="sfs-assets-title">{item.subsTitle}</div>
+                                        <template lwc:if={item.hasRenewal}>
+                                            <div class="sfs-assets-alert">⚠ {item.renewalAlert}</div>
+                                        </template>
+                                        <template lwc:if={item.hasSubs}>
+                                            <ul class="sfs-asset-list">
+                                                <template for:each={item.subCards} for:item="sc">
+                                                    <li key={sc.uid} class="sfs-asset-row">
+                                                        <div class="sfs-asset-info">
+                                                            <div class="sfs-asset-name">{sc.name}</div>
+                                                            <template lwc:if={sc.hasHighlight}>
+                                                                <div class="sfs-asset-highlight">{sc.highlight}</div>
+                                                            </template>
+                                                        </div>
+                                                        <div>
+                                                            <span class={sc.statusCls}>{sc.status}</span>
+                                                            <template lwc:if={sc.expiringSoon2}>
+                                                                <div class="sfs-asset-serial">Ends {sc.endDate}</div>
+                                                            </template>
+                                                        </div>
+                                                    </li>
+                                                </template>
+                                            </ul>
+                                        </template>
+                                    </div>
+                                </template>
+
+                            </div>
+                        </template>
+                    </div>
+                </template>
+                <!-- /CHAT VIEW -->
+
+                <!-- ─── ORDERS VIEW ───────────────────────────────────────── -->
+                <template lwc:if={showOrders}>
+                    <div class="sfs-orders-view">
+                        <div class="sfs-orders-hdr">
+                            <h3 class="sfs-view-title">Your orders</h3>
+                        </div>
+                        <template lwc:if={hasOrders}>
+                            <ul class="sfs-orders-list" role="list">
+                                <template for:each={orderViews} for:item="order">
+                                    <li key={order.uid} class="sfs-orders-row">
+                                        <div class="sfs-orders-info">
+                                            <div class="sfs-orders-id">{order.id}</div>
+                                            <div class="sfs-orders-meta">{order.meta}</div>
+                                        </div>
+                                        <span class={order.statusClass}>{order.statusLabel}</span>
+                                        <button class="sfs-ask-order-btn"
+                                                data-id={order.id}
+                                                onclick={handleOrderAsk}
+                                                aria-label="Ask about this order">Ask →</button>
+                                    </li>
+                                </template>
+                            </ul>
+                        </template>
+                        <template lwc:if={noOrders}>
+                            <div class="sfs-empty-state">
+                                <p>No orders yet.</p>
+                                <button class="sfs-link-btn" onclick={handleViewAssistant}>Start shopping →</button>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+                <!-- /ORDERS VIEW -->
+
+                <!-- ─── CART VIEW ─────────────────────────────────────────── -->
+                <template lwc:if={showCart}>
+                    <div class="sfs-cart-view">
+                        <div class="sfs-cart-hdr">
+                            <h3 class="sfs-view-title">Cart · {cartItemLabel}</h3>
+                        </div>
+                        <template lwc:if={hasCartItems}>
+                            <ul class="sfs-cart-list" role="list">
+                                <template for:each={cartLineItems} for:item="item">
+                                    <li key={item.uid} class="sfs-cart-row">
+                                        <div class="sfs-cart-img-wrap">
+                                            <template lwc:if={item.hasImage}>
+                                                <img class="sfs-cart-img" src={item.image_url} alt={item.title} loading="lazy"/>
+                                            </template>
+                                            <template lwc:else>
+                                                <div class="sfs-cart-initial" aria-hidden="true">{item.initial}</div>
+                                            </template>
+                                        </div>
+                                        <div class="sfs-cart-info">
+                                            <div class="sfs-cart-title">{item.title}</div>
+                                            <div class="sfs-cart-price">{item.price} × {item.quantity}</div>
+                                        </div>
+                                        <div class="sfs-cart-total">{item.lineTotal}</div>
+                                    </li>
+                                </template>
+                            </ul>
+                            <div class="sfs-cart-footer">
+                                <div class="sfs-cart-subtotal">
+                                    <span>Subtotal</span>
+                                    <span class="sfs-cart-subtotal-value">{cartSubtotal}</span>
+                                </div>
+                                <button class="sfs-cart-checkout-btn" onclick={handleCheckout}>
+                                    Check out →
+                                </button>
+                                <div class="sfs-cart-actions">
+                                    <button class="sfs-link-btn" onclick={handleCartAsk}>Review with assistant</button>
+                                    <button class="sfs-link-btn sfs-link-danger" onclick={handleClearCart}>Clear cart</button>
+                                </div>
+                            </div>
+                        </template>
+                        <template lwc:if={cartIsEmpty}>
+                            <div class="sfs-empty-state">
+                                <p>Your cart is empty.</p>
+                                <button class="sfs-link-btn" onclick={handleViewAssistant}>Start shopping →</button>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+                <!-- /CART VIEW -->
+
+            </div>
+            <!-- /sfs-scroll -->
+
+            <!-- ═══ COMPOSER FOOTER ════════════════════════════════════════════ -->
+            <footer class="sfs-footer">
+                <form class="sfs-form" onsubmit={handleFormSubmit} aria-label="Send a message">
+                    <textarea class="sfs-textarea"
+                              rows="1"
+                              placeholder={placeholder}
+                              aria-label="Message the shopping assistant"
+                              value={draftValue}
+                              oninput={handleInput}
+                              onkeydown={handleKeyDown}></textarea>
+                    <button type="button"
+                            class={micClass}
+                            onclick={handleMic}
+                            aria-label={micAriaLabel}
+                            title={micAriaLabel}>
+                        <template lwc:if={isListening}>
+                            <!-- Stop icon while recording -->
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                                <rect x="5" y="5" width="14" height="14" rx="2"/>
+                            </svg>
+                        </template>
+                        <template lwc:else>
+                            <!-- Mic icon -->
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                <rect x="9" y="2" width="6" height="12" rx="3" stroke="currentColor" stroke-width="2"/>
+                                <path d="M5 10a7 7 0 0014 0" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                                <line x1="12" y1="19" x2="12" y2="22" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                            </svg>
+                        </template>
+                    </button>
+                    <button type="submit"
+                            class="sfs-send-btn"
+                            disabled={cannotSend}
+                            aria-label="Send message">
+                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                            <path d="M7 12V2M2 7l5-5 5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </button>
+                </form>
+            </footer>
+
+        </div>
+        <!-- /sfs-outer -->
+    </template>
+
+</template>

@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Commerce Agents — Reference Architecture</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface2: #22263a;
+    --border: #2e3349;
+    --text: #e8eaf0;
+    --muted: #8b90a8;
+    --accent: #6c8ef7;
+    --accent2: #4ecdc4;
+    --accent3: #f7c26c;
+    --accent4: #f76ca0;
+    --green: #4ade80;
+    --shopping: #6c8ef7;
+    --merchant: #f7c26c;
+    --common: #4ecdc4;
+    --railway: #a78bfa;
+    --sf: #60a5fa;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; font-size: 14px; line-height: 1.6; }
+
+  header { padding: 32px 48px 24px; border-bottom: 1px solid var(--border); }
+  header h1 { font-size: 24px; font-weight: 700; color: var(--text); letter-spacing: -0.02em; }
+  header p { color: var(--muted); margin-top: 4px; font-size: 13px; }
+
+  .legend { display: flex; gap: 20px; padding: 14px 48px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  .legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+  .legend-dot { width: 10px; height: 10px; border-radius: 2px; }
+
+  .canvas { padding: 32px 48px; overflow-x: auto; }
+
+  /* ── Layers ── */
+  .layer { margin-bottom: 28px; }
+  .layer-label { font-size: 10px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+
+  .row { display: flex; gap: 12px; align-items: stretch; flex-wrap: wrap; }
+
+  /* ── Boxes ── */
+  .box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+    min-width: 160px;
+    position: relative;
+  }
+  .box.accent-shopping { border-top: 3px solid var(--shopping); }
+  .box.accent-merchant { border-top: 3px solid var(--merchant); }
+  .box.accent-common   { border-top: 3px solid var(--common); }
+  .box.accent-railway  { border-top: 3px solid var(--railway); }
+  .box.accent-sf       { border-top: 3px solid var(--sf); }
+  .box.accent-green    { border-top: 3px solid var(--green); }
+  .box.wide { min-width: 260px; flex: 1; }
+
+  .box-title { font-size: 12px; font-weight: 700; color: var(--text); margin-bottom: 6px; }
+  .box-sub   { font-size: 11px; color: var(--muted); margin-bottom: 8px; }
+  .tag-row   { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+  .tag {
+    font-size: 10px; padding: 2px 7px; border-radius: 4px;
+    background: var(--surface2); color: var(--muted); border: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  .tag.blue   { background: rgba(108,142,247,0.12); color: var(--shopping); border-color: rgba(108,142,247,0.3); }
+  .tag.yellow { background: rgba(247,194,108,0.12); color: var(--merchant); border-color: rgba(247,194,108,0.3); }
+  .tag.teal   { background: rgba(78,205,196,0.12);  color: var(--common);   border-color: rgba(78,205,196,0.3); }
+  .tag.purple { background: rgba(167,139,250,0.12); color: var(--railway);  border-color: rgba(167,139,250,0.3); }
+  .tag.sky    { background: rgba(96,165,250,0.12);  color: var(--sf);       border-color: rgba(96,165,250,0.3); }
+  .tag.green  { background: rgba(74,222,128,0.12);  color: var(--green);    border-color: rgba(74,222,128,0.3); }
+
+  /* ── Arrows ── */
+  .arrow-row { display: flex; align-items: center; gap: 0; padding: 4px 0; }
+  .arrow-block { display: flex; flex-direction: column; align-items: center; flex: 1; gap: 2px; }
+  .arrow-line { width: 100%; height: 1px; background: var(--border); position: relative; }
+  .arrow-line::after { content: '▶'; position: absolute; right: -6px; top: -7px; font-size: 10px; color: var(--border); }
+  .arrow-label { font-size: 10px; color: var(--muted); white-space: nowrap; }
+
+  /* ── Big architecture diagram ── */
+  .arch { display: grid; gap: 0; }
+
+  .flow-row { display: flex; align-items: center; gap: 0; margin-bottom: 8px; }
+  .flow-box {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    padding: 10px 14px; text-align: center; min-width: 130px;
+  }
+  .flow-box .fb-title { font-size: 12px; font-weight: 700; }
+  .flow-box .fb-sub   { font-size: 10px; color: var(--muted); margin-top: 2px; }
+  .flow-box.c-shopping { border-color: var(--shopping); background: rgba(108,142,247,0.07); }
+  .flow-box.c-merchant { border-color: var(--merchant); background: rgba(247,194,108,0.07); }
+  .flow-box.c-common   { border-color: var(--common);   background: rgba(78,205,196,0.07); }
+  .flow-box.c-railway  { border-color: var(--railway);  background: rgba(167,139,250,0.07); }
+  .flow-box.c-sf       { border-color: var(--sf);       background: rgba(96,165,250,0.07); }
+
+  .connector { display: flex; align-items: center; justify-content: center; width: 36px; flex-shrink: 0; }
+  .connector svg { width: 24px; height: 14px; }
+
+  /* ── Paths grid ── */
+  .paths-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+
+  /* ── Vertical grid ── */
+  .vert-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
+  .vert-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    padding: 12px 14px; text-align: center;
+  }
+  .vert-card .vc-name { font-size: 13px; font-weight: 700; margin-bottom: 4px; }
+  .vert-card .vc-port { font-size: 10px; color: var(--muted); margin-bottom: 8px; font-family: monospace; }
+  .vc-tag { font-size: 10px; padding: 2px 6px; border-radius: 3px; background: var(--surface2); color: var(--muted); display: inline-block; margin: 2px; }
+
+  /* ── SF Integration ── */
+  .sf-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+  .divider { border: none; border-top: 1px solid var(--border); margin: 24px 0; }
+
+  h2 { font-size: 16px; font-weight: 700; margin-bottom: 16px; color: var(--text); }
+  h3 { font-size: 13px; font-weight: 700; margin-bottom: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+
+  .pill-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  .pill { font-size: 11px; padding: 3px 10px; border-radius: 20px; background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+  .pill.blue   { background: rgba(108,142,247,0.15); color: var(--shopping); border-color: rgba(108,142,247,0.4); }
+  .pill.yellow { background: rgba(247,194,108,0.15); color: var(--merchant); border-color: rgba(247,194,108,0.4); }
+
+  .section { margin-bottom: 36px; }
+
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .three-col { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Commerce Agents — Reference Architecture</h1>
+  <p>Full system map: roles, deployment paths, layers, verticals, and Salesforce integration</p>
+</header>
+
+<div class="legend">
+  <div class="legend-item"><div class="legend-dot" style="background:var(--shopping)"></div> Shopping Agent</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--merchant)"></div> Merchant Agent</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--common)"></div> Commerce Common</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--railway)"></div> Infrastructure / Deploy</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--sf)"></div> Salesforce Integration</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--green)"></div> Frontend / UI</div>
+</div>
+
+<div class="canvas">
+
+  <!-- ══════════════════════════════════════
+       SECTION 1 — End-to-End Request Flow
+  ══════════════════════════════════════ -->
+  <div class="section">
+    <h2>End-to-End Request Flow</h2>
+    <div style="overflow-x:auto">
+    <div style="display:flex; align-items:center; gap:0; min-width:900px; flex-wrap:nowrap;">
+
+      <div class="flow-box c-shopping" style="min-width:120px">
+        <div class="fb-title">Browser / LWC / SDK</div>
+        <div class="fb-sub">React · Next.js · Salesforce LWC</div>
+      </div>
+
+      <div class="connector"><svg><line x1="0" y1="7" x2="20" y2="7" stroke="#6c8ef7" stroke-width="1.5"/><polygon points="18,4 24,7 18,10" fill="#6c8ef7"/></svg></div>
+
+      <div class="flow-box c-railway" style="min-width:120px">
+        <div class="fb-title">FastAPI Server</div>
+        <div class="fb-sub">Railway / local · /api prefix</div>
+      </div>
+
+      <div class="connector"><svg><line x1="0" y1="7" x2="20" y2="7" stroke="#a78bfa" stroke-width="1.5"/><polygon points="18,4 24,7 18,10" fill="#a78bfa"/></svg></div>
+
+      <div class="flow-box c-common" style="min-width:130px">
+        <div class="fb-title">Executor (gates.py)</div>
+        <div class="fb-sub">Provenance · qty caps · locks</div>
+      </div>
+
+      <div class="connector"><svg><line x1="0" y1="7" x2="20" y2="7" stroke="#4ecdc4" stroke-width="1.5"/><polygon points="18,4 24,7 18,10" fill="#4ecdc4"/></svg></div>
+
+      <div class="flow-box" style="border-color:var(--accent4); background:rgba(247,108,160,0.07); min-width:130px">
+        <div class="fb-title" style="color:var(--accent4)">Claude API</div>
+        <div class="fb-sub">claude-sonnet-4-6 · tool_use · streaming</div>
+      </div>
+
+      <div class="connector"><svg><line x1="0" y1="7" x2="20" y2="7" stroke="#f76ca0" stroke-width="1.5"/><polygon points="18,4 24,7 18,10" fill="#f76ca0"/></svg></div>
+
+      <div class="flow-box c-common" style="min-width:120px">
+        <div class="fb-title">Tool Dispatch</div>
+        <div class="fb-sub">registry.py · skill loader</div>
+      </div>
+
+      <div class="connector"><svg><line x1="0" y1="7" x2="20" y2="7" stroke="#4ecdc4" stroke-width="1.5"/><polygon points="18,4 24,7 18,10" fill="#4ecdc4"/></svg></div>
+
+      <div class="flow-box c-sf" style="min-width:130px">
+        <div class="fb-title">Backend Impl</div>
+        <div class="fb-sub">SalesforceOMSBackend · B2B APIs</div>
+      </div>
+
+      <div class="connector"><svg><line x1="0" y1="7" x2="20" y2="7" stroke="#60a5fa" stroke-width="1.5"/><polygon points="18,4 24,7 18,10" fill="#60a5fa"/></svg></div>
+
+      <div class="flow-box c-sf" style="min-width:120px">
+        <div class="fb-title">Salesforce B2B</div>
+        <div class="fb-sub">atci-b2b-lex--b2bpoc sandbox</div>
+      </div>
+
+    </div>
+    </div>
+    <div style="margin-top:8px; font-size:11px; color:var(--muted);">
+      ← SSE stream back: <code style="background:var(--surface2);padding:1px 6px;border-radius:3px;">text_delta · ui · ui_partial · cart_update · progress · suggestions · turn_complete</code>
+    </div>
+  </div>
+
+  <hr class="divider" />
+
+  <!-- ══════════════════════════════════════
+       SECTION 2 — Two Roles
+  ══════════════════════════════════════ -->
+  <div class="section">
+    <h2>Two Roles — One Model Loop</h2>
+    <div class="two-col">
+
+      <div class="box accent-shopping wide">
+        <div class="box-title" style="color:var(--shopping)">🛒 Shopping Agent (Storefront)</div>
+        <div class="box-sub">Serves the buyer — discovery, cart, quotes, approvals, orders, assets, subscriptions</div>
+        <div class="tag-row">
+          <span class="tag blue">search_products</span>
+          <span class="tag blue">add_to_cart</span>
+          <span class="tag blue">create_quote</span>
+          <span class="tag blue">submit_for_approval</span>
+          <span class="tag blue">get_orders</span>
+          <span class="tag blue">get_assets</span>
+          <span class="tag blue">get_subscriptions</span>
+          <span class="tag blue">load_quote_to_cart</span>
+          <span class="tag blue">apply_promotion</span>
+          <span class="tag blue">+ 30 more tools</span>
+        </div>
+        <div style="margin-top:10px; font-size:11px; color:var(--muted);">
+          Package: <code style="background:var(--surface2);padding:1px 5px;border-radius:3px;">shopping-agent/core/shopping_agent/</code><br/>
+          Implements: <strong>StorefrontBackend</strong> ABC
+        </div>
+      </div>
+
+      <div class="box accent-merchant wide">
+        <div class="box-title" style="color:var(--merchant)">📊 Merchant Agent (Portal)</div>
+        <div class="box-sub">Serves the operator — performance, catalog, inventory, pricing, campaigns, quote approvals</div>
+        <div class="tag-row">
+          <span class="tag yellow">get_business_snapshot</span>
+          <span class="tag yellow">query_metrics</span>
+          <span class="tag yellow">stage_price_update</span>
+          <span class="tag yellow">approve_quote</span>
+          <span class="tag yellow">stage_listing_update</span>
+          <span class="tag yellow">stage_promotion</span>
+          <span class="tag yellow">apply_change</span>
+          <span class="tag yellow">run_analysis</span>
+          <span class="tag yellow">+ 15 more tools</span>
+        </div>
+        <div style="margin-top:10px; font-size:11px; color:var(--muted);">
+          Package: <code style="background:var(--surface2);padding:1px 5px;border-radius:3px;">merchant-agent/core/merchant_agent/</code><br/>
+          Implements: <strong>MerchantBackend</strong> ABC — staged-write protocol
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <hr class="divider" />
+
+  <!-- ══════════════════════════════════════
+       SECTION 3 — Package Layers
+  ══════════════════════════════════════ -->
+  <div class="section">
+    <h2>Package Layers</h2>
+
+    <div class="layer">
+      <div class="layer-label">Shared Foundation</div>
+      <div class="row">
+        <div class="box accent-common">
+          <div class="box-title">commerce-common</div>
+          <div class="tag-row">
+            <span class="tag teal">types.py</span>
+            <span class="tag teal">fencing.py</span>
+            <span class="tag teal">streaming.py</span>
+            <span class="tag teal">memory.py</span>
+            <span class="tag teal">prompt_assembly.py</span>
+            <span class="tag teal">config.py</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="layer">
+      <div class="layer-label">Role Cores</div>
+      <div class="row">
+        <div class="box accent-shopping">
+          <div class="box-title">shopping-agent/core</div>
+          <div class="tag-row">
+            <span class="tag blue">types.py</span>
+            <span class="tag blue">backend.py (ABC)</span>
+            <span class="tag blue">config.py</span>
+            <span class="tag blue">prompt.py</span>
+            <span class="tag blue">tools/registry.py</span>
+            <span class="tag blue">gates.py</span>
+            <span class="tag blue">enrichment.py</span>
+            <span class="tag blue">executor.py</span>
+          </div>
+        </div>
+        <div class="box accent-merchant">
+          <div class="box-title">merchant-agent/core</div>
+          <div class="tag-row">
+            <span class="tag yellow">types.py</span>
+            <span class="tag yellow">backend.py (ABC)</span>
+            <span class="tag yellow">config.py</span>
+            <span class="tag yellow">prompt.py</span>
+            <span class="tag yellow">tools/registry.py</span>
+            <span class="tag yellow">changes.py</span>
+            <span class="tag yellow">analysis.py</span>
+            <span class="tag yellow">executor.py</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="layer">
+      <div class="layer-label">Skills (domain flows)</div>
+      <div class="row">
+        <div class="box accent-shopping wide">
+          <div class="box-title">Shopping Skills (10)</div>
+          <div class="tag-row">
+            <span class="tag blue">search-discovery</span>
+            <span class="tag blue">purchase-research</span>
+            <span class="tag blue">planning-goals</span>
+            <span class="tag blue">customer-care</span>
+            <span class="tag blue">quote-management</span>
+            <span class="tag blue">approval-workflow</span>
+            <span class="tag blue">asset-management</span>
+            <span class="tag blue">promotions</span>
+            <span class="tag blue">subscriptions</span>
+            <span class="tag blue">memory-personalization</span>
+          </div>
+        </div>
+        <div class="box accent-merchant wide">
+          <div class="box-title">Merchant Skills (5)</div>
+          <div class="tag-row">
+            <span class="tag yellow">performance-insights</span>
+            <span class="tag yellow">pricing-promotions</span>
+            <span class="tag yellow">inventory-operations</span>
+            <span class="tag yellow">catalog-listings</span>
+            <span class="tag yellow">marketing-campaigns</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="layer">
+      <div class="layer-label">Runtime Paths (3 per role)</div>
+      <div class="row">
+        <div class="box" style="border-top:3px solid var(--accent4); flex:1">
+          <div class="box-title" style="color:var(--accent4)">Messages API</div>
+          <div class="box-sub">Direct Anthropic SDK loop</div>
+          <div class="tag-row">
+            <span class="tag">ShoppingAgent</span>
+            <span class="tag">MerchantAgent</span>
+            <span class="tag">MerchantAnalysisDelegate</span>
+          </div>
+        </div>
+        <div class="box" style="border-top:3px solid var(--accent3); flex:1">
+          <div class="box-title" style="color:var(--accent3)">Agent SDK</div>
+          <div class="box-sub">ClaudeAgentOptions + console</div>
+          <div class="tag-row">
+            <span class="tag">VERTEX · BEDROCK · MANTLE · FOUNDRY</span>
+          </div>
+        </div>
+        <div class="box" style="border-top:3px solid var(--green); flex:1">
+          <div class="box-title" style="color:var(--green)">Managed Agents</div>
+          <div class="box-sub">Manifest → system.md + MCP server</div>
+          <div class="tag-row">
+            <span class="tag green">Anthropic API</span>
+            <span class="tag green">In-house gateway</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="layer">
+      <div class="layer-label">Plugin (Commerce Builder)</div>
+      <div class="row">
+        <div class="box" style="border-top:3px solid #e879f9; flex:1">
+          <div class="box-title" style="color:#e879f9">Claude Code Plugin — 6 Skills</div>
+          <div class="tag-row">
+            <span class="tag">commerce-architecture</span>
+            <span class="tag">commerce-ui-tools</span>
+            <span class="tag">commerce-trust-safety</span>
+            <span class="tag">commerce-prompt-caching</span>
+            <span class="tag">commerce-merchant-operations</span>
+            <span class="tag">commerce-evals</span>
+          </div>
+        </div>
+        <div class="box" style="border-top:3px solid #e879f9; flex:1">
+          <div class="box-title" style="color:#e879f9">4 Commands</div>
+          <div class="tag-row">
+            <span class="tag">/scaffold-commerce-agent</span>
+            <span class="tag">/add-commerce-flow</span>
+            <span class="tag">/author-commerce-evals</span>
+            <span class="tag">/review-commerce-agent</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <hr class="divider" />
+
+  <!-- ══════════════════════════════════════
+       SECTION 4 — Verticals
+  ══════════════════════════════════════ -->
+  <div class="section">
+    <h2>Example Verticals</h2>
+    <div class="vert-grid">
+
+      <div class="vert-card" style="border-color:var(--shopping)">
+        <div class="vc-name" style="color:var(--shopping)">Retail</div>
+        <div class="vc-port">:8000 / :3000 / :3100</div>
+        <span class="vc-tag">General catalog</span>
+        <span class="vc-tag">Reference impl</span>
+        <span class="vc-tag">PresentationExtension baseline</span>
+      </div>
+
+      <div class="vert-card" style="border-color:#a78bfa">
+        <div class="vc-name" style="color:#a78bfa">Travel</div>
+        <div class="vc-port">:8001 / :3001 / :3101</div>
+        <span class="vc-tag">Date-bound catalog</span>
+        <span class="vc-tag">Trip day planner</span>
+        <span class="vc-tag">Occupancy calendar</span>
+      </div>
+
+      <div class="vert-card" style="border-color:#4ecdc4">
+        <div class="vc-name" style="color:#4ecdc4">Telecom</div>
+        <div class="vc-port">:8002 / :3002 / :3102</div>
+        <span class="vc-tag">Carrier plans</span>
+        <span class="vc-tag">Plan comparison matrix</span>
+        <span class="vc-tag">Subscriber metrics</span>
+      </div>
+
+      <div class="vert-card" style="border-color:#f76ca0">
+        <div class="vc-name" style="color:#f76ca0">Entertainment</div>
+        <div class="vc-port">:8003 / :3003 / :3103</div>
+        <span class="vc-tag">Ticketing + holds</span>
+        <span class="vc-tag">Seat maps</span>
+        <span class="vc-tag">Waitlist &amp; transfer</span>
+      </div>
+
+      <div class="vert-card" style="border-color:var(--sf)">
+        <div class="vc-name" style="color:var(--sf)">Salesforce</div>
+        <div class="vc-port">Railway (:8005 local)</div>
+        <span class="vc-tag">Live SF B2B org</span>
+        <span class="vc-tag">OAuth2 client creds</span>
+        <span class="vc-tag">B2B Commerce APIs</span>
+        <span class="vc-tag">LWC embed</span>
+      </div>
+
+    </div>
+  </div>
+
+  <hr class="divider" />
+
+  <!-- ══════════════════════════════════════
+       SECTION 5 — Salesforce Deep Dive
+  ══════════════════════════════════════ -->
+  <div class="section">
+    <h2>Salesforce Integration Architecture</h2>
+    <div class="sf-grid">
+
+      <div class="box accent-sf wide">
+        <div class="box-title" style="color:var(--sf)">SalesforceOMSBackend</div>
+        <div class="box-sub">Implements both StorefrontBackend + MerchantBackend in one class</div>
+        <div style="font-size:11px; color:var(--muted); margin-bottom:8px;">Auth: OAuth2 client_credentials → token cache → Bearer header</div>
+        <div class="tag-row">
+          <span class="tag sky">_soql() — SOQL queries</span>
+          <span class="tag sky">_b2b_request() — B2B REST API</span>
+          <span class="tag sky">_gap_fill_recent_products()</span>
+          <span class="tag sky">_add_to_cart_direct()</span>
+          <span class="tag sky">_group_variants()</span>
+        </div>
+        <div style="margin-top:10px; font-size:11px; color:var(--muted)">
+          SF Objects touched: Product2 · PricebookEntry · WebCart · CartItem · CartDeliveryGroup · OrderSummary · Quote · QuoteLineItem · ProcessInstanceWorkitem · Asset · Contract
+        </div>
+      </div>
+
+      <div style="display:flex; flex-direction:column; gap:10px;">
+        <div class="box" style="border-color:var(--sf)">
+          <div class="box-title">Product Catalog Loading</div>
+          <div style="font-size:11px; color:var(--muted)">
+            1. B2B Commerce Products API (primary — indexed products)<br/>
+            2. Gap-fill: SOQL subqueries on ProductCategoryProduct + CommerceEntitlementProduct, LAST_N_DAYS:30, UnitPrice &gt; 0<br/>
+            3. Fallback: PricebookEntry SOQL if B2B API unavailable<br/>
+            4. <code style="background:var(--surface2);padding:1px 4px;border-radius:3px;">_group_variants()</code> creates FAMILY- synthetic IDs
+          </div>
+        </div>
+        <div class="box" style="border-color:var(--sf)">
+          <div class="box-title">Add-to-Cart Flow</div>
+          <div style="font-size:11px; color:var(--muted)">
+            1. POST /commerce/webstores/{id}/carts/{cartId}/cart-items<br/>
+            2. If 404 (not in B2B index) → <code style="background:var(--surface2);padding:1px 4px;border-radius:3px;">_add_to_cart_direct()</code><br/>
+            → POST /sobjects/CartItem with SalesPrice from product cache
+          </div>
+        </div>
+        <div class="box" style="border-color:var(--sf)">
+          <div class="box-title">Quote Approval Flow</div>
+          <div style="font-size:11px; color:var(--muted)">
+            Shopping agent submits → Salesforce Approval Process (ProcessInstanceWorkitem) → Merchant agent approves/rejects via /process/approvals/ REST API
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <hr class="divider" />
+
+  <!-- ══════════════════════════════════════
+       SECTION 6 — Frontend Options
+  ══════════════════════════════════════ -->
+  <div class="section">
+    <h2>Frontend Integration Options</h2>
+    <div class="three-col">
+
+      <div class="box accent-green">
+        <div class="box-title" style="color:var(--green)">React / Next.js</div>
+        <div class="box-sub">examples/*/storefront-web · port 3005</div>
+        <div class="tag-row">
+          <span class="tag green">AgentApi class</span>
+          <span class="tag green">useSession hook</span>
+          <span class="tag green">useAgentTurn hook</span>
+          <span class="tag green">SSE event stream</span>
+          <span class="tag green">UI card registry</span>
+          <span class="tag green">NEXT_PUBLIC_API_URL</span>
+        </div>
+      </div>
+
+      <div class="box accent-sf">
+        <div class="box-title" style="color:var(--sf)">Salesforce LWC</div>
+        <div class="box-sub">embed/lwc/ → Workbench deploy</div>
+        <div class="tag-row">
+          <span class="tag sky">commerceAgentPanel (merchant)</span>
+          <span class="tag sky">salesforceStorefront (buyer)</span>
+          <span class="tag sky">Named Credential → Railway</span>
+          <span class="tag sky">LiteLLM proxy → Bedrock</span>
+        </div>
+      </div>
+
+      <div class="box accent-railway">
+        <div class="box-title" style="color:var(--railway)">CLI / SDK Console</div>
+        <div class="box-sub">runtime-agent-sdk/</div>
+        <div class="tag-row">
+          <span class="tag purple">ClaudeAgentOptions</span>
+          <span class="tag purple">Interactive terminal</span>
+          <span class="tag purple">All 5 model platforms</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div><!-- /canvas -->
+
+<div style="padding:16px 48px; border-top:1px solid var(--border); font-size:11px; color:var(--muted); display:flex; justify-content:space-between;">
+  <span>Commerce Agents — Reference Architecture</span>
+  <span>shopping-agent · merchant-agent · commerce-common · examples · plugins/commerce-builder</span>
+</div>
+
+</body>
+</html>

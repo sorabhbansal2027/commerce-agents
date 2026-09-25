@@ -589,7 +589,7 @@ export default class SalesforceStorefront extends LightningElement {
     handleClose()         { this._open = false; }
     handleViewAssistant() { this._activeView = 'assistant'; }
     handleViewOrders()    { this._activeView = 'orders'; }
-    handleViewCart()      { this._activeView = 'cart'; }
+    handleViewCart()      { this._activeView = 'cart'; this._loadCart(); }
 
     // ── Handlers: home actions ─────────────────────────────────────────────────
     handleFeaturedAsk(evt) {
@@ -789,8 +789,7 @@ export default class SalesforceStorefront extends LightningElement {
             this._disableStarters(false);
             this._pendingTurnId = null;
             this._activityId    = null;
-            // Reload cart and orders so UI stays in sync
-            this._loadCart();
+            // Reload orders so UI stays in sync; cart is updated via cart_update SSE events
             this._loadOrders();
             this._scheduleRender();
         }

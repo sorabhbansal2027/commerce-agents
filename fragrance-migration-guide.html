@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Electronics → Fragrance Migration Guide</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0d1117; color: #e6edf3; }
+
+  .page { max-width: 1120px; margin: 0 auto; padding: 40px 24px 64px; }
+
+  h1 { font-size: 22px; font-weight: 700; }
+  h2 { font-size: 13px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase;
+       color: #7d8590; margin-bottom: 16px; }
+  h3 { font-size: 13px; font-weight: 600; color: #e6edf3; margin-bottom: 8px; }
+
+  .section { margin-bottom: 48px; }
+
+  .hero { text-align: center; margin-bottom: 48px; }
+  .hero p { color: #8b949e; font-size: 14px; margin-top: 6px; }
+  .badge { display: inline-block; background: #161b22; border: 1px solid #30363d;
+           border-radius: 20px; padding: 3px 10px; font-size: 11px; color: #79c0ff; margin: 0 3px; }
+  .badge.green  { color: #56d364; }
+  .badge.orange { color: #f97316; }
+  .badge.purple { color: #d2a8ff; }
+
+  /* ── effort pills ── */
+  .e-none   { background:#1a2a1a; color:#56d364; border:1px solid #1e4a1e; }
+  .e-low    { background:#001a2e; color:#79c0ff; border:1px solid #1e4976; }
+  .e-medium { background:#2d2200; color:#e3b341; border:1px solid #4a3800; }
+  .e-high   { background:#2d1000; color:#f97316; border:1px solid #5a2a00; }
+  .e-replace{ background:#2d0a2d; color:#d2a8ff; border:1px solid #4a1a4a; }
+  .e-new    { background:#001a2e; color:#58a6ff; border:1px solid #1e4976; }
+
+  .pill {
+    display: inline-block; border-radius: 5px; padding: 2px 8px;
+    font-size: 10px; font-weight: 700; white-space: nowrap;
+  }
+
+  /* ── change matrix ── */
+  .matrix { background: #161b22; border: 1px solid #30363d; border-radius: 14px; overflow: hidden; }
+  table { width: 100%; border-collapse: collapse; }
+  thead tr { background: #1c2128; }
+  th { padding: 10px 14px; font-size: 10px; font-weight: 700; text-align: left; color: #7d8590;
+       letter-spacing: .06em; text-transform: uppercase; border-bottom: 1px solid #30363d; }
+  td { padding: 10px 14px; font-size: 12px; color: #c9d1d9; border-bottom: 1px solid #21262d; vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  tbody tr:hover { background: #1c2128; }
+
+  .mono { font-family: 'Cascadia Code','Fira Code',monospace; font-size: 10px;
+          background: #0d1117; border: 1px solid #21262d; border-radius: 4px;
+          padding: 1px 5px; color: #a5b4fc; display: inline-block; }
+
+  /* ── layer cards ── */
+  .layers { display: flex; flex-direction: column; gap: 12px; }
+  .layer-card {
+    border: 1px solid #30363d; border-radius: 12px; overflow: hidden;
+  }
+  .layer-header {
+    display: flex; align-items: center; gap: 12px;
+    padding: 13px 16px; background: #1c2128; border-bottom: 1px solid #30363d;
+  }
+  .layer-num {
+    width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center;
+    justify-content: center; font-size: 11px; font-weight: 700; flex-shrink: 0;
+  }
+  .layer-title { font-size: 13px; font-weight: 700; flex: 1; }
+  .layer-body { display: grid; grid-template-columns: 1fr 1fr; gap: 0; }
+  .layer-col { padding: 14px 16px; }
+  .layer-col:first-child { border-right: 1px solid #21262d; }
+  .layer-col-label { font-size: 9px; font-weight: 700; letter-spacing: .08em;
+                     text-transform: uppercase; margin-bottom: 8px; }
+  .layer-col-label.old { color: #586069; }
+  .layer-col-label.new { color: #56d364; }
+
+  ul.diff { list-style: none; }
+  ul.diff li { font-size: 12px; padding: 3px 0; display: flex; gap: 6px; align-items: flex-start; line-height: 1.5; }
+  ul.diff li.old::before { content: '✕'; color: #f85149; flex-shrink: 0; font-size: 10px; margin-top: 2px; }
+  ul.diff li.new::before { content: '✓'; color: #56d364; flex-shrink: 0; font-size: 10px; margin-top: 2px; }
+  ul.diff li.keep::before { content: '→'; color: #8b949e; flex-shrink: 0; font-size: 10px; margin-top: 2px; }
+
+  /* ── arch comparison ── */
+  .arch-compare { display: grid; grid-template-columns: 1fr 48px 1fr; align-items: center; gap: 0; }
+  .arch-box { border-radius: 12px; border: 1px solid; overflow: hidden; }
+  .arch-box.current { border-color: #30363d; }
+  .arch-box.future  { border-color: #1e4976; }
+  .arch-box-title {
+    font-size: 11px; font-weight: 700; padding: 10px 14px;
+    border-bottom: 1px solid; letter-spacing: .06em; text-transform: uppercase;
+  }
+  .arch-box.current .arch-box-title { background: #1c2128; border-color: #30363d; color: #7d8590; }
+  .arch-box.future  .arch-box-title { background: #0d1f33; border-color: #1e4976; color: #79c0ff; }
+  .arch-layer {
+    display: flex; align-items: center; gap: 10px; padding: 10px 14px;
+    border-bottom: 1px solid #21262d; font-size: 12px;
+  }
+  .arch-layer:last-child { border-bottom: none; }
+  .arch-icon { font-size: 16px; flex-shrink: 0; }
+  .arch-name { font-weight: 600; font-size: 12px; }
+  .arch-sub  { font-size: 10px; color: #8b949e; }
+  .arch-arrow-mid { text-align: center; font-size: 22px; color: #30363d; }
+
+  /* ── google shopper section ── */
+  .shopper-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .shopper-card { background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 16px; }
+  .shopper-card-title { font-size: 12px; font-weight: 700; margin-bottom: 10px; }
+  .shopper-card.provides { border-color: #1e4976; }
+  .shopper-card.provides .shopper-card-title { color: #79c0ff; }
+  .shopper-card.you-need  { border-color: #4a3800; }
+  .shopper-card.you-need .shopper-card-title  { color: #e3b341; }
+
+  /* ── checklist ── */
+  .checklist { display: flex; flex-direction: column; gap: 8px; }
+  .check-item {
+    display: flex; gap: 12px; align-items: flex-start;
+    background: #161b22; border: 1px solid #30363d; border-radius: 10px; padding: 12px 14px;
+  }
+  .check-num {
+    width: 24px; height: 24px; border-radius: 50%; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700;
+  }
+  .check-body { flex: 1; }
+  .check-title { font-size: 12px; font-weight: 600; margin-bottom: 3px; }
+  .check-sub   { font-size: 11px; color: #8b949e; line-height: 1.5; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- HERO -->
+  <div class="hero">
+    <div style="font-size:32px; margin-bottom:10px;">🔌 → 🌸</div>
+    <h1>Electronics → Fragrance Migration Guide</h1>
+    <p>What changes, what stays, and how Google Shopper replaces the React frontend</p>
+    <div style="margin-top:12px;">
+      <span class="badge">Salesforce B2B</span>
+      <span class="badge orange">UCP layer</span>
+      <span class="badge green">Gemini agent</span>
+      <span class="badge purple">Google Shopper UI</span>
+    </div>
+  </div>
+
+  <!-- ── CHANGE MATRIX ── -->
+  <div class="section">
+    <h2>Change Matrix at a Glance</h2>
+    <div class="matrix">
+      <table>
+        <thead>
+          <tr>
+            <th>Layer</th>
+            <th>Component</th>
+            <th>Effort</th>
+            <th>What changes</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Data</strong></td>
+            <td>Salesforce B2B — Product Catalog</td>
+            <td><span class="pill e-high">HIGH</span></td>
+            <td>New product type, custom fragrance fields (notes, concentration, volume, scent family, gender), new category taxonomy, product import</td>
+          </tr>
+          <tr>
+            <td><strong>Data</strong></td>
+            <td>Salesforce B2B — Pricing &amp; Entitlement</td>
+            <td><span class="pill e-medium">MEDIUM</span></td>
+            <td>Fragrance pricing is volume-based (30ml / 50ml / 100ml SKUs); price books need restructuring</td>
+          </tr>
+          <tr>
+            <td><strong>Integration</strong></td>
+            <td>Google Merchant Center feed</td>
+            <td><span class="pill e-new">NEW</span></td>
+            <td>Product feed from Salesforce → GMC (inventory sync, price sync, fragrance-specific required attributes)</td>
+          </tr>
+          <tr>
+            <td><strong>API</strong></td>
+            <td>UCP Manifest (<span class="mono">/.well-known/ucp</span>)</td>
+            <td><span class="pill e-medium">MEDIUM</span></td>
+            <td>Update <span class="mono">business.name</span>, <span class="mono">business.description</span>, <span class="mono">agent_hints</span>; add fragrance filter capabilities to manifest</td>
+          </tr>
+          <tr>
+            <td><strong>API</strong></td>
+            <td>UCP search endpoint (<span class="mono">GET /ucp/products</span>)</td>
+            <td><span class="pill e-medium">MEDIUM</span></td>
+            <td>Add new query params: <span class="mono">scent_family</span>, <span class="mono">concentration</span>, <span class="mono">gender</span>, <span class="mono">volume_ml</span>; update product schema fields returned</td>
+          </tr>
+          <tr>
+            <td><strong>AI</strong></td>
+            <td>Gemini system prompt</td>
+            <td><span class="pill e-low">LOW</span></td>
+            <td>Auto-generated from UCP manifest — update manifest's <span class="mono">agent_hints</span> with fragrance domain knowledge (scent families, concentrations)</td>
+          </tr>
+          <tr>
+            <td><strong>AI</strong></td>
+            <td>Gemini tool definitions (<span class="mono">FunctionDeclaration</span>)</td>
+            <td><span class="pill e-low">LOW</span></td>
+            <td>Auto-built by <span class="mono">_build_tools()</span> from manifest — no manual changes; new filter params appear automatically</td>
+          </tr>
+          <tr>
+            <td><strong>Backend</strong></td>
+            <td>FastAPI server + TrackedAgent</td>
+            <td><span class="pill e-none">NONE</span></td>
+            <td>No changes — domain-neutral; serves whatever UCP returns</td>
+          </tr>
+          <tr>
+            <td><strong>Frontend</strong></td>
+            <td>React SPA (chat UI + cart sidebar)</td>
+            <td><span class="pill e-replace">REPLACED</span></td>
+            <td>Product discovery UI replaced by Google Shopper. Gemini chat widget embedded inside / alongside Google Shopper experience</td>
+          </tr>
+          <tr>
+            <td><strong>Frontend</strong></td>
+            <td>Google Shopper (out-of-box)</td>
+            <td><span class="pill e-new">NEW</span></td>
+            <td>Google Merchant Center listing, Google Shopping tab, product cards, filter UI, reviews, cart, Google Pay checkout — all provided by Google</td>
+          </tr>
+          <tr>
+            <td><strong>Infra</strong></td>
+            <td>Railway Docker container</td>
+            <td><span class="pill e-none">NONE</span></td>
+            <td>Same container, same port, same deployment — only app data changes</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── LAYER BY LAYER ── -->
+  <div class="section">
+    <h2>Layer-by-Layer: What Exactly Changes</h2>
+    <div class="layers">
+
+      <!-- Layer 1: Salesforce -->
+      <div class="layer-card">
+        <div class="layer-header">
+          <div class="layer-num" style="background:#2d0a00; border:1.5px solid #f97316; color:#f97316;">1</div>
+          <div>
+            <div class="layer-title">Salesforce B2B — Product Catalog <span class="pill e-high" style="margin-left:8px;">HIGH EFFORT</span></div>
+            <div style="font-size:11px; color:#8b949e; margin-top:2px;">All data lives here — most work is catalog migration, not code</div>
+          </div>
+        </div>
+        <div class="layer-body">
+          <div class="layer-col">
+            <div class="layer-col-label old">Electronics fields (current)</div>
+            <ul class="diff">
+              <li class="old">Processor, RAM, Storage, Display size</li>
+              <li class="old">Battery life, Connectivity (WiFi/BT)</li>
+              <li class="old">Weight, Dimensions (laptop form factor)</li>
+              <li class="old">Category: Laptops / Monitors / Accessories</li>
+              <li class="old">Warranty: 1yr / 2yr / 3yr</li>
+            </ul>
+          </div>
+          <div class="layer-col">
+            <div class="layer-col-label new">Fragrance fields (new)</div>
+            <ul class="diff">
+              <li class="new"><strong>Scent family</strong>: Floral / Woody / Oriental / Citrus / Aquatic / Chypre</li>
+              <li class="new"><strong>Concentration</strong>: EDT / EDP / Parfum / EDC / Body Mist</li>
+              <li class="new"><strong>Notes</strong>: Top / Middle / Base (e.g., Bergamot / Rose / Sandalwood)</li>
+              <li class="new"><strong>Volume</strong>: 30ml / 50ml / 75ml / 100ml / 200ml (separate SKUs)</li>
+              <li class="new"><strong>Gender target</strong>: Men / Women / Unisex</li>
+              <li class="new"><strong>Season</strong>: Spring / Summer / Autumn / Winter / Year-round</li>
+              <li class="new"><strong>Occasion</strong>: Casual / Work / Evening / Special</li>
+              <li class="new"><strong>Brand</strong>: Parfumier name / house</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <!-- Layer 2: UCP Endpoints -->
+      <div class="layer-card">
+        <div class="layer-header">
+          <div class="layer-num" style="background:#2d2200; border:1.5px solid #e3b341; color:#e3b341;">2</div>
+          <div>
+            <div class="layer-title">UCP Manifest &amp; Search Endpoint <span class="pill e-medium" style="margin-left:8px;">MEDIUM EFFORT</span></div>
+            <div style="font-size:11px; color:#8b949e; margin-top:2px;">examples/demo_common/ucp.py — add new filter params + update product schema</div>
+          </div>
+        </div>
+        <div class="layer-body">
+          <div class="layer-col">
+            <div class="layer-col-label old">Current search params</div>
+            <ul class="diff">
+              <li class="old"><span class="mono">q</span> — text search</li>
+              <li class="old"><span class="mono">category</span> — electronics category</li>
+              <li class="old"><span class="mono">min_price / max_price</span></li>
+              <li class="old"><span class="mono">in_stock</span></li>
+              <li class="old"><span class="mono">limit</span></li>
+            </ul>
+          </div>
+          <div class="layer-col">
+            <div class="layer-col-label new">Fragrance search params (add these)</div>
+            <ul class="diff">
+              <li class="keep"><span class="mono">q, min_price, max_price, in_stock, limit</span> — unchanged</li>
+              <li class="new"><span class="mono">scent_family</span> — Floral / Woody / Citrus …</li>
+              <li class="new"><span class="mono">concentration</span> — EDT / EDP / Parfum</li>
+              <li class="new"><span class="mono">gender</span> — Men / Women / Unisex</li>
+              <li class="new"><span class="mono">volume_ml</span> — 30 / 50 / 100 / 200</li>
+              <li class="new"><span class="mono">notes</span> — comma-separated scent notes</li>
+              <li class="new"><span class="mono">occasion</span> — casual / evening / work</li>
+            </ul>
+          </div>
+        </div>
+        <div style="padding:12px 16px; background:#0d1117; border-top:1px solid #21262d; font-size:11px; color:#8b949e;">
+          Also update <strong style="color:#e6edf3;">product schema</strong> returned by <span class="mono">GET /ucp/products</span>: add <span class="mono">notes</span>, <span class="mono">concentration</span>, <span class="mono">volume_ml</span>, <span class="mono">scent_family</span>, <span class="mono">gender_target</span> to each product object. The UCP manifest's <span class="mono">capabilities.product_discovery.features[]</span> list drives what <span class="mono">_build_tools()</span> exposes to Gemini — add the new filter names there.
+        </div>
+      </div>
+
+      <!-- Layer 3: Gemini Agent -->
+      <div class="layer-card">
+        <div class="layer-header">
+          <div class="layer-num" style="background:#001a2e; border:1.5px solid #58a6ff; color:#58a6ff;">3</div>
+          <div>
+            <div class="layer-title">Gemini Agent — System Prompt &amp; Tools <span class="pill e-low" style="margin-left:8px;">LOW EFFORT</span></div>
+            <div style="font-size:11px; color:#8b949e; margin-top:2px;">examples/demo_common/gemini_ucp_agent.py — prompt auto-generated from manifest; tools auto-built</div>
+          </div>
+        </div>
+        <div class="layer-body">
+          <div class="layer-col">
+            <div class="layer-col-label old">System prompt today (generated from manifest)</div>
+            <ul class="diff">
+              <li class="old">"You are a shopping assistant for ACME Electronics."</li>
+              <li class="old">Understands laptop specs, RAM, processor queries</li>
+              <li class="old">Tools: search_products(q, category, min_price, max_price)</li>
+            </ul>
+          </div>
+          <div class="layer-col">
+            <div class="layer-col-label new">After updating manifest agent_hints</div>
+            <ul class="diff">
+              <li class="new">"You are a fragrance advisor for ACME Parfums…"</li>
+              <li class="new">Understands scent families, concentrations, pairing suggestions</li>
+              <li class="new">Asks clarifying questions: "Do you prefer floral or woody?"</li>
+              <li class="new">Tools: search_products(q, scent_family, concentration, gender, …) — <strong>auto-expanded from manifest</strong></li>
+              <li class="new">Recommends complementary scents, layering tips</li>
+            </ul>
+          </div>
+        </div>
+        <div style="padding:12px 16px; background:#0d1117; border-top:1px solid #21262d; font-size:11px; color:#8b949e;">
+          Only change needed: update <span class="mono">business.name</span>, <span class="mono">business.description</span>, and <span class="mono">agent_hints</span> in <span class="mono">build_ucp_manifest()</span> in <strong style="color:#e6edf3;">ucp.py</strong>. The <span class="mono">_system_prompt()</span> and <span class="mono">_build_tools()</span> methods auto-derive everything from the manifest — no code changes in the agent.
+        </div>
+      </div>
+
+      <!-- Layer 4: FastAPI -->
+      <div class="layer-card">
+        <div class="layer-header">
+          <div class="layer-num" style="background:#1a2a1a; border:1.5px solid #56d364; color:#56d364;">4</div>
+          <div>
+            <div class="layer-title">FastAPI Server + TrackedAgent <span class="pill e-none" style="margin-left:8px;">NO CHANGE</span></div>
+            <div style="font-size:11px; color:#8b949e; margin-top:2px;">scripts/gemini_web_server.py — domain-neutral; serves whatever the UCP layer returns</div>
+          </div>
+        </div>
+        <div style="padding:14px 16px; font-size:12px; color:#c9d1d9;">
+          The FastAPI server, <span class="mono">TrackedAgent</span>, cart tracking, and all API endpoints (<span class="mono">/api/chat</span>, <span class="mono">/api/cart</span>, <span class="mono">/api/reset</span>) require <strong>zero changes</strong>. They are product-category-agnostic. The agentic loop, FunctionCall routing, and cart_additions tracking work identically for fragrances.
+        </div>
+      </div>
+
+      <!-- Layer 5: Frontend REPLACED -->
+      <div class="layer-card" style="border-color:#4a1a4a;">
+        <div class="layer-header" style="background:#1a0d1a; border-color:#4a1a4a;">
+          <div class="layer-num" style="background:#2d0a2d; border:1.5px solid #d2a8ff; color:#d2a8ff;">5</div>
+          <div>
+            <div class="layer-title">React Frontend → Google Shopper <span class="pill e-replace" style="margin-left:8px;">REPLACED</span></div>
+            <div style="font-size:11px; color:#8b949e; margin-top:2px;">examples/gemini-storefront/ replaced by Google Merchant Center + Google Shopping UI</div>
+          </div>
+        </div>
+        <div class="layer-body">
+          <div class="layer-col">
+            <div class="layer-col-label old">React SPA (removed)</div>
+            <ul class="diff">
+              <li class="old">Custom product grid cards</li>
+              <li class="old">Cart sidebar (useState)</li>
+              <li class="old">Manual filter UI</li>
+              <li class="old">Custom checkout PO flow</li>
+              <li class="old">LoginScreen + sessionStorage auth</li>
+            </ul>
+          </div>
+          <div class="layer-col">
+            <div class="layer-col-label new">Google Shopper provides out-of-box</div>
+            <ul class="diff">
+              <li class="new">Product listing with rich images, reviews, ratings</li>
+              <li class="new">Filter UI: brand, price, fragrance family, gender</li>
+              <li class="new">Google Pay / saved cards checkout</li>
+              <li class="new">Product comparison, wishlist</li>
+              <li class="new">Mobile-optimised, accessible by default</li>
+              <li class="new">Price drop alerts, stock notifications</li>
+            </ul>
+          </div>
+        </div>
+        <div style="padding:12px 16px; background:#1a0d1a; border-top:1px solid #4a1a4a; font-size:11px; color:#8b949e;">
+          <strong style="color:#d2a8ff;">Gemini chat widget survives</strong> — embed it as a floating assistant inside the Google Shopping page via an iframe or web component. It handles conversational queries ("Find something woody and sophisticated for evenings") while Google Shopper handles standard browse/filter/buy.
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── GOOGLE SHOPPER SECTION ── -->
+  <div class="section">
+    <h2>Google Shopper Out-of-Box — What It Gives You vs What You Still Build</h2>
+    <div class="shopper-grid">
+
+      <div class="shopper-card provides">
+        <div class="shopper-card-title">✅ Google Shopper provides (no code needed)</div>
+        <ul class="diff">
+          <li class="new">Product listing page with images, prices, ratings</li>
+          <li class="new">Search bar with fragrance-specific filters (once GMC attributes set up)</li>
+          <li class="new">Mobile UI, dark mode, accessibility</li>
+          <li class="new">Google Pay, saved addresses, 1-click checkout</li>
+          <li class="new">Customer reviews &amp; Q&amp;A (Google's moderation)</li>
+          <li class="new">Price comparison with other sellers</li>
+          <li class="new">Structured product data (schema.org) for SEO</li>
+          <li class="new">Buy on Google fulfilment</li>
+          <li class="new">Shopping ads (paid) + free listings</li>
+        </ul>
+      </div>
+
+      <div class="shopper-card you-need">
+        <div class="shopper-card-title">🔧 You still build / configure</div>
+        <ul class="diff">
+          <li class="new"><strong>Google Merchant Center account</strong> — register your store, verify domain</li>
+          <li class="new"><strong>Product feed</strong> — Salesforce B2B → GMC sync (inventory, prices, images in real-time). Use GMC API or a middleware like Feedonomics</li>
+          <li class="new"><strong>Fragrance-specific GMC attributes</strong>: <span class="mono">google_product_category</span> = "Health &amp; Beauty &gt; Fragrances", <span class="mono">gender</span>, <span class="mono">scent</span>, <span class="mono">item_group_id</span> per fragrance (groups volume variants)</li>
+          <li class="new"><strong>Gemini chat widget</strong> — embed as floating assistant alongside Google Shopper. Handles: "recommend a gift for my wife who likes florals"</li>
+          <li class="new"><strong>B2B checkout path</strong> — Google Shopper handles B2C. For B2B (PO numbers, account pricing), still needs your UCP / Salesforce flow</li>
+          <li class="new"><strong>Inventory webhook</strong> — Salesforce stock changes → GMC feed update (prevent selling out-of-stock)</li>
+        </ul>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── ARCHITECTURE COMPARISON ── -->
+  <div class="section">
+    <h2>Architecture: Before vs After</h2>
+    <div class="arch-compare">
+
+      <!-- CURRENT -->
+      <div class="arch-box current">
+        <div class="arch-box-title">Current — Electronics</div>
+        <div class="arch-layer">
+          <div class="arch-icon">👤</div>
+          <div><div class="arch-name">User</div><div class="arch-sub">Visits Railway URL</div></div>
+        </div>
+        <div class="arch-layer" style="background:#0d1f33;">
+          <div class="arch-icon">⚛️</div>
+          <div><div class="arch-name" style="color:#79c0ff;">React SPA</div><div class="arch-sub">Chat + product grid + cart sidebar</div></div>
+        </div>
+        <div class="arch-layer">
+          <div class="arch-icon">⚡</div>
+          <div><div class="arch-name">FastAPI</div><div class="arch-sub">POST /api/chat · /api/cart</div></div>
+        </div>
+        <div class="arch-layer">
+          <div class="arch-icon">🤖</div>
+          <div><div class="arch-name">Gemini API</div><div class="arch-sub">Electronics shopping assistant</div></div>
+        </div>
+        <div class="arch-layer">
+          <div class="arch-icon">🔗</div>
+          <div><div class="arch-name">UCP Endpoints</div><div class="arch-sub">q, category, min_price, max_price</div></div>
+        </div>
+        <div class="arch-layer">
+          <div class="arch-icon">☁️</div>
+          <div><div class="arch-name">Salesforce B2B</div><div class="arch-sub">Electronics catalog · Orders</div></div>
+        </div>
+      </div>
+
+      <div class="arch-arrow-mid">→</div>
+
+      <!-- FUTURE -->
+      <div class="arch-box future">
+        <div class="arch-box-title">After — Fragrance + Google Shopper</div>
+        <div class="arch-layer">
+          <div class="arch-icon">👤</div>
+          <div><div class="arch-name">User</div><div class="arch-sub">Visits Google Shopping page</div></div>
+        </div>
+        <div class="arch-layer" style="background:#1a1500;">
+          <div class="arch-icon">🛍️</div>
+          <div>
+            <div class="arch-name" style="color:#e3b341;">Google Shopper UI <span class="pill e-new" style="font-size:9px; margin-left:6px;">NEW</span></div>
+            <div class="arch-sub">Product grid, filters, reviews, Google Pay</div>
+          </div>
+        </div>
+        <div class="arch-layer" style="background:#0d1f0d;">
+          <div class="arch-icon">💬</div>
+          <div>
+            <div class="arch-name" style="color:#56d364;">Gemini Chat Widget <span class="pill e-low" style="font-size:9px; margin-left:6px;">EMBED</span></div>
+            <div class="arch-sub">Floating advisor — conversational fragrance help</div>
+          </div>
+        </div>
+        <div class="arch-layer">
+          <div class="arch-icon">⚡</div>
+          <div><div class="arch-name">FastAPI</div><div class="arch-sub">Unchanged — same endpoints</div></div>
+        </div>
+        <div class="arch-layer">
+          <div class="arch-icon">🤖</div>
+          <div><div class="arch-name">Gemini API</div><div class="arch-sub">Fragrance advisor (updated agent_hints)</div></div>
+        </div>
+        <div class="arch-layer">
+          <div class="arch-icon">🔗</div>
+          <div>
+            <div class="arch-name">UCP Endpoints <span class="pill e-medium" style="font-size:9px; margin-left:6px;">UPDATED</span></div>
+            <div class="arch-sub">+scent_family, concentration, gender, volume_ml</div>
+          </div>
+        </div>
+        <div class="arch-layer" style="background:#1a0d1a;">
+          <div class="arch-icon">☁️</div>
+          <div>
+            <div class="arch-name" style="color:#d2a8ff;">Salesforce B2B <span class="pill e-high" style="font-size:9px; margin-left:6px;">MIGRATED</span></div>
+            <div class="arch-sub">Fragrance catalog · Volume SKUs · Orders</div>
+          </div>
+        </div>
+        <div class="arch-layer" style="background:#1a1500;">
+          <div class="arch-icon">📦</div>
+          <div>
+            <div class="arch-name" style="color:#e3b341;">Google Merchant Center <span class="pill e-new" style="font-size:9px; margin-left:6px;">NEW</span></div>
+            <div class="arch-sub">Product feed sync from Salesforce · GMC attributes</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── MIGRATION CHECKLIST ── -->
+  <div class="section">
+    <h2>Migration Steps — In Order</h2>
+    <div class="checklist">
+
+      <div class="check-item">
+        <div class="check-num" style="background:#2d0a00; border:1.5px solid #f97316; color:#f97316;">1</div>
+        <div class="check-body">
+          <div class="check-title">Create fragrance product schema in Salesforce B2B</div>
+          <div class="check-sub">Add custom fields to <span class="mono">Product2</span>: <span class="mono">Scent_Family__c</span>, <span class="mono">Concentration__c</span>, <span class="mono">Top_Notes__c</span>, <span class="mono">Middle_Notes__c</span>, <span class="mono">Base_Notes__c</span>, <span class="mono">Volume_ML__c</span>, <span class="mono">Gender_Target__c</span>. Create new product categories under B2B catalog.</div>
+        </div>
+      </div>
+
+      <div class="check-item">
+        <div class="check-num" style="background:#2d0a00; border:1.5px solid #f97316; color:#f97316;">2</div>
+        <div class="check-body">
+          <div class="check-title">Import fragrance product catalog into Salesforce</div>
+          <div class="check-sub">Load products via Data Loader or Bulk API. Each fragrance needs SKUs per volume (30ml, 50ml, 100ml). Set up <span class="mono">PricebookEntry</span> per volume. Upload product images to CMS.</div>
+        </div>
+      </div>
+
+      <div class="check-item">
+        <div class="check-num" style="background:#2d2200; border:1.5px solid #e3b341; color:#e3b341;">3</div>
+        <div class="check-body">
+          <div class="check-title">Update UCP manifest in ucp.py</div>
+          <div class="check-sub">Change <span class="mono">business.name</span> → "ACME Parfums", <span class="mono">business.description</span> → fragrance store description, <span class="mono">agent_hints</span> → fragrance advisor persona. Add <span class="mono">"scent_family_filter"</span>, <span class="mono">"concentration_filter"</span>, <span class="mono">"gender_filter"</span> to <span class="mono">capabilities.product_discovery.features[]</span>.</div>
+        </div>
+      </div>
+
+      <div class="check-item">
+        <div class="check-num" style="background:#2d2200; border:1.5px solid #e3b341; color:#e3b341;">4</div>
+        <div class="check-body">
+          <div class="check-title">Add new query params to GET /ucp/products</div>
+          <div class="check-sub">Add <span class="mono">scent_family</span>, <span class="mono">concentration</span>, <span class="mono">gender</span>, <span class="mono">volume_ml</span>, <span class="mono">notes</span> as optional FastAPI query params. Update the filter logic to read new Salesforce custom fields. Update product response schema to include these fields.</div>
+        </div>
+      </div>
+
+      <div class="check-item">
+        <div class="check-num" style="background:#001a2e; border:1.5px solid #58a6ff; color:#58a6ff;">5</div>
+        <div class="check-body">
+          <div class="check-title">Set up Google Merchant Center account</div>
+          <div class="check-sub">Create GMC account, verify domain, agree to Google Shopping policies. Set up product feed: <span class="mono">google_product_category = 2388</span> (Fragrances). Required attributes: <span class="mono">id</span>, <span class="mono">title</span>, <span class="mono">description</span>, <span class="mono">link</span>, <span class="mono">image_link</span>, <span class="mono">price</span>, <span class="mono">brand</span>, <span class="mono">gtin</span>, <span class="mono">gender</span>, <span class="mono">scent</span>. Group volume variants with <span class="mono">item_group_id</span>.</div>
+        </div>
+      </div>
+
+      <div class="check-item">
+        <div class="check-num" style="background:#001a2e; border:1.5px solid #58a6ff; color:#58a6ff;">6</div>
+        <div class="check-body">
+          <div class="check-title">Build Salesforce → GMC product feed sync</div>
+          <div class="check-sub">Options: (a) scheduled export from Salesforce → GMC Content API; (b) middleware like Feedonomics or GoDataFeed; (c) Salesforce Commerce Cloud connector if on SFCC. Sync must propagate price changes and stock changes within 30 mins to avoid GMC penalties.</div>
+        </div>
+      </div>
+
+      <div class="check-item">
+        <div class="check-num" style="background:#1a2a1a; border:1.5px solid #56d364; color:#56d364;">7</div>
+        <div class="check-body">
+          <div class="check-title">Embed Gemini chat widget alongside Google Shopper</div>
+          <div class="check-sub">The FastAPI server + Gemini agent stays on Railway unchanged. Embed as a floating chat button on your store landing page using an iframe pointing to the Railway URL. Wire the iframe so clicking a Gemini-recommended product deep-links into the Google Shopper product page.</div>
+        </div>
+      </div>
+
+      <div class="check-item">
+        <div class="check-num" style="background:#1a2a1a; border:1.5px solid #56d364; color:#56d364;">8</div>
+        <div class="check-body">
+          <div class="check-title">Test &amp; validate end-to-end</div>
+          <div class="check-sub">Smoke test: "Find a woody EDP for men under $80" → Gemini should call <span class="mono">search_products(scent_family="woody", concentration="EDP", gender="men", max_price=80)</span> → UCP queries Salesforce → returns fragrance products. Confirm GMC feed shows correct prices and inventory. Place a test order through both paths (Gemini → UCP → Salesforce, and Google Pay checkout).</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- SUMMARY STRIP -->
+  <div style="background:#161b22; border:1px solid #30363d; border-radius:12px; padding:16px 20px; display:flex; flex-wrap:wrap; gap:16px; align-items:flex-start;">
+    <div style="flex:1; min-width:200px;">
+      <div style="font-size:11px; font-weight:700; color:#7d8590; text-transform:uppercase; letter-spacing:.06em; margin-bottom:6px;">Zero code changes</div>
+      <div style="font-size:12px; color:#c9d1d9;">FastAPI server, TrackedAgent, agentic loop, Railway deploy, Docker container</div>
+    </div>
+    <div style="flex:1; min-width:200px;">
+      <div style="font-size:11px; font-weight:700; color:#e3b341; text-transform:uppercase; letter-spacing:.06em; margin-bottom:6px;">Config / minor code</div>
+      <div style="font-size:12px; color:#c9d1d9;">UCP manifest fields, new search params in ucp.py, agent_hints text</div>
+    </div>
+    <div style="flex:1; min-width:200px;">
+      <div style="font-size:11px; font-weight:700; color:#f97316; text-transform:uppercase; letter-spacing:.06em; margin-bottom:6px;">Heavy lift</div>
+      <div style="font-size:12px; color:#c9d1d9;">Salesforce product schema + catalog migration, GMC account + feed sync</div>
+    </div>
+    <div style="flex:1; min-width:200px;">
+      <div style="font-size:11px; font-weight:700; color:#d2a8ff; text-transform:uppercase; letter-spacing:.06em; margin-bottom:6px;">Replaced by Google</div>
+      <div style="font-size:12px; color:#c9d1d9;">React SPA product grid, cart sidebar, filter UI — Google Shopper takes over</div>
+    </div>
+  </div>
+
+  <div style="text-align:center; color:#586069; font-size:11px; margin-top:24px;">
+    commerce-agents · Electronics → Fragrance migration · Google Shopper integration
+  </div>
+
+</div>
+</body>
+</html>

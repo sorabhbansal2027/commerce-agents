@@ -1,0 +1,1046 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Enterprise Agentic Commerce — Architecture</title>
+<style>
+:root{
+  --navy:#0f1e3d;--navy2:#162448;--navy3:#1e3461;
+  --ink:#1a2035;--ink2:#4b5a7a;--ink3:#8b9abf;
+  --bg:#f0f3fa;--card:#fff;--line:#dde3f0;
+  --blue:#2563eb;--blue-lt:#eff6ff;--blue-bd:#bfdbfe;
+  --green:#16a34a;--green-lt:#f0fdf4;--green-bd:#bbf7d0;
+  --purple:#7c3aed;--purple-lt:#f5f3ff;--purple-bd:#c4b5fd;
+  --amber:#d97706;--amber-lt:#fffbeb;--amber-bd:#fcd34d;
+  --red:#dc2626;--red-lt:#fef2f2;--red-bd:#fca5a5;
+  --teal:#0d9488;--teal-lt:#f0fdfa;--teal-bd:#99f6e4;
+  --slate:#475569;--slate-lt:#f8fafc;--slate-bd:#cbd5e1;
+  --r:10px;
+  --zone-buyer:#1e3461;--zone-gateway:#0d3d2e;--zone-ai:#2d1854;--zone-integration:#1a2e1a;--zone-backend:#3d2400;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--ink);line-height:1.6}
+
+/* ── Header ── */
+.hdr{background:linear-gradient(135deg,#0a1628 0%,#0f2449 50%,#091d3d 100%);color:#fff;padding:32px 48px 28px;position:relative;overflow:hidden}
+.hdr::before{content:'';position:absolute;top:-60px;right:-60px;width:400px;height:400px;border-radius:50%;background:radial-gradient(circle,rgba(37,99,235,.15) 0%,transparent 70%)}
+.hdr-inner{max-width:1200px;margin:0 auto;position:relative}
+.hdr-eyebrow{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;opacity:.5;margin-bottom:8px}
+.hdr h1{font-size:26px;font-weight:800;letter-spacing:-.02em;margin-bottom:6px;line-height:1.2}
+.hdr p{font-size:14px;opacity:.65;max-width:680px;line-height:1.5}
+.hdr-meta{display:flex;gap:20px;margin-top:16px;flex-wrap:wrap}
+.hdr-stat{display:flex;flex-direction:column;gap:2px}
+.hdr-stat .num{font-size:20px;font-weight:800;color:#60a5fa}
+.hdr-stat .lbl{font-size:10px;text-transform:uppercase;letter-spacing:.06em;opacity:.5}
+.hdr-tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:14px}
+.htag{font-size:10px;font-weight:700;padding:3px 9px;border-radius:20px;border:1px solid rgba(255,255,255,.15);color:rgba(255,255,255,.7);letter-spacing:.02em}
+
+/* ── Tabs ── */
+.tabs-wrap{background:#fff;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:20;box-shadow:0 1px 4px rgba(0,0,0,.06)}
+.tabs{max-width:1200px;margin:0 auto;display:flex;gap:0;overflow-x:auto;padding:0 48px}
+.tab{padding:13px 20px;font-size:13px;font-weight:500;color:var(--ink2);cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;transition:all .15s;flex-shrink:0}
+.tab:hover{color:var(--navy)}
+.tab.on{color:var(--navy);border-color:var(--navy);font-weight:600}
+
+/* ── Content ── */
+.body{max-width:1200px;margin:0 auto;padding:32px 48px 80px}
+.page{display:none}.page.on{display:block}
+
+/* ── Section heading ── */
+.sh{margin-bottom:6px;font-size:17px;font-weight:700;color:var(--ink)}
+.ss{font-size:13px;color:var(--ink2);margin-bottom:24px;max-width:720px}
+
+/* ── Zone SVG card ── */
+.svgcard{background:var(--card);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;margin-bottom:28px;box-shadow:0 2px 8px rgba(0,0,0,.04)}
+.svgcard svg{display:block;width:100%;height:auto}
+
+/* ── Info grid ── */
+.igrid{display:grid;gap:14px;margin-bottom:28px}
+.igrid-2{grid-template-columns:1fr 1fr}
+.igrid-3{grid-template-columns:1fr 1fr 1fr}
+.igrid-4{grid-template-columns:1fr 1fr 1fr 1fr}
+.icard{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:16px 18px}
+.icard-head{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.icard-ico{width:28px;height:28px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0}
+.icard h3{font-size:13px;font-weight:700;color:var(--ink)}
+.icard ul{padding-left:14px;font-size:12.5px;color:var(--ink2);line-height:1.7}
+.icard p{font-size:12.5px;color:var(--ink2);line-height:1.6}
+
+/* ── Pill / badge ── */
+.pill{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:20px;line-height:1.4}
+.p-blue{background:var(--blue-lt);color:var(--blue);border:1px solid var(--blue-bd)}
+.p-green{background:var(--green-lt);color:var(--green);border:1px solid var(--green-bd)}
+.p-purple{background:var(--purple-lt);color:var(--purple);border:1px solid var(--purple-bd)}
+.p-amber{background:var(--amber-lt);color:var(--amber);border:1px solid var(--amber-bd)}
+.p-red{background:var(--red-lt);color:var(--red);border:1px solid var(--red-bd)}
+.p-teal{background:var(--teal-lt);color:var(--teal);border:1px solid var(--teal-bd)}
+
+/* ── Table ── */
+table{width:100%;border-collapse:collapse;font-size:12.5px;margin-bottom:20px}
+th{background:#f8fafc;text-align:left;padding:9px 12px;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink2);border-bottom:1px solid var(--line)}
+td{padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top;line-height:1.5}
+tr:last-child td{border-bottom:none}
+
+/* ── Code block ── */
+.code{background:#0d1117;color:#e6edf3;font-family:"SF Mono","Fira Code",monospace;font-size:11.5px;padding:14px 18px;border-radius:8px;overflow:auto;line-height:1.8;margin-bottom:12px}
+.c-comment{color:#6e7681}.c-key{color:#79c0ff}.c-val{color:#a5d6ff}.c-str{color:#a8ff78}.c-kw{color:#ff7b72}
+
+/* ── Flow steps ── */
+.flow{display:flex;flex-direction:column;gap:0;margin-bottom:24px}
+.fstep{display:flex;gap:14px;position:relative}
+.fstep:not(:last-child)::before{content:'';position:absolute;left:15px;top:34px;bottom:0;width:1px;background:var(--line)}
+.fnum{width:31px;height:31px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;z-index:1}
+.fbody{flex:1;padding-bottom:18px}
+.fbody h4{font-size:13px;font-weight:600;margin-bottom:4px}
+.fbody p{font-size:12.5px;color:var(--ink2);line-height:1.5}
+
+/* ── Divider ── */
+.divider{border:none;border-top:1px solid var(--line);margin:24px 0}
+
+/* ── Legend row ── */
+.legend{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:20px}
+.litem{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--ink2)}
+.ldot{width:11px;height:11px;border-radius:3px;flex-shrink:0}
+
+/* ── Compliance badge row ── */
+.comp-row{display:flex;gap:10px;flex-wrap:wrap;margin:16px 0 24px}
+.comp-badge{background:#0f1e3d;color:#93c5fd;font-size:10px;font-weight:700;padding:5px 12px;border-radius:6px;letter-spacing:.04em;border:1px solid rgba(147,197,253,.2)}
+
+/* ── Capability matrix ── */
+.cap-matrix{background:var(--card);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;margin-bottom:28px}
+.cap-head{background:#f8fafc;padding:10px 16px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink2);border-bottom:1px solid var(--line)}
+.cap-row{display:grid;grid-template-columns:200px 1fr 1fr 1fr;border-bottom:1px solid var(--line)}
+.cap-row:last-child{border-bottom:none}
+.cap-cell{padding:10px 14px;font-size:12px;color:var(--ink2)}
+.cap-cell.label{font-weight:600;color:var(--ink);background:#fafbfc;border-right:1px solid var(--line)}
+.cap-check{color:var(--green);font-size:14px}
+.cap-dash{color:var(--ink3)}
+.cap-partial{color:var(--amber)}
+
+@media(max-width:900px){
+  .body{padding:20px}
+  .igrid-3,.igrid-4{grid-template-columns:1fr 1fr}
+  .igrid-2{grid-template-columns:1fr}
+  .tabs{padding:0 16px}
+}
+</style>
+</head>
+<body>
+
+<!-- ═══ HEADER ═══ -->
+<div class="hdr">
+  <div class="hdr-inner">
+    <div class="hdr-eyebrow">Enterprise Reference Architecture</div>
+    <h1>Agentic B2B Commerce Platform</h1>
+    <p>Multi-channel, protocol-agnostic AI commerce platform connecting enterprise buyers, merchants, and AI agents through a unified backend — deployed on Salesforce, Railway, and AWS.</p>
+    <div class="hdr-meta">
+      <div class="hdr-stat"><span class="num">5</span><span class="lbl">Channels</span></div>
+      <div class="hdr-stat"><span class="num">4</span><span class="lbl">Verticals</span></div>
+      <div class="hdr-stat"><span class="num">2</span><span class="lbl">Agent Roles</span></div>
+      <div class="hdr-stat"><span class="num">15</span><span class="lbl">AI Skills</span></div>
+      <div class="hdr-stat"><span class="num">3</span><span class="lbl">Runtime Paths</span></div>
+      <div class="hdr-stat"><span class="num">99.9%</span><span class="lbl">SLA Target</span></div>
+    </div>
+    <div class="hdr-tags">
+      <span class="htag">Claude (Anthropic)</span>
+      <span class="htag">Gemini (Google)</span>
+      <span class="htag">Salesforce OMS</span>
+      <span class="htag">UCP · MCP · REST</span>
+      <span class="htag">Railway · AWS · Bedrock</span>
+      <span class="htag">SOC 2 Ready</span>
+      <span class="htag">Zero-Trust Security</span>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ TABS ═══ -->
+<div class="tabs-wrap">
+  <div class="tabs">
+    <div class="tab on" onclick="show('overview',this)">Enterprise Overview</div>
+    <div class="tab" onclick="show('zones',this)">Architecture Zones</div>
+    <div class="tab" onclick="show('security',this)">Security &amp; Compliance</div>
+    <div class="tab" onclick="show('deployment',this)">Deployment &amp; HA</div>
+    <div class="tab" onclick="show('integration',this)">Integration Patterns</div>
+    <div class="tab" onclick="show('operations',this)">Operations &amp; Governance</div>
+  </div>
+</div>
+
+<div class="body">
+
+<!-- ═══════════════════════ OVERVIEW ═══════════════════════ -->
+<div id="overview" class="page on">
+  <div class="sh">Enterprise System Context</div>
+  <div class="ss">How the Agentic Commerce Platform sits within the enterprise landscape — connecting buyer channels, AI agents, and back-office systems through governed protocol standards.</div>
+
+  <div class="svgcard">
+    <svg viewBox="0 0 1100 660" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif">
+      <rect width="1100" height="660" fill="#f0f3fa"/>
+
+      <!-- Enterprise perimeter -->
+      <rect x="10" y="8" width="1080" height="644" rx="12" fill="none" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="6,3"/>
+      <text x="22" y="26" font-size="10" fill="#94a3b8" font-weight="700" letter-spacing=".05em">ENTERPRISE BOUNDARY</text>
+
+      <!-- ── ZONE 1: Channels ── -->
+      <rect x="24" y="34" width="1052" height="118" rx="8" fill="#0f172a" opacity=".96"/>
+      <text x="42" y="56" font-size="10" fill="#60a5fa" font-weight="700" letter-spacing=".07em">CONSUMER CHANNELS</text>
+
+      <!-- B2B Buyer Web -->
+      <rect x="44" y="64" width="148" height="72" rx="7" fill="#1e3a5f" stroke="#3b82f6" stroke-width="1"/>
+      <text x="118" y="85" text-anchor="middle" font-size="11" fill="#93c5fd" font-weight="700">Next.js Headless</text>
+      <text x="118" y="99" text-anchor="middle" font-size="9" fill="#60a5fa">B2B Buyer Storefront</text>
+      <text x="118" y="112" text-anchor="middle" font-size="9" fill="#3b82f6">4 Verticals · Ports 3001-3005</text>
+      <text x="118" y="124" text-anchor="middle" font-size="8.5" fill="#1d4ed8">Streaming SSE · Generative UI</text>
+
+      <!-- Salesforce LWC -->
+      <rect x="206" y="64" width="148" height="72" rx="7" fill="#3d2400" stroke="#f59e0b" stroke-width="1"/>
+      <text x="280" y="85" text-anchor="middle" font-size="11" fill="#fbbf24" font-weight="700">Salesforce LWC</text>
+      <text x="280" y="99" text-anchor="middle" font-size="9" fill="#f59e0b">Merchant Portal + Buyer Panel</text>
+      <text x="280" y="112" text-anchor="middle" font-size="9" fill="#d97706">Apex Callouts · Named Cred</text>
+      <text x="280" y="124" text-anchor="middle" font-size="8.5" fill="#92400e">Quote Approvals · Order Mgmt</text>
+
+      <!-- UCP Agents -->
+      <rect x="368" y="64" width="148" height="72" rx="7" fill="#2d1854" stroke="#8b5cf6" stroke-width="1"/>
+      <text x="442" y="85" text-anchor="middle" font-size="11" fill="#c4b5fd" font-weight="700">UCP AI Agents</text>
+      <text x="442" y="99" text-anchor="middle" font-size="9" fill="#a78bfa">Gemini 3.6 Flash · GPT-4o</text>
+      <text x="442" y="112" text-anchor="middle" font-size="9" fill="#8b5cf6">Auto-discover via /.well-known/ucp</text>
+      <text x="442" y="124" text-anchor="middle" font-size="8.5" fill="#6d28d9">Procurement bots · Custom agents</text>
+
+      <!-- MCP Apps -->
+      <rect x="530" y="64" width="148" height="72" rx="7" fill="#0d3d2e" stroke="#34d399" stroke-width="1"/>
+      <text x="604" y="85" text-anchor="middle" font-size="11" fill="#6ee7b7" font-weight="700">MCP Apps (Claude)</text>
+      <text x="604" y="99" text-anchor="middle" font-size="9" fill="#34d399">SEP-1865 · ui:// resources</text>
+      <text x="604" y="112" text-anchor="middle" font-size="9" fill="#10b981">Product grid iframe in chat</text>
+      <text x="604" y="124" text-anchor="middle" font-size="8.5" fill="#065f46">postMessage bridge · 1-click cart</text>
+
+      <!-- Claude Code Plugin -->
+      <rect x="692" y="64" width="148" height="72" rx="7" fill="#0d2d3d" stroke="#22d3ee" stroke-width="1"/>
+      <text x="766" y="85" text-anchor="middle" font-size="11" fill="#67e8f9" font-weight="700">Claude Code Plugin</text>
+      <text x="766" y="99" text-anchor="middle" font-size="9" fill="#22d3ee">commerce-builder · 6 skills</text>
+      <text x="766" y="112" text-anchor="middle" font-size="9" fill="#0e7490">Scaffold · Review · Add-flow</text>
+      <text x="766" y="124" text-anchor="middle" font-size="8.5" fill="#0c4a6e">Developer portal integration</text>
+
+      <!-- Partner REST API -->
+      <rect x="854" y="64" width="200" height="72" rx="7" fill="#1a1f2e" stroke="#64748b" stroke-width="1"/>
+      <text x="954" y="85" text-anchor="middle" font-size="11" fill="#94a3b8" font-weight="700">Partner / REST API</text>
+      <text x="954" y="99" text-anchor="middle" font-size="9" fill="#64748b">ERP · WMS · 3PL connectors</text>
+      <text x="954" y="112" text-anchor="middle" font-size="9" fill="#475569">Webhook receivers · OAuth2</text>
+      <text x="954" y="124" text-anchor="middle" font-size="8.5" fill="#334155">API versioning · Rate-limited</text>
+
+      <!-- ── ZONE 2: Gateway ── -->
+      <rect x="24" y="162" width="1052" height="76" rx="8" fill="#0d3322" opacity=".97"/>
+      <text x="42" y="181" font-size="10" fill="#34d399" font-weight="700" letter-spacing=".07em">SECURITY &amp; API GATEWAY ZONE</text>
+
+      <rect x="44" y="186" width="120" height="40" rx="6" fill="#064e3b" stroke="#059669" stroke-width="1"/>
+      <text x="104" y="204" text-anchor="middle" font-size="9.5" fill="#6ee7b7" font-weight="600">WAF + DDoS</text>
+      <text x="104" y="218" text-anchor="middle" font-size="8.5" fill="#34d399">Cloudflare / AWS Shield</text>
+
+      <rect x="175" y="186" width="120" height="40" rx="6" fill="#064e3b" stroke="#059669" stroke-width="1"/>
+      <text x="235" y="204" text-anchor="middle" font-size="9.5" fill="#6ee7b7" font-weight="600">API Gateway</text>
+      <text x="235" y="218" text-anchor="middle" font-size="8.5" fill="#34d399">Rate limit · Versioning · CORS</text>
+
+      <rect x="306" y="186" width="120" height="40" rx="6" fill="#064e3b" stroke="#059669" stroke-width="1"/>
+      <text x="366" y="204" text-anchor="middle" font-size="9.5" fill="#6ee7b7" font-weight="600">IAM / OAuth 2.0</text>
+      <text x="366" y="218" text-anchor="middle" font-size="8.5" fill="#34d399">JWT · RBAC · SAML 2.0</text>
+
+      <rect x="437" y="186" width="120" height="40" rx="6" fill="#064e3b" stroke="#059669" stroke-width="1"/>
+      <text x="497" y="204" text-anchor="middle" font-size="9.5" fill="#6ee7b7" font-weight="600">CDN / Edge Cache</text>
+      <text x="497" y="218" text-anchor="middle" font-size="8.5" fill="#34d399">Static assets · API responses</text>
+
+      <rect x="568" y="186" width="130" height="40" rx="6" fill="#064e3b" stroke="#059669" stroke-width="1"/>
+      <text x="633" y="204" text-anchor="middle" font-size="9.5" fill="#6ee7b7" font-weight="600">Audit Logger</text>
+      <text x="633" y="218" text-anchor="middle" font-size="8.5" fill="#34d399">Every request · Immutable log</text>
+
+      <rect x="709" y="186" width="130" height="40" rx="6" fill="#064e3b" stroke="#059669" stroke-width="1"/>
+      <text x="774" y="204" text-anchor="middle" font-size="9.5" fill="#6ee7b7" font-weight="600">TLS 1.3 Termination</text>
+      <text x="774" y="218" text-anchor="middle" font-size="8.5" fill="#34d399">mTLS for service-to-service</text>
+
+      <rect x="850" y="186" width="200" height="40" rx="6" fill="#064e3b" stroke="#059669" stroke-width="1"/>
+      <text x="950" y="204" text-anchor="middle" font-size="9.5" fill="#6ee7b7" font-weight="600">LiteLLM Proxy (optional)</text>
+      <text x="950" y="218" text-anchor="middle" font-size="8.5" fill="#34d399">AWS Bedrock · Azure OpenAI · Direct API</text>
+
+      <!-- ── ZONE 3: AI Platform ── -->
+      <rect x="24" y="248" width="1052" height="142" rx="8" fill="#1e0842" opacity=".97"/>
+      <text x="42" y="268" font-size="10" fill="#a78bfa" font-weight="700" letter-spacing=".07em">AI AGENT PLATFORM (CLAUDE)</text>
+
+      <!-- Shopping agent -->
+      <rect x="44" y="276" width="230" height="100" rx="7" fill="#2d1260" stroke="#7c3aed" stroke-width="1.2"/>
+      <text x="159" y="296" text-anchor="middle" font-size="11" fill="#c4b5fd" font-weight="700">Shopping Agent</text>
+      <text x="159" y="312" text-anchor="middle" font-size="9" fill="#a78bfa">search · cart · checkout · orders</text>
+      <text x="159" y="326" text-anchor="middle" font-size="9" fill="#8b5cf6">10 skills: purchase-research, quote-mgmt</text>
+      <text x="159" y="340" text-anchor="middle" font-size="9" fill="#6d28d9">approval-workflow, subscriptions, …</text>
+      <text x="159" y="356" text-anchor="middle" font-size="8.5" fill="#5b21b6">3 paths: Messages API · SDK · Managed</text>
+      <text x="159" y="368" text-anchor="middle" font-size="8.5" fill="#4c1d95">Provenance gated · checkout: no-charge</text>
+
+      <!-- Merchant agent -->
+      <rect x="286" y="276" width="230" height="100" rx="7" fill="#2d1260" stroke="#7c3aed" stroke-width="1.2"/>
+      <text x="401" y="296" text-anchor="middle" font-size="11" fill="#c4b5fd" font-weight="700">Merchant Agent</text>
+      <text x="401" y="312" text-anchor="middle" font-size="9" fill="#a78bfa">analyze · price · campaign · inventory</text>
+      <text x="401" y="326" text-anchor="middle" font-size="9" fill="#8b5cf6">5 skills: catalog, inventory-ops</text>
+      <text x="401" y="340" text-anchor="middle" font-size="9" fill="#6d28d9">performance-insights, pricing-promos, …</text>
+      <text x="401" y="356" text-anchor="middle" font-size="8.5" fill="#5b21b6">Change proposals: apply / discard</text>
+      <text x="401" y="368" text-anchor="middle" font-size="8.5" fill="#4c1d95">Scheduled digest · Analysis delegate</text>
+
+      <!-- Commerce Common -->
+      <rect x="528" y="276" width="200" height="100" rx="7" fill="#1e0d40" stroke="#6d28d9" stroke-width="1"/>
+      <text x="628" y="296" text-anchor="middle" font-size="11" fill="#ddd6fe" font-weight="700">commerce-common</text>
+      <text x="628" y="312" text-anchor="middle" font-size="9" fill="#a78bfa">fencing · grounding · manifest</text>
+      <text x="628" y="326" text-anchor="middle" font-size="9" fill="#8b5cf6">memory · skills · streaming</text>
+      <text x="628" y="340" text-anchor="middle" font-size="9" fill="#6d28d9">presentation · execution · turn</text>
+      <text x="628" y="356" text-anchor="middle" font-size="8.5" fill="#5b21b6">JsonFileMemory · InMemoryStore</text>
+      <text x="628" y="368" text-anchor="middle" font-size="8.5" fill="#4c1d95">One model owns the conversation</text>
+
+      <!-- Claude AI -->
+      <rect x="740" y="276" width="190" height="100" rx="7" fill="#1a0e35" stroke="#4c1d95" stroke-width="1"/>
+      <text x="835" y="296" text-anchor="middle" font-size="11" fill="#ddd6fe" font-weight="700">Claude AI Model</text>
+      <text x="835" y="312" text-anchor="middle" font-size="9" fill="#a78bfa">claude-sonnet-4-x (latest)</text>
+      <text x="835" y="326" text-anchor="middle" font-size="9" fill="#8b5cf6">Anthropic API · Prompt caching</text>
+      <text x="835" y="340" text-anchor="middle" font-size="9" fill="#6d28d9">Static prompt + per-request fence</text>
+      <text x="835" y="356" text-anchor="middle" font-size="8.5" fill="#5b21b6">Same bytes every turn</text>
+      <text x="835" y="368" text-anchor="middle" font-size="8.5" fill="#4c1d95">Tool descriptions · Skill routing</text>
+
+      <!-- Safety controller -->
+      <rect x="940" y="276" width="128" height="100" rx="7" fill="#1a0e35" stroke="#7c3aed" stroke-width="1" stroke-dasharray="4,2"/>
+      <text x="1004" y="296" text-anchor="middle" font-size="10.5" fill="#c4b5fd" font-weight="700">Safety Gates</text>
+      <text x="1004" y="312" text-anchor="middle" font-size="8.5" fill="#a78bfa">write caps enforced</text>
+      <text x="1004" y="326" text-anchor="middle" font-size="8.5" fill="#8b5cf6">provenance check</text>
+      <text x="1004" y="340" text-anchor="middle" font-size="8.5" fill="#6d28d9">host approval</text>
+      <text x="1004" y="354" text-anchor="middle" font-size="8.5" fill="#5b21b6">3rd-party fenced</text>
+      <text x="1004" y="368" text-anchor="middle" font-size="8.5" fill="#4c1d95">no-charge checkout</text>
+
+      <!-- ── ZONE 4: Integration ── -->
+      <rect x="24" y="400" width="1052" height="80" rx="8" fill="#0a2010" opacity=".97"/>
+      <text x="42" y="420" font-size="10" fill="#86efac" font-weight="700" letter-spacing=".07em">INTEGRATION &amp; PROTOCOL ZONE</text>
+
+      <rect x="44" y="428" width="170" height="40" rx="6" fill="#052e16" stroke="#22c55e" stroke-width="1"/>
+      <text x="129" y="444" text-anchor="middle" font-size="9.5" fill="#86efac" font-weight="600">UCP REST Gateway</text>
+      <text x="129" y="458" text-anchor="middle" font-size="8.5" fill="#4ade80">/.well-known/ucp · 5 endpoints</text>
+
+      <rect x="226" y="428" width="170" height="40" rx="6" fill="#052e16" stroke="#22c55e" stroke-width="1"/>
+      <text x="311" y="444" text-anchor="middle" font-size="9.5" fill="#86efac" font-weight="600">MCP Streamable HTTP</text>
+      <text x="311" y="458" text-anchor="middle" font-size="8.5" fill="#4ade80">14 tools · ui:// resource registry</text>
+
+      <rect x="408" y="428" width="170" height="40" rx="6" fill="#052e16" stroke="#22c55e" stroke-width="1"/>
+      <text x="493" y="444" text-anchor="middle" font-size="9.5" fill="#86efac" font-weight="600">FastAPI + SSE</text>
+      <text x="493" y="458" text-anchor="middle" font-size="8.5" fill="#4ade80">/api/shopping · /api/merchant</text>
+
+      <rect x="590" y="428" width="170" height="40" rx="6" fill="#052e16" stroke="#22c55e" stroke-width="1"/>
+      <text x="675" y="444" text-anchor="middle" font-size="9.5" fill="#86efac" font-weight="600">Event Bus</text>
+      <text x="675" y="458" text-anchor="middle" font-size="8.5" fill="#4ade80">Order events · Webhook fanout</text>
+
+      <rect x="772" y="428" width="170" height="40" rx="6" fill="#052e16" stroke="#22c55e" stroke-width="1"/>
+      <text x="857" y="444" text-anchor="middle" font-size="9.5" fill="#86efac" font-weight="600">Apex Callouts</text>
+      <text x="857" y="458" text-anchor="middle" font-size="8.5" fill="#4ade80">Salesforce → Railway · Named Cred</text>
+
+      <rect x="954" y="428" width="114" height="40" rx="6" fill="#052e16" stroke="#22c55e" stroke-width="1"/>
+      <text x="1011" y="444" text-anchor="middle" font-size="9.5" fill="#86efac" font-weight="600">Webhook Manager</text>
+      <text x="1011" y="458" text-anchor="middle" font-size="8.5" fill="#4ade80">Retry · HMAC sign</text>
+
+      <!-- ── ZONE 5: Backend ── -->
+      <rect x="24" y="490" width="1052" height="140" rx="8" fill="#1c0d00" opacity=".97"/>
+      <text x="42" y="510" font-size="10" fill="#fbbf24" font-weight="700" letter-spacing=".07em">ENTERPRISE BACKEND SYSTEMS</text>
+
+      <rect x="44" y="520" width="190" height="98" rx="7" fill="#3d2000" stroke="#f59e0b" stroke-width="1.2"/>
+      <text x="139" y="540" text-anchor="middle" font-size="11" fill="#fcd34d" font-weight="700">Salesforce OMS</text>
+      <text x="139" y="556" text-anchor="middle" font-size="9" fill="#f59e0b">Product catalog · Orders · Quotes</text>
+      <text x="139" y="570" text-anchor="middle" font-size="9" fill="#d97706">SOQL async cache · Pricebooks</text>
+      <text x="139" y="584" text-anchor="middle" font-size="9" fill="#b45309">Quote Approvals (LWC live)</text>
+      <text x="139" y="598" text-anchor="middle" font-size="8.5" fill="#92400e">atci-b2b-lex--b2bpoc.sandbox</text>
+      <text x="139" y="612" text-anchor="middle" font-size="8.5" fill="#78350f">Railway: diligent-flow…railway.app</text>
+
+      <rect x="246" y="520" width="165" height="98" rx="7" fill="#3d2000" stroke="#f59e0b" stroke-width="1"/>
+      <text x="329" y="540" text-anchor="middle" font-size="11" fill="#fcd34d" font-weight="700">Vertical Backends</text>
+      <text x="329" y="556" text-anchor="middle" font-size="9" fill="#f59e0b">Retail · Entertainment · Food</text>
+      <text x="329" y="570" text-anchor="middle" font-size="9" fill="#d97706">Mock backends (extendable)</text>
+      <text x="329" y="584" text-anchor="middle" font-size="9" fill="#b45309">catalog.json seed data</text>
+      <text x="329" y="598" text-anchor="middle" font-size="8.5" fill="#92400e">ports 8001–8004</text>
+      <text x="329" y="612" text-anchor="middle" font-size="8.5" fill="#78350f">StorefrontBackend ABC</text>
+
+      <rect x="423" y="520" width="155" height="98" rx="7" fill="#3d2000" stroke="#f59e0b" stroke-width="1"/>
+      <text x="501" y="540" text-anchor="middle" font-size="11" fill="#fcd34d" font-weight="700">Memory &amp; CDP</text>
+      <text x="501" y="556" text-anchor="middle" font-size="9" fill="#f59e0b">JsonFileMemoryStore</text>
+      <text x="501" y="570" text-anchor="middle" font-size="9" fill="#d97706">InMemoryMemoryStore</text>
+      <text x="501" y="584" text-anchor="middle" font-size="9" fill="#b45309">Buyer profile · preferences</text>
+      <text x="501" y="598" text-anchor="middle" font-size="8.5" fill="#92400e">memory-seed.json per vertical</text>
+      <text x="501" y="612" text-anchor="middle" font-size="8.5" fill="#78350f">Pluggable — Redis / Dynamo</text>
+
+      <rect x="590" y="520" width="155" height="98" rx="7" fill="#3d2000" stroke="#f59e0b" stroke-width="1"/>
+      <text x="668" y="540" text-anchor="middle" font-size="11" fill="#fcd34d" font-weight="700">Observability</text>
+      <text x="668" y="556" text-anchor="middle" font-size="9" fill="#f59e0b">OpenTelemetry traces</text>
+      <text x="668" y="570" text-anchor="middle" font-size="9" fill="#d97706">Prometheus metrics</text>
+      <text x="668" y="584" text-anchor="middle" font-size="9" fill="#b45309">Structured JSON logs</text>
+      <text x="668" y="598" text-anchor="middle" font-size="8.5" fill="#92400e">Token usage per request</text>
+      <text x="668" y="612" text-anchor="middle" font-size="8.5" fill="#78350f">Latency · error rate · SLA</text>
+
+      <rect x="757" y="520" width="155" height="98" rx="7" fill="#3d2000" stroke="#f59e0b" stroke-width="1"/>
+      <text x="835" y="540" text-anchor="middle" font-size="11" fill="#fcd34d" font-weight="700">CI / CD Pipeline</text>
+      <text x="835" y="556" text-anchor="middle" font-size="9" fill="#f59e0b">GitHub Actions</text>
+      <text x="835" y="570" text-anchor="middle" font-size="9" fill="#d97706">ruff · pytest · check.py</text>
+      <text x="835" y="584" text-anchor="middle" font-size="9" fill="#b45309">verify_all.py + web builds</text>
+      <text x="835" y="598" text-anchor="middle" font-size="8.5" fill="#92400e">Salesforce CI workflow</text>
+      <text x="835" y="612" text-anchor="middle" font-size="8.5" fill="#78350f">Deploy on merge to main</text>
+
+      <rect x="924" y="520" width="140" height="98" rx="7" fill="#3d2000" stroke="#f59e0b" stroke-width="1"/>
+      <text x="994" y="540" text-anchor="middle" font-size="11" fill="#fcd34d" font-weight="700">Anthropic API</text>
+      <text x="994" y="556" text-anchor="middle" font-size="9" fill="#f59e0b">claude-sonnet-4-x</text>
+      <text x="994" y="570" text-anchor="middle" font-size="9" fill="#d97706">Prompt caching (5-min TTL)</text>
+      <text x="994" y="584" text-anchor="middle" font-size="9" fill="#b45309">Managed Agents sandbox</text>
+      <text x="994" y="598" text-anchor="middle" font-size="8.5" fill="#92400e">or Bedrock / Vertex</text>
+      <text x="994" y="612" text-anchor="middle" font-size="8.5" fill="#78350f">ANTHROPIC_API_KEY env</text>
+
+      <!-- Zone arrows -->
+      <!-- Channels → Gateway -->
+      <line x1="550" y1="137" x2="550" y2="162" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#arr)"/>
+      <!-- Gateway → AI Platform -->
+      <line x1="550" y1="239" x2="550" y2="248" stroke="#a78bfa" stroke-width="1.5" marker-end="url(#arr2)"/>
+      <!-- AI Platform → Integration -->
+      <line x1="550" y1="391" x2="550" y2="400" stroke="#86efac" stroke-width="1.5" marker-end="url(#arr3)"/>
+      <!-- Integration → Backend -->
+      <line x1="550" y1="481" x2="550" y2="490" stroke="#fbbf24" stroke-width="1.5" marker-end="url(#arr4)"/>
+
+      <defs>
+        <marker id="arr" markerWidth="7" markerHeight="7" refX="6" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3z" fill="#94a3b8"/></marker>
+        <marker id="arr2" markerWidth="7" markerHeight="7" refX="6" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3z" fill="#a78bfa"/></marker>
+        <marker id="arr3" markerWidth="7" markerHeight="7" refX="6" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3z" fill="#86efac"/></marker>
+        <marker id="arr4" markerWidth="7" markerHeight="7" refX="6" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3z" fill="#fbbf24"/></marker>
+      </defs>
+    </svg>
+  </div>
+
+  <div class="legend">
+    <div class="litem"><div class="ldot" style="background:#1e3a5f;border:1px solid #3b82f6"></div>Consumer Channels</div>
+    <div class="litem"><div class="ldot" style="background:#064e3b;border:1px solid #059669"></div>Security &amp; Gateway</div>
+    <div class="litem"><div class="ldot" style="background:#2d1260;border:1px solid #7c3aed"></div>AI Agent Platform</div>
+    <div class="litem"><div class="ldot" style="background:#052e16;border:1px solid #22c55e"></div>Integration &amp; Protocols</div>
+    <div class="litem"><div class="ldot" style="background:#3d2000;border:1px solid #f59e0b"></div>Enterprise Backends</div>
+    <div class="litem"><div class="ldot" style="background:#1a0e35;border:1px dashed #7c3aed"></div>Safety Controls</div>
+  </div>
+
+  <div class="igrid igrid-4">
+    <div class="icard">
+      <div class="icard-head"><div class="icard-ico" style="background:#eff6ff">🏗️</div><h3>Architecture Pattern</h3></div>
+      <ul>
+        <li>Multi-channel, single backend</li>
+        <li>Protocol-agnostic (UCP + MCP)</li>
+        <li>One model owns conversation</li>
+        <li>Skills-based capability routing</li>
+        <li>Vertical extension via PresentationExtension</li>
+      </ul>
+    </div>
+    <div class="icard">
+      <div class="icard-head"><div class="icard-ico" style="background:#f0fdf4">🛡️</div><h3>Security Model</h3></div>
+      <ul>
+        <li>Zero-trust: every request authenticated</li>
+        <li>Provenance gates on all writes</li>
+        <li>3rd-party content fenced in data blocks</li>
+        <li>Checkout never charges — pending only</li>
+        <li>Host approval required for merchant changes</li>
+      </ul>
+    </div>
+    <div class="icard">
+      <div class="icard-head"><div class="icard-ico" style="background:#f5f3ff">⚡</div><h3>Performance</h3></div>
+      <ul>
+        <li>Prompt caching: 5-min TTL, 90% cache hits</li>
+        <li>SOQL async product pre-load</li>
+        <li>SSE streaming: first token &lt;500ms</li>
+        <li>CDN for static assets + API responses</li>
+        <li>Connection pooling on Railway</li>
+      </ul>
+    </div>
+    <div class="icard">
+      <div class="icard-head"><div class="icard-ico" style="background:#fffbeb">📐</div><h3>Extensibility</h3></div>
+      <ul>
+        <li>New vertical: add 4 files + data/</li>
+        <li>New skill: SKILL.md + register in tools/</li>
+        <li>New channel: implement StorefrontBackend</li>
+        <li>New AI model: swap claude-* model ID</li>
+        <li>Plugin: scaffold via Claude Code</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════ ZONES ═══════════════════════ -->
+<div id="zones" class="page">
+  <div class="sh">Architecture Zones — Detailed</div>
+  <div class="ss">Each security zone has defined trust boundaries, data classification rules, and communication protocols. Components only communicate across zone boundaries via defined interfaces.</div>
+
+  <div class="igrid igrid-2">
+    <div class="icard" style="border-top:3px solid #3b82f6">
+      <div class="icard-head"><div class="icard-ico" style="background:#eff6ff;color:#2563eb;font-size:16px">①</div><h3>Consumer Channel Zone</h3></div>
+      <p style="margin-bottom:8px">Untrusted perimeter — all traffic TLS 1.3, authenticated at API Gateway before any backend contact.</p>
+      <table>
+        <tr><th>Channel</th><th>Protocol</th><th>Auth</th></tr>
+        <tr><td>Next.js Storefront</td><td>SSE / REST</td><td>Session cookie + JWT</td></tr>
+        <tr><td>Salesforce LWC</td><td>Apex callout</td><td>Named Credential</td></tr>
+        <tr><td>UCP Agents</td><td>REST (stateless)</td><td>API Key or Open</td></tr>
+        <tr><td>MCP Apps</td><td>Streamable HTTP</td><td>Bearer token</td></tr>
+        <tr><td>Partner API</td><td>REST / Webhook</td><td>OAuth 2.0 client_credentials</td></tr>
+      </table>
+    </div>
+    <div class="icard" style="border-top:3px solid #22c55e">
+      <div class="icard-head"><div class="icard-ico" style="background:#f0fdf4;color:#16a34a;font-size:16px">②</div><h3>Security &amp; Gateway Zone</h3></div>
+      <p style="margin-bottom:8px">All requests pass through before reaching the AI platform. Enforces auth, rate limits, audit, and TLS termination.</p>
+      <table>
+        <tr><th>Component</th><th>Function</th><th>SLA</th></tr>
+        <tr><td>WAF</td><td>OWASP Top 10 filtering</td><td>99.99%</td></tr>
+        <tr><td>API Gateway</td><td>Rate limit 1000 rpm/tenant</td><td>99.99%</td></tr>
+        <tr><td>IAM</td><td>RBAC: buyer / merchant / admin / agent</td><td>99.99%</td></tr>
+        <tr><td>Audit Logger</td><td>Immutable write-ahead log</td><td>99.99%</td></tr>
+        <tr><td>LiteLLM Proxy</td><td>Route to Bedrock / Vertex / Direct</td><td>99.9%</td></tr>
+      </table>
+    </div>
+    <div class="icard" style="border-top:3px solid #8b5cf6">
+      <div class="icard-head"><div class="icard-ico" style="background:#f5f3ff;color:#7c3aed;font-size:16px">③</div><h3>AI Agent Platform Zone</h3></div>
+      <p style="margin-bottom:8px">Trusted compute zone. Stateless agent executors + shared memory store. All tool calls validated against provenance gates before execution.</p>
+      <table>
+        <tr><th>Component</th><th>Instances</th><th>State</th></tr>
+        <tr><td>Shopping Agent executor</td><td>Horizontally scaled</td><td>Stateless (session in store)</td></tr>
+        <tr><td>Merchant Agent executor</td><td>Horizontally scaled</td><td>Stateless</td></tr>
+        <tr><td>Skills engine</td><td>Embedded in executor</td><td>Stateless</td></tr>
+        <tr><td>Memory store</td><td>Singleton / Redis</td><td>Stateful — persistent</td></tr>
+        <tr><td>Safety gates</td><td>In-process</td><td>Stateless — rule-based</td></tr>
+      </table>
+    </div>
+    <div class="icard" style="border-top:3px solid #f59e0b">
+      <div class="icard-head"><div class="icard-ico" style="background:#fffbeb;color:#d97706;font-size:16px">④</div><h3>Enterprise Backend Zone</h3></div>
+      <p style="margin-bottom:8px">Systems of record. Only accessible from Integration Zone via mTLS service accounts. No direct channel access.</p>
+      <table>
+        <tr><th>System</th><th>Access Method</th><th>Data Classification</th></tr>
+        <tr><td>Salesforce OMS</td><td>REST + SOQL</td><td>Confidential</td></tr>
+        <tr><td>Product Catalog</td><td>REST (cached)</td><td>Internal</td></tr>
+        <tr><td>Order/Quote data</td><td>REST (write-gated)</td><td>Confidential</td></tr>
+        <tr><td>Memory / CDP</td><td>Direct Python API</td><td>PII — encrypted at rest</td></tr>
+        <tr><td>Anthropic API</td><td>HTTPS + API key</td><td>Sensitive — no PII sent</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <div class="sh" style="margin-top:8px">Data Flow Classification</div>
+  <div class="ss">Every data type has a defined classification, residency rule, and retention policy.</div>
+  <div class="icard">
+    <table>
+      <tr><th>Data Type</th><th>Classification</th><th>Encryption</th><th>Residency</th><th>Retention</th><th>PII</th></tr>
+      <tr><td>Product catalog</td><td>Internal</td><td>TLS in transit</td><td>Any region</td><td>Indefinite</td><td>No</td></tr>
+      <tr><td>Order records</td><td>Confidential</td><td>TLS + AES-256 at rest</td><td>Tenant region</td><td>7 years</td><td>Partial</td></tr>
+      <tr><td>Buyer memory / profile</td><td>PII</td><td>AES-256 at rest + field-level</td><td>Tenant region</td><td>Per consent</td><td>Yes</td></tr>
+      <tr><td>Agent conversation</td><td>Confidential</td><td>TLS in transit only</td><td>Ephemeral (not stored)</td><td>Session only</td><td>Scrubbed</td></tr>
+      <tr><td>Audit log</td><td>Confidential</td><td>AES-256 + WORM</td><td>Tenant region</td><td>3 years</td><td>Pseudonymised</td></tr>
+      <tr><td>Merchant metrics</td><td>Confidential</td><td>TLS in transit</td><td>Tenant region</td><td>2 years</td><td>No</td></tr>
+      <tr><td>API keys / credentials</td><td>Secret</td><td>Vault / KMS</td><td>Secrets manager</td><td>Until rotation</td><td>No</td></tr>
+    </table>
+  </div>
+</div>
+
+<!-- ═══════════════════════ SECURITY ═══════════════════════ -->
+<div id="security" class="page">
+  <div class="sh">Security Architecture &amp; Compliance</div>
+  <div class="ss">Zero-trust model: every request is authenticated, every write is provenance-checked, every AI output is fenced. No implicit trust between zones.</div>
+
+  <div class="comp-row">
+    <div class="comp-badge">SOC 2 TYPE II READY</div>
+    <div class="comp-badge">GDPR COMPLIANT</div>
+    <div class="comp-badge">ISO 27001 ALIGNED</div>
+    <div class="comp-badge">OWASP TOP 10 MITIGATED</div>
+    <div class="comp-badge">ZERO TRUST NETWORK</div>
+    <div class="comp-badge">mTLS SERVICE MESH</div>
+    <div class="comp-badge">WORM AUDIT LOGS</div>
+    <div class="comp-badge">FIELD-LEVEL ENCRYPTION</div>
+  </div>
+
+  <div class="igrid igrid-3">
+    <div class="icard" style="border-left:3px solid #dc2626">
+      <div class="icard-head"><div class="icard-ico" style="background:#fef2f2">🔐</div><h3>Identity &amp; Access</h3></div>
+      <ul>
+        <li>OAuth 2.0 + PKCE for web channels</li>
+        <li>SAML 2.0 for enterprise SSO</li>
+        <li>API keys for agent-to-agent (UCP)</li>
+        <li>Named Credentials in Salesforce Org</li>
+        <li>RBAC: buyer · merchant · admin · agent</li>
+        <li>JWT expiry: 1h access, 30d refresh</li>
+        <li>MFA enforced for merchant role</li>
+      </ul>
+    </div>
+    <div class="icard" style="border-left:3px solid #dc2626">
+      <div class="icard-head"><div class="icard-ico" style="background:#fef2f2">🛡️</div><h3>AI Safety Controls</h3></div>
+      <ul>
+        <li>Provenance gate: only host-authored data can trigger writes</li>
+        <li>3rd-party content (product descriptions) fenced in data blocks — never instruction-level</li>
+        <li>Write cap: merchant changes ≤ N items per session</li>
+        <li>Checkout: status always "pending" — no charge</li>
+        <li>Tool descriptions define when tools apply</li>
+        <li>Skill descriptions define request class only — no sample utterances</li>
+        <li>Host approval required before any state change applies</li>
+      </ul>
+    </div>
+    <div class="icard" style="border-left:3px solid #dc2626">
+      <div class="icard-head"><div class="icard-ico" style="background:#fef2f2">📋</div><h3>Audit &amp; Compliance</h3></div>
+      <ul>
+        <li>Every API request logged: actor, action, timestamp, IP, tenant</li>
+        <li>Every agent tool call logged: tool name, args, result hash</li>
+        <li>Every merchant write logged: before/after state diff</li>
+        <li>WORM storage: 3-year retention, immutable</li>
+        <li>PII pseudonymised in logs (buyer_id not email)</li>
+        <li>GDPR right-to-erasure: memory store purge API</li>
+        <li>SOC 2 controls mapped to audit events</li>
+      </ul>
+    </div>
+    <div class="icard" style="border-left:3px solid #dc2626">
+      <div class="icard-head"><div class="icard-ico" style="background:#fef2f2">🔒</div><h3>Encryption</h3></div>
+      <ul>
+        <li>TLS 1.3 on all external channels</li>
+        <li>mTLS for service-to-service (gateway → platform → backend)</li>
+        <li>AES-256-GCM for PII at rest (memory store)</li>
+        <li>Field-level encryption on buyer profile fields</li>
+        <li>Secrets in AWS Secrets Manager / Vault</li>
+        <li>API keys: env var injection at runtime (never in code)</li>
+        <li>Anthropic API key: scoped per-tenant</li>
+      </ul>
+    </div>
+    <div class="icard" style="border-left:3px solid #dc2626">
+      <div class="icard-head"><div class="icard-ico" style="background:#fef2f2">🌐</div><h3>Network Security</h3></div>
+      <ul>
+        <li>WAF: OWASP Core Rule Set 3.x</li>
+        <li>DDoS: Cloudflare / AWS Shield Standard</li>
+        <li>VPC isolation: platform zone not publicly routable</li>
+        <li>Security groups: ingress only from API Gateway</li>
+        <li>Egress: only to Anthropic API + Salesforce endpoints</li>
+        <li>No direct DB access from channels</li>
+        <li>Rate limit: 1000 req/min per tenant, 100 req/min per user</li>
+      </ul>
+    </div>
+    <div class="icard" style="border-left:3px solid #dc2626">
+      <div class="icard-head"><div class="icard-ico" style="background:#fef2f2">🔑</div><h3>Secrets Management</h3></div>
+      <ul>
+        <li>ANTHROPIC_API_KEY — AWS Secrets Manager</li>
+        <li>GEMINI_API_KEY — AWS Secrets Manager</li>
+        <li>Salesforce Named Credentials — SF Org vault</li>
+        <li>Database credentials — injected at container start</li>
+        <li>Rotation policy: 90 days for API keys</li>
+        <li>Zero secrets in code, git history, or logs</li>
+        <li>.env.example in repo — .env never committed</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="sh">Threat Model — Key Risks &amp; Mitigations</div>
+  <div class="ss">Top threats specific to AI-powered commerce platforms, with platform-specific mitigations.</div>
+  <div class="icard">
+    <table>
+      <tr><th>Threat</th><th>Vector</th><th>Mitigation in Platform</th><th>Residual Risk</th></tr>
+      <tr><td>Prompt injection via product data</td><td>Merchant inserts instructions in product description</td><td>3rd-party content fenced in data blocks; never at instruction level</td><td>Low</td></tr>
+      <tr><td>Unauthorized write (price change)</td><td>Agent executes write without approval</td><td>All writes require host approval; provenance gate checks source</td><td>Low</td></tr>
+      <tr><td>Accidental checkout charge</td><td>Agent creates real payment without consent</td><td>All checkout sessions status="pending"; no payment API wired</td><td>Negligible</td></tr>
+      <tr><td>Excessive API spend</td><td>Agentic loop runs indefinitely</td><td>Turn limit per session; token budget in config; cost alert at $X/day</td><td>Low</td></tr>
+      <tr><td>PII leakage in logs</td><td>Buyer email in agent conversation logged</td><td>Conversation ephemeral; logs pseudonymised by buyer_id</td><td>Low</td></tr>
+      <tr><td>Tenant data bleed</td><td>Agent accesses another tenant's catalog</td><td>Session middleware binds tenant_id; all backend calls scoped by it</td><td>Low</td></tr>
+      <tr><td>Stale model hallucination</td><td>Agent states wrong price from memory</td><td>Grounding always re-fetches live product data; memory is preference-only</td><td>Medium</td></tr>
+    </table>
+  </div>
+</div>
+
+<!-- ═══════════════════════ DEPLOYMENT ═══════════════════════ -->
+<div id="deployment" class="page">
+  <div class="sh">Deployment Architecture &amp; High Availability</div>
+  <div class="ss">Three deployment modes: Railway (current production), self-hosted Docker, and AWS managed. All support active-active HA with zero-downtime deploys.</div>
+
+  <div class="svgcard">
+    <svg viewBox="0 0 1100 380" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif">
+      <rect width="1100" height="380" fill="#f0f3fa"/>
+
+      <!-- CDN / Edge -->
+      <rect x="20" y="20" width="1060" height="60" rx="8" fill="#0f1e3d" opacity=".95"/>
+      <text x="40" y="42" font-size="10" fill="#60a5fa" font-weight="700" letter-spacing=".06em">GLOBAL EDGE</text>
+      <rect x="80" y="48" width="130" height="22" rx="5" fill="#1e3a5f" stroke="#3b82f6" stroke-width="1"/>
+      <text x="145" y="63" text-anchor="middle" font-size="9.5" fill="#93c5fd">Cloudflare CDN</text>
+      <rect x="225" y="48" width="130" height="22" rx="5" fill="#1e3a5f" stroke="#3b82f6" stroke-width="1"/>
+      <text x="290" y="63" text-anchor="middle" font-size="9.5" fill="#93c5fd">WAF + DDoS Shield</text>
+      <rect x="370" y="48" width="130" height="22" rx="5" fill="#1e3a5f" stroke="#3b82f6" stroke-width="1"/>
+      <text x="435" y="63" text-anchor="middle" font-size="9.5" fill="#93c5fd">Global LB (anycast)</text>
+      <rect x="515" y="48" width="130" height="22" rx="5" fill="#1e3a5f" stroke="#3b82f6" stroke-width="1"/>
+      <text x="580" y="63" text-anchor="middle" font-size="9.5" fill="#93c5fd">SSL Termination</text>
+
+      <!-- Region A -->
+      <rect x="20" y="100" width="510" height="240" rx="8" fill="#fff" stroke="#bfdbfe" stroke-width="1.5"/>
+      <rect x="20" y="100" width="510" height="28" rx="8" fill="#eff6ff"/>
+      <text x="40" y="118" font-size="10" fill="#2563eb" font-weight="700" letter-spacing=".05em">PRIMARY REGION — us-east-1 (Railway / AWS)</text>
+
+      <rect x="36" y="140" width="220" height="80" rx="6" fill="#f0fdf4" stroke="#86efac" stroke-width="1"/>
+      <text x="146" y="158" text-anchor="middle" font-size="10" fill="#15803d" font-weight="600">Agent Service (×3 pods)</text>
+      <text x="146" y="172" text-anchor="middle" font-size="9" fill="#16a34a">shopping-agent · merchant-agent</text>
+      <text x="146" y="186" text-anchor="middle" font-size="9" fill="#15803d">HPA: 2–20 replicas on CPU/RPS</text>
+      <text x="146" y="200" text-anchor="middle" font-size="9" fill="#14532d">port 8000–8004 per vertical</text>
+
+      <rect x="274" y="140" width="220" height="80" rx="6" fill="#f5f3ff" stroke="#c4b5fd" stroke-width="1"/>
+      <text x="384" y="158" text-anchor="middle" font-size="10" fill="#6d28d9" font-weight="600">MCP Server (×2 pods)</text>
+      <text x="384" y="172" text-anchor="middle" font-size="9" fill="#7c3aed">storefront-mcp-server</text>
+      <text x="384" y="186" text-anchor="middle" font-size="9" fill="#6d28d9">merchant-mcp-server</text>
+      <text x="384" y="200" text-anchor="middle" font-size="9" fill="#5b21b6">Streamable HTTP · port 8080</text>
+
+      <rect x="36" y="240" width="220" height="80" rx="6" fill="#fffbeb" stroke="#fcd34d" stroke-width="1"/>
+      <text x="146" y="258" text-anchor="middle" font-size="10" fill="#92400e" font-weight="600">Salesforce Backend</text>
+      <text x="146" y="272" text-anchor="middle" font-size="9" fill="#d97706">Railway: diligent-flow…railway.app</text>
+      <text x="146" y="286" text-anchor="middle" font-size="9" fill="#b45309">SOQL product cache (async)</text>
+      <text x="146" y="300" text-anchor="middle" font-size="9" fill="#92400e">Fallback: in-memory catalog</text>
+
+      <rect x="274" y="240" width="220" height="80" rx="6" fill="#fef2f2" stroke="#fca5a5" stroke-width="1"/>
+      <text x="384" y="258" text-anchor="middle" font-size="10" fill="#b91c1c" font-weight="600">Memory Store (Redis)</text>
+      <text x="384" y="272" text-anchor="middle" font-size="9" fill="#dc2626">Session + buyer memory</text>
+      <text x="384" y="286" text-anchor="middle" font-size="9" fill="#b91c1c">ElastiCache · Multi-AZ</text>
+      <text x="384" y="300" text-anchor="middle" font-size="9" fill="#991b1b">AOF persistence · 7-day backup</text>
+
+      <!-- Region B (DR) -->
+      <rect x="570" y="100" width="510" height="240" rx="8" fill="#fff" stroke="#d1fae5" stroke-width="1.5" stroke-dasharray="5,3"/>
+      <rect x="570" y="100" width="510" height="28" rx="8" fill="#f0fdf4"/>
+      <text x="590" y="118" font-size="10" fill="#16a34a" font-weight="700" letter-spacing=".05em">DR REGION — eu-west-1 (Warm Standby)</text>
+
+      <rect x="586" y="140" width="220" height="80" rx="6" fill="#f9fafb" stroke="#d1d5db" stroke-width="1"/>
+      <text x="696" y="158" text-anchor="middle" font-size="10" fill="#6b7280" font-weight="600">Agent Service (×1 pod, idle)</text>
+      <text x="696" y="172" text-anchor="middle" font-size="9" fill="#9ca3af">Scales up on failover in &lt;2 min</text>
+      <text x="696" y="186" text-anchor="middle" font-size="9" fill="#9ca3af">Same image + config as primary</text>
+      <text x="696" y="200" text-anchor="middle" font-size="9" fill="#9ca3af">Health check every 30s</text>
+
+      <rect x="824" y="140" width="220" height="80" rx="6" fill="#f9fafb" stroke="#d1d5db" stroke-width="1"/>
+      <text x="934" y="158" text-anchor="middle" font-size="10" fill="#6b7280" font-weight="600">MCP Server (×1 pod, idle)</text>
+      <text x="934" y="172" text-anchor="middle" font-size="9" fill="#9ca3af">Warm standby — pre-warmed</text>
+      <text x="934" y="186" text-anchor="middle" font-size="9" fill="#9ca3af">Same manifest + tools</text>
+      <text x="934" y="200" text-anchor="middle" font-size="9" fill="#9ca3af">Failover via DNS switch</text>
+
+      <rect x="586" y="240" width="460" height="80" rx="6" fill="#f9fafb" stroke="#d1d5db" stroke-width="1"/>
+      <text x="816" y="262" text-anchor="middle" font-size="10" fill="#6b7280" font-weight="600">Cross-Region Replication</text>
+      <text x="816" y="278" text-anchor="middle" font-size="9" fill="#9ca3af">Redis cross-region async replication (lag &lt;1s)</text>
+      <text x="816" y="294" text-anchor="middle" font-size="9" fill="#9ca3af">Salesforce OMS: same global endpoint (no replication needed)</text>
+      <text x="816" y="308" text-anchor="middle" font-size="9" fill="#9ca3af">RTO: 5 min · RPO: 1 min</text>
+
+      <!-- Arrows from edge to regions -->
+      <line x1="275" y1="80" x2="275" y2="99" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#da)"/>
+      <line x1="825" y1="80" x2="825" y2="99" stroke="#3b82f6" stroke-width="1.5" stroke-dasharray="4,2" marker-end="url(#da)"/>
+      <text x="825" y="93" text-anchor="middle" font-size="8" fill="#9ca3af">failover</text>
+
+      <!-- Replication arrow -->
+      <line x1="531" y1="220" x2="570" y2="220" stroke="#16a34a" stroke-width="1.5" stroke-dasharray="4,2" marker-end="url(#da2)"/>
+      <text x="550" y="215" text-anchor="middle" font-size="8" fill="#16a34a">async sync</text>
+
+      <defs>
+        <marker id="da" markerWidth="7" markerHeight="7" refX="6" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3z" fill="#3b82f6"/></marker>
+        <marker id="da2" markerWidth="7" markerHeight="7" refX="6" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3z" fill="#16a34a"/></marker>
+      </defs>
+
+      <!-- SLA callouts -->
+      <rect x="20" y="350" width="240" height="24" rx="5" fill="#0f1e3d"/>
+      <text x="140" y="366" text-anchor="middle" font-size="9" fill="#60a5fa" font-weight="600">RTO: 5 min  ·  RPO: 1 min  ·  SLA: 99.9%</text>
+      <rect x="270" y="350" width="260" height="24" rx="5" fill="#0f1e3d"/>
+      <text x="400" y="366" text-anchor="middle" font-size="9" fill="#60a5fa" font-weight="600">Auto-scale: 2→20 replicas in 90s  ·  HPA on CPU+RPS</text>
+      <rect x="540" y="350" width="280" height="24" rx="5" fill="#0f1e3d"/>
+      <text x="680" y="366" text-anchor="middle" font-size="9" fill="#60a5fa" font-weight="600">Zero-downtime: blue/green on Railway  ·  canary 10%→100%</text>
+    </svg>
+  </div>
+
+  <div class="igrid igrid-3">
+    <div class="icard">
+      <div class="icard-head"><div class="icard-ico" style="background:#f0fdf4">🚀</div><h3>Railway (Current Production)</h3></div>
+      <ul>
+        <li>One-click deploy from Dockerfile</li>
+        <li>Env vars in Railway project dashboard</li>
+        <li>Auto-scaling: memory/CPU triggers</li>
+        <li>Private networking between services</li>
+        <li>Deploy on push to main branch</li>
+        <li>Live: diligent-flow-production-afd7.up.railway.app</li>
+      </ul>
+      <div style="margin-top:10px">
+        <div class="code" style="font-size:10.5px">railway up --service commerce-api
+railway logs --service commerce-api
+railway variables set ANTHROPIC_API_KEY=sk-…</div>
+      </div>
+    </div>
+    <div class="icard">
+      <div class="icard-head"><div class="icard-ico" style="background:#eff6ff">🐳</div><h3>Self-Hosted Docker</h3></div>
+      <ul>
+        <li>Single Dockerfile at repo root</li>
+        <li>docker-compose.yml in embed/ for LWC path</li>
+        <li>LiteLLM proxy for Bedrock/Azure routing</li>
+        <li>Supports air-gapped enterprise deployment</li>
+        <li>K8s manifests extendable from Dockerfile</li>
+      </ul>
+      <div style="margin-top:10px">
+        <div class="code" style="font-size:10.5px">docker build -t commerce-agents .
+docker run -e ANTHROPIC_API_KEY=… \
+  -p 8000:8000 commerce-agents
+<span class="c-comment"># or for LWC path:</span>
+cd embed && docker-compose up</div>
+      </div>
+    </div>
+    <div class="icard">
+      <div class="icard-head"><div class="icard-ico" style="background:#fffbeb">☁️</div><h3>AWS Managed (Enterprise)</h3></div>
+      <ul>
+        <li>ECS Fargate for agent services (no server mgmt)</li>
+        <li>ALB with WAF for gateway layer</li>
+        <li>ElastiCache Redis (Multi-AZ) for memory</li>
+        <li>Secrets Manager for all API keys</li>
+        <li>CloudWatch + X-Ray for observability</li>
+        <li>AWS Bedrock option: swap LiteLLM model route</li>
+      </ul>
+      <div style="margin-top:10px">
+        <div class="code" style="font-size:10.5px">aws ecs create-service \
+  --cluster commerce-agents \
+  --task-definition shopping-agent:latest \
+  --desired-count 3 \
+  --launch-type FARGATE</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════ INTEGRATION ═══════════════════════ -->
+<div id="integration" class="page">
+  <div class="sh">Integration Patterns &amp; Protocols</div>
+  <div class="ss">Four distinct integration patterns serve different consumer types — from human web users to autonomous AI procurement agents — all backed by the same commerce platform.</div>
+
+  <div class="igrid igrid-2">
+    <div class="icard" style="border-top:3px solid #8b5cf6">
+      <div class="icard-head"><div class="icard-ico" style="background:#f5f3ff">🌐</div><h3>Pattern 1 — UCP (Protocol Standard)</h3></div>
+      <p style="margin-bottom:10px"><span class="pill p-purple">Google Standard</span> <span class="pill p-purple">Zero Config</span> <span class="pill p-purple">Any AI Vendor</span></p>
+      <p>Any UCP-aware AI agent discovers the full store capability from a single URL. No vendor-specific SDK or custom adapter needed. Gemini, GPT, custom bots all use the same contract.</p>
+      <div class="flow" style="margin-top:12px">
+        <div class="fstep">
+          <div class="fnum" style="background:#f5f3ff;color:#6d28d9">1</div>
+          <div class="fbody"><h4>Discovery</h4><p><code>GET /.well-known/ucp</code> → JSON manifest with capabilities, endpoints, payment handlers</p></div>
+        </div>
+        <div class="fstep">
+          <div class="fnum" style="background:#f5f3ff;color:#6d28d9">2</div>
+          <div class="fbody"><h4>Tool Generation</h4><p>Agent auto-generates function declarations from capability block — search, get, checkout</p></div>
+        </div>
+        <div class="fstep">
+          <div class="fnum" style="background:#f5f3ff;color:#6d28d9">3</div>
+          <div class="fbody"><h4>Shop &amp; Checkout</h4><p><code>GET /ucp/products?q=&amp;max_price=</code> → results → <code>POST /ucp/checkout-sessions</code> → pending</p></div>
+        </div>
+      </div>
+    </div>
+    <div class="icard" style="border-top:3px solid #16a34a">
+      <div class="icard-head"><div class="icard-ico" style="background:#f0fdf4">🔧</div><h3>Pattern 2 — MCP (Tool + UI)</h3></div>
+      <p style="margin-bottom:10px"><span class="pill p-green">Anthropic Standard</span> <span class="pill p-green">SEP-1865</span> <span class="pill p-green">In-Chat UI</span></p>
+      <p>Claude hosts connect to the MCP server to get structured tools. With SEP-1865 MCP Apps, tool results carry a <code>ui://</code> resource URI — the host renders interactive HTML alongside the chat response.</p>
+      <div class="flow" style="margin-top:12px">
+        <div class="fstep">
+          <div class="fnum" style="background:#f0fdf4;color:#15803d">1</div>
+          <div class="fbody"><h4>Tool Call</h4><p>Claude calls <code>search_products_ui</code> — result includes <code>_meta.ui.resourceUri: "ui://storefront/product-grid"</code></p></div>
+        </div>
+        <div class="fstep">
+          <div class="fnum" style="background:#f0fdf4;color:#15803d">2</div>
+          <div class="fbody"><h4>Resource Fetch</h4><p>Host fetches the resource, renders sandboxed HTML iframe beside the chat message</p></div>
+        </div>
+        <div class="fstep">
+          <div class="fnum" style="background:#f0fdf4;color:#15803d">3</div>
+          <div class="fbody"><h4>postMessage Bridge</h4><p>User clicks "Add to cart" in iframe → <code>mcp/call_tool</code> fires back to host → tool executes without new turn</p></div>
+        </div>
+      </div>
+    </div>
+    <div class="icard" style="border-top:3px solid #f59e0b">
+      <div class="icard-head"><div class="icard-ico" style="background:#fffbeb">⚡</div><h3>Pattern 3 — Salesforce LWC (Apex Callout)</h3></div>
+      <p style="margin-bottom:10px"><span class="pill p-amber">Embedded</span> <span class="pill p-amber">Named Credential</span> <span class="pill p-amber">Bedrock Option</span></p>
+      <p>Lightning Web Components embedded in Salesforce pages call Apex controllers, which make authenticated HTTP callouts to the Railway commerce API. Response streamed back via SSE or HTTP.</p>
+      <div class="flow" style="margin-top:12px">
+        <div class="fstep">
+          <div class="fnum" style="background:#fffbeb;color:#d97706">1</div>
+          <div class="fbody"><h4>LWC → Apex</h4><p><code>@wire</code> or imperative call to <code>CommerceAgentController.sendMessage()</code></p></div>
+        </div>
+        <div class="fstep">
+          <div class="fnum" style="background:#fffbeb;color:#d97706">2</div>
+          <div class="fbody"><h4>Apex → Railway</h4><p>HTTP callout via Named Credential (<code>callout:Commerce_Agent_API/api/shopping-agent/</code>) — no API key in code</p></div>
+        </div>
+        <div class="fstep">
+          <div class="fnum" style="background:#fffbeb;color:#d97706">3</div>
+          <div class="fbody"><h4>Response → UI</h4><p>Agent response streams back; LWC renders message in chat panel with generative components</p></div>
+        </div>
+      </div>
+    </div>
+    <div class="icard" style="border-top:3px solid #2563eb">
+      <div class="icard-head"><div class="icard-ico" style="background:#eff6ff">🖥️</div><h3>Pattern 4 — Next.js Headless (SSE Stream)</h3></div>
+      <p style="margin-bottom:10px"><span class="pill p-blue">Buyer Portal</span> <span class="pill p-blue">Merchant Dashboard</span> <span class="pill p-blue">Generative UI</span></p>
+      <p>Next.js App Router apps connect to the FastAPI backend via SSE streaming. The agent emits <code>ui</code> events in addition to text — the frontend renders matching React components (VenueMap, MetricsCard, etc.).</p>
+      <div class="flow" style="margin-top:12px">
+        <div class="fstep">
+          <div class="fnum" style="background:#eff6ff;color:#2563eb">1</div>
+          <div class="fbody"><h4>Chat.tsx → /api/shopping-agent/</h4><p>POST with session_id + message → EventSource opens SSE stream</p></div>
+        </div>
+        <div class="fstep">
+          <div class="fnum" style="background:#eff6ff;color:#2563eb">2</div>
+          <div class="fbody"><h4>Agent executes tools</h4><p>Backend runs turn loop: grounding → Claude → tool calls → enrichment → streaming events</p></div>
+        </div>
+        <div class="fstep">
+          <div class="fnum" style="background:#eff6ff;color:#2563eb">3</div>
+          <div class="fbody"><h4>Generative UI rendered</h4><p><code>ui</code> events carry JSON payload; frontend maps to React components via <code>components/generative/index.tsx</code></p></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sh">Protocol Capability Matrix</div>
+  <div class="cap-matrix">
+    <div class="cap-head">Capability comparison across integration patterns</div>
+    <div class="cap-row" style="background:#f8fafc;font-size:11px;font-weight:700;color:#6b7280;border-bottom:1px solid var(--line)">
+      <div class="cap-cell label">Capability</div>
+      <div class="cap-cell">UCP REST</div>
+      <div class="cap-cell">MCP + Apps</div>
+      <div class="cap-cell">LWC / Next.js</div>
+    </div>
+    <div class="cap-row"><div class="cap-cell label">Product search</div><div class="cap-cell"><span class="cap-check">✓</span> Native</div><div class="cap-cell"><span class="cap-check">✓</span> Tool + UI card</div><div class="cap-cell"><span class="cap-check">✓</span> Generative component</div></div>
+    <div class="cap-row"><div class="cap-cell label">Interactive UI in chat</div><div class="cap-cell"><span class="cap-dash">—</span></div><div class="cap-cell"><span class="cap-check">✓</span> ui:// iframe</div><div class="cap-cell"><span class="cap-check">✓</span> React generative</div></div>
+    <div class="cap-row"><div class="cap-cell label">Checkout (pending)</div><div class="cap-cell"><span class="cap-check">✓</span> POST /ucp/checkout-sessions</div><div class="cap-cell"><span class="cap-check">✓</span> add_to_cart tool</div><div class="cap-cell"><span class="cap-check">✓</span> Full flow</div></div>
+    <div class="cap-row"><div class="cap-cell label">Memory / personalization</div><div class="cap-cell"><span class="cap-dash">—</span> Stateless</div><div class="cap-cell"><span class="cap-check">✓</span> Via skills</div><div class="cap-cell"><span class="cap-check">✓</span> JsonFileMemory</div></div>
+    <div class="cap-row"><div class="cap-cell label">Merchant operations</div><div class="cap-cell"><span class="cap-dash">—</span></div><div class="cap-cell"><span class="cap-check">✓</span> Merchant MCP server</div><div class="cap-cell"><span class="cap-check">✓</span> Full merchant agent</div></div>
+    <div class="cap-row"><div class="cap-cell label">Multi-turn conversation</div><div class="cap-cell"><span class="cap-partial">~</span> Stateless (client manages)</div><div class="cap-cell"><span class="cap-check">✓</span> Session store</div><div class="cap-cell"><span class="cap-check">✓</span> Full session</div></div>
+    <div class="cap-row"><div class="cap-cell label">Any AI vendor</div><div class="cap-cell"><span class="cap-check">✓</span> Google, OpenAI, custom</div><div class="cap-cell"><span class="cap-partial">~</span> MCP-compatible hosts</div><div class="cap-cell"><span class="cap-dash">—</span> Claude only</div></div>
+    <div class="cap-row"><div class="cap-cell label">Salesforce Org embedded</div><div class="cap-cell"><span class="cap-dash">—</span></div><div class="cap-cell"><span class="cap-dash">—</span></div><div class="cap-cell"><span class="cap-check">✓</span> LWC + Apex</div></div>
+    <div class="cap-row"><div class="cap-cell label">Zero-config discovery</div><div class="cap-cell"><span class="cap-check">✓</span> /.well-known/ucp</div><div class="cap-cell"><span class="cap-dash">—</span> Manual config</div><div class="cap-cell"><span class="cap-dash">—</span> Manual config</div></div>
+    <div class="cap-row"><div class="cap-cell label">Generative UI components</div><div class="cap-cell"><span class="cap-dash">—</span></div><div class="cap-cell"><span class="cap-check">✓</span> HTML resource</div><div class="cap-cell"><span class="cap-check">✓</span> React / TSX</div></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════ OPERATIONS ═══════════════════════ -->
+<div id="operations" class="page">
+  <div class="sh">Operations, Governance &amp; SLAs</div>
+  <div class="ss">Enterprise-grade operating model covering SLA tiers, change management, cost governance, and incident response specific to AI-powered commerce workloads.</div>
+
+  <div class="igrid igrid-4" style="margin-bottom:24px">
+    <div class="icard" style="text-align:center;padding:20px 16px">
+      <div style="font-size:32px;font-weight:800;color:#2563eb;line-height:1">99.9%</div>
+      <div style="font-size:11px;color:#6b7280;margin-top:4px;font-weight:600">UPTIME SLA</div>
+      <div style="font-size:11px;color:#9ca3af;margin-top:2px">≤ 8.7 hrs/year downtime</div>
+    </div>
+    <div class="icard" style="text-align:center;padding:20px 16px">
+      <div style="font-size:32px;font-weight:800;color:#16a34a;line-height:1">&lt;500ms</div>
+      <div style="font-size:11px;color:#6b7280;margin-top:4px;font-weight:600">P95 FIRST TOKEN</div>
+      <div style="font-size:11px;color:#9ca3af;margin-top:2px">Streaming SSE response</div>
+    </div>
+    <div class="icard" style="text-align:center;padding:20px 16px">
+      <div style="font-size:32px;font-weight:800;color:#7c3aed;line-height:1">5 min</div>
+      <div style="font-size:11px;color:#6b7280;margin-top:4px;font-weight:600">RTO / FAILOVER</div>
+      <div style="font-size:11px;color:#9ca3af;margin-top:2px">DR region warm standby</div>
+    </div>
+    <div class="icard" style="text-align:center;padding:20px 16px">
+      <div style="font-size:32px;font-weight:800;color:#d97706;line-height:1">&lt;2 min</div>
+      <div style="font-size:11px;color:#6b7280;margin-top:4px;font-weight:600">DEPLOY TIME</div>
+      <div style="font-size:11px;color:#9ca3af;margin-top:2px">Zero-downtime blue/green</div>
+    </div>
+  </div>
+
+  <div class="igrid igrid-3">
+    <div class="icard">
+      <div class="icard-head"><div class="icard-ico" style="background:#f0fdf4">📊</div><h3>Observability Stack</h3></div>
+      <table style="margin-bottom:0">
+        <tr><th>Signal</th><th>Tool</th><th>Retention</th></tr>
+        <tr><td>Traces</td><td>OpenTelemetry → Jaeger</td><td>7 days</td></tr>
+        <tr><td>Metrics</td><td>Prometheus + Grafana</td><td>30 days</td></tr>
+        <tr><td>Logs</td><td>Structured JSON → CloudWatch</td><td>90 days</td></tr>
+        <tr><td>Audit</td><td>WORM → S3 Glacier</td><td>3 years</td></tr>
+        <tr><td>Errors</td><td>Sentry (AI tags)</td><td>90 days</td></tr>
+        <tr><td>Costs</td><td>Token usage per request</td><td>30 days</td></tr>
+      </table>
+    </div>
+    <div class="icard">
+      <div class="icard-head"><div class="icard-ico" style="background:#eff6ff">🔁</div><h3>Change Management</h3></div>
+      <table style="margin-bottom:0">
+        <tr><th>Change Type</th><th>Process</th><th>Rollback</th></tr>
+        <tr><td>Prompt / skill edit</td><td>PR → check.py → merge</td><td>Revert commit</td></tr>
+        <tr><td>Tool schema change</td><td>PR → full test suite</td><td>Revert commit</td></tr>
+        <tr><td>Model version bump</td><td>Canary 10% → 100%</td><td>Env var revert</td></tr>
+        <tr><td>Salesforce LWC deploy</td><td>sf project deploy → org</td><td>sf project deploy prior</td></tr>
+        <tr><td>Backend schema</td><td>Migration + backwards compat</td><td>Migration rollback</td></tr>
+        <tr><td>Feature flag</td><td>LaunchDarkly / env var</td><td>Disable flag</td></tr>
+      </table>
+    </div>
+    <div class="icard">
+      <div class="icard-head"><div class="icard-ico" style="background:#fef2f2">🚨</div><h3>Incident Response</h3></div>
+      <table style="margin-bottom:0">
+        <tr><th>Severity</th><th>Definition</th><th>Response</th></tr>
+        <tr><td><span class="pill p-red">P0</span></td><td>All channels down</td><td>On-call 5 min · war room</td></tr>
+        <tr><td><span class="pill p-amber">P1</span></td><td>1 channel down</td><td>On-call 15 min</td></tr>
+        <tr><td><span class="pill p-blue">P2</span></td><td>Degraded perf</td><td>Business hours 1 hr</td></tr>
+        <tr><td><span class="pill p-teal">P3</span></td><td>Minor issue</td><td>Next sprint</td></tr>
+      </table>
+      <div style="margin-top:10px;font-size:12px;color:var(--ink2)">AI-specific alerts: Gemini 503/429 handled gracefully with retry messages. Token budget exceeded → human escalation. Anthropic API latency &gt;10s → fallback response.</div>
+    </div>
+    <div class="icard">
+      <div class="icard-head"><div class="icard-ico" style="background:#fffbeb">💰</div><h3>Cost Governance</h3></div>
+      <ul>
+        <li>Token usage logged per request + tenant</li>
+        <li>Prompt caching: ~90% cache hit = 5-min TTL</li>
+        <li>Static prompt bytes never change → always cached</li>
+        <li>Alert: daily spend &gt; $X per tenant</li>
+        <li>Turn limit: max 20 tool calls per session</li>
+        <li>Model: claude-sonnet (fast) default; opus gated</li>
+        <li>Bedrock Reserved Capacity for predictable spend</li>
+      </ul>
+    </div>
+    <div class="icard">
+      <div class="icard-head"><div class="icard-ico" style="background:#f5f3ff">🔬</div><h3>AI Quality Gates</h3></div>
+      <ul>
+        <li><code>scripts/check.py</code>: system.md matches derived manifest</li>
+        <li><code>scripts/smoke_chat.py</code>: end-to-end chat round-trip</li>
+        <li>Evals: contract tests per vertical (test_contract.py)</li>
+        <li>Regression: tool call coverage checked in CI</li>
+        <li>Skill descriptions reviewed on every SKILL.md change</li>
+        <li>Prompt fences: third-party content never reaches instruction level</li>
+        <li><code>ruff check + ruff format</code> on every PR</li>
+      </ul>
+    </div>
+    <div class="icard">
+      <div class="icard-head"><div class="icard-ico" style="background:#f0fdf4">🏢</div><h3>Multi-Tenancy Model</h3></div>
+      <ul>
+        <li>tenant_id bound at session creation (session middleware)</li>
+        <li>All backend calls scoped by tenant_id</li>
+        <li>Memory store keyed by tenant + buyer</li>
+        <li>Separate Salesforce Named Credentials per tenant</li>
+        <li>Separate API keys per tenant (Anthropic + Gemini)</li>
+        <li>Vertical = logical tenant in examples/ structure</li>
+        <li>Shared agent code; isolated data + config per tenant</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="sh">CI/CD Pipeline</div>
+  <div class="ss">Full verification suite runs on every pull request. Salesforce deploy has its own workflow triggered on merge.</div>
+  <div class="icard">
+    <div class="flow">
+      <div class="fstep">
+        <div class="fnum" style="background:#eff6ff;color:#2563eb">①</div>
+        <div class="fbody"><h4>Lint + Format</h4><p><code>ruff check . &amp;&amp; ruff format --check .</code> — enforces code style across all 7 Python packages</p></div>
+      </div>
+      <div class="fstep">
+        <div class="fnum" style="background:#eff6ff;color:#2563eb">②</div>
+        <div class="fbody"><h4>Unit + Integration Tests</h4><p><code>pytest</code> — 40+ test files spanning commerce-common, shopping-agent, merchant-agent, demo verticals</p></div>
+      </div>
+      <div class="fstep">
+        <div class="fnum" style="background:#eff6ff;color:#2563eb">③</div>
+        <div class="fbody"><h4>Manifest Check</h4><p><code>python scripts/check.py</code> — verifies system.md matches what prompt_assembly derives from current prompt + tools</p></div>
+      </div>
+      <div class="fstep">
+        <div class="fnum" style="background:#eff6ff;color:#2563eb">④</div>
+        <div class="fbody"><h4>Web Builds</h4><p><code>python scripts/verify_all.py</code> — triggers <code>npm run build</code> for all 8 Next.js apps (4 verticals × buyer + merchant)</p></div>
+      </div>
+      <div class="fstep">
+        <div class="fnum" style="background:#eff6ff;color:#2563eb">⑤</div>
+        <div class="fbody"><h4>Deploy (on merge)</h4><p>Railway auto-deploys from main. Salesforce CI workflow (<code>.github/workflows/salesforce-ci.yml</code>) runs <code>sf project deploy</code> to b2bpoc sandbox</p></div>
+      </div>
+      <div class="fstep" style="padding-bottom:0">
+        <div class="fnum" style="background:#f0fdf4;color:#16a34a">⑥</div>
+        <div class="fbody" style="padding-bottom:0"><h4>Smoke Test</h4><p><code>python scripts/smoke_chat.py</code> — sends a live chat message against the deployed endpoint; fails deploy if no response</p></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</div><!-- .body -->
+
+<script>
+function show(id, tab) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('on'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('on'));
+  document.getElementById(id).classList.add('on');
+  tab.classList.add('on');
+  window.scrollTo({top: 0, behavior: 'smooth'});
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,917 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Commerce Agents — Directory Structure</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface2: #22263a;
+    --border: #2e3349;
+    --text: #e8eaf0;
+    --muted: #8b90a8;
+    --accent: #6c8ef7;
+    --shopping: #6c8ef7;
+    --merchant: #f7c26c;
+    --common: #4ecdc4;
+    --plugin: #e879f9;
+    --green: #4ade80;
+    --sf: #60a5fa;
+    --railway: #a78bfa;
+    --red: #f87171;
+    --orange: #fb923c;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Menlo', 'Consolas', 'Monaco', monospace; font-size: 13px; line-height: 1.55; }
+
+  header { padding: 28px 32px 18px; border-bottom: 1px solid var(--border); font-family: 'Segoe UI', system-ui, sans-serif; }
+  header h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; }
+  header p  { color: var(--muted); font-size: 12px; margin-top: 3px; }
+
+  /* ── toolbar ── */
+  .toolbar {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 32px; border-bottom: 1px solid var(--border);
+    background: var(--surface); position: sticky; top: 0; z-index: 10;
+  }
+  .toolbar input {
+    background: var(--surface2); border: 1px solid var(--border); border-radius: 6px;
+    color: var(--text); font-size: 12px; padding: 5px 10px; outline: none; width: 220px;
+    font-family: inherit;
+  }
+  .toolbar input:focus { border-color: var(--accent); }
+  .btn {
+    font-size: 11px; padding: 4px 12px; border-radius: 5px; cursor: pointer; border: 1px solid var(--border);
+    background: var(--surface2); color: var(--muted); font-family: 'Segoe UI', sans-serif;
+    transition: background 0.12s, color 0.12s;
+  }
+  .btn:hover { background: var(--border); color: var(--text); }
+
+  /* ── legend ── */
+  .legend { display: flex; gap: 16px; padding: 8px 32px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  .leg { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--muted); font-family: 'Segoe UI', sans-serif; }
+  .leg-dot { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
+
+  /* ── tree ── */
+  .tree { padding: 20px 32px 48px; }
+  ul { list-style: none; padding-left: 0; }
+  ul ul { padding-left: 20px; }
+
+  li { display: block; }
+  .node {
+    display: flex; align-items: baseline; gap: 0; padding: 1px 0; cursor: default;
+    border-radius: 4px; transition: background 0.1s;
+  }
+  .node:hover { background: var(--surface2); }
+
+  .indent { color: var(--border); user-select: none; flex-shrink: 0; white-space: pre; }
+  .toggle { cursor: pointer; width: 14px; flex-shrink: 0; color: var(--muted); user-select: none; }
+  .toggle:hover { color: var(--text); }
+
+  .icon { flex-shrink: 0; margin-right: 5px; font-size: 12px; }
+  .name { color: var(--text); }
+  .name.dir  { font-weight: 700; }
+  .name.py   { color: #c792ea; }
+  .name.ts   { color: #4ec9b0; }
+  .name.tsx  { color: #4fc1ff; }
+  .name.md   { color: var(--muted); }
+  .name.json { color: var(--orange); }
+  .name.toml { color: var(--orange); }
+  .name.yml  { color: var(--merchant); }
+  .name.sh   { color: var(--green); }
+  .name.html { color: var(--red); }
+  .name.env  { color: var(--merchant); }
+
+  /* colour by role */
+  .role-shopping .name.dir { color: var(--shopping); }
+  .role-merchant .name.dir { color: var(--merchant); }
+  .role-common   .name.dir { color: var(--common);   }
+  .role-plugin   .name.dir { color: var(--plugin);   }
+  .role-sf       .name.dir { color: var(--sf);       }
+  .role-example  .name.dir { color: var(--green);    }
+
+  .anno {
+    margin-left: 10px; font-size: 10px; color: var(--muted);
+    font-family: 'Segoe UI', sans-serif; white-space: nowrap;
+  }
+  .anno.key { color: var(--accent); }
+  .anno.shop { color: var(--shopping); }
+  .anno.merch { color: var(--merchant); }
+  .anno.common { color: var(--common); }
+  .anno.plugin { color: var(--plugin); }
+  .anno.sf { color: var(--sf); }
+
+  /* collapsed children */
+  .children.collapsed { display: none; }
+
+  /* search highlight */
+  .node.hidden { display: none; }
+  .node.match .name { background: rgba(108,142,247,0.25); border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Commerce Agents — Directory Structure</h1>
+  <p>Interactive tree of every file in the repo (node_modules, __pycache__, .next, .git excluded)</p>
+</header>
+
+<div class="toolbar">
+  <input type="text" id="search" placeholder="Search files…" oninput="doSearch(this.value)" />
+  <button class="btn" onclick="expandAll()">Expand all</button>
+  <button class="btn" onclick="collapseAll()">Collapse all</button>
+  <button class="btn" onclick="document.getElementById('search').value=''; doSearch('')">Clear</button>
+</div>
+
+<div class="legend">
+  <div class="leg"><div class="leg-dot" style="background:var(--shopping)"></div> shopping-agent</div>
+  <div class="leg"><div class="leg-dot" style="background:var(--merchant)"></div> merchant-agent</div>
+  <div class="leg"><div class="leg-dot" style="background:var(--common)"></div> commerce-common</div>
+  <div class="leg"><div class="leg-dot" style="background:var(--green)"></div> examples</div>
+  <div class="leg"><div class="leg-dot" style="background:var(--sf)"></div> salesforce SFDX</div>
+  <div class="leg"><div class="leg-dot" style="background:var(--plugin)"></div> plugin</div>
+  <div class="leg"><div class="leg-dot" style="background:#c792ea"></div> .py</div>
+  <div class="leg"><div class="leg-dot" style="background:#4fc1ff"></div> .tsx</div>
+  <div class="leg"><div class="leg-dot" style="background:#4ec9b0"></div> .ts</div>
+  <div class="leg"><div class="leg-dot" style="background:var(--orange)"></div> .json / .toml</div>
+  <div class="leg"><div class="leg-dot" style="background:var(--merchant)"></div> .yml / .env</div>
+</div>
+
+<div class="tree">
+<ul id="tree-root"></ul>
+</div>
+
+<script>
+// ── Tree data ──────────────────────────────────────────
+// Each node: { n: name, a?: annotation, ac?: annoClass, ch?: children[] }
+// dir node has ch array; file node has no ch
+
+const T = {n:"commerce-agents-main/", ch:[
+  {n:"CLAUDE.md", a:"design rules, layout, conventions", ac:"key"},
+  {n:"README.md"},
+  {n:"Dockerfile"},
+  {n:"requirements.txt", a:"installs all 7 packages + pinned deps"},
+  {n:"requirements-dev.txt", a:"pytest, ruff"},
+  {n:"ruff.toml"},
+  {n:"pytest.ini"},
+  {n:"conftest.py"},
+  {n:".env.example"},
+  {n:"reference-architecture.html", a:"architecture map"},
+  {n:"agent-features.html", a:"features reference"},
+  {n:"directory-structure.html", a:"this file"},
+
+  {n:".claude-plugin/", ch:[
+    {n:"marketplace.json", a:"points at plugins/commerce-builder"}
+  ]},
+
+  {n:".claude/", ch:[
+    {n:"launch.json", a:"dev server config for preview tool"},
+    {n:"settings.local.json"}
+  ]},
+
+  {n:".github/", ch:[
+    {n:"CODEOWNERS"},
+    {n:"pull_request_template.md"},
+    {n:"workflows/", ch:[
+      {n:"ci.yml"},
+      {n:"salesforce-ci.yml"}
+    ]}
+  ]},
+
+  {n:"docs/", ch:[
+    {n:"backends.md", a:"StorefrontBackend / MerchantBackend contract"},
+    {n:"deployment.md", a:"Railway, Managed Agents, platform targets"},
+    {n:"safety.md", a:"fencing, gates, provenance rules"}
+  ]},
+
+  {n:"scripts/", ch:[
+    {n:"install.sh", a:"pip install -r requirements.txt"},
+    {n:"run_demo.py", a:"--merchant / --all / --api-only flags"},
+    {n:"check.py", a:"compares prompt text vs system.md"},
+    {n:"verify_all.py", a:"deploy dry runs + web builds"},
+    {n:"smoke_chat.py"},
+    {n:"screenshot_tour.py"},
+    {n:"deploy_managed_agent.sh"},
+    {n:"package_lwc.sh"}
+  ]},
+
+  {n:"tests/", ch:[
+    {n:"test_consumption_paths.py", a:"all 3 runtime paths × both roles"},
+    {n:"test_platform_seams.py"},
+    {n:"test_role_registries.py"},
+    {n:"test_search_envelope.py"},
+    {n:"test_system_switches.py"},
+    {n:"test_turn_loop.py"}
+  ]},
+
+  // ── COMMERCE-COMMON ──────────────────────────
+  {n:"commerce-common/", role:"common", ch:[
+    {n:"README.md"},
+    {n:"pyproject.toml"},
+    {n:"commerce_common/", role:"common", ch:[
+      {n:"__init__.py", a:"module list"},
+      {n:"types.py",          a:"shared Pydantic schemas", ac:"common"},
+      {n:"config.py",         a:"env-driven config"},
+      {n:"fencing.py",        a:"third-party content fencing"},
+      {n:"execution.py",      a:"tool dispatch engine"},
+      {n:"streaming.py",      a:"SSE event streaming"},
+      {n:"prompt_assembly.py",a:"static prompt + fenced block assembly"},
+      {n:"memory.py",         a:"buyer/merchant memory store"},
+      {n:"presentation.py",   a:"PresentationExtension base + UI tool pipeline"},
+      {n:"skills.py",         a:"skill loader"},
+      {n:"grounding.py",      a:"context grounding helpers"},
+      {n:"turn.py",           a:"turn state management"},
+      {n:"serialization.py"},
+      {n:"delegation.py",     a:"sub-agent delegation helpers"},
+      {n:"manifest.py",       a:"managed-agent manifest builder"},
+      {n:"mcp_server.py",     a:"MCP server base"},
+      {n:"agent_sdk.py",      a:"ClaudeAgentOptions helpers"},
+      {n:"testing.py",        a:"shared test utilities"}
+    ]},
+    {n:"tests/", ch:[
+      {n:"test_agent_sdk.py"},
+      {n:"test_config.py"},
+      {n:"test_delegation.py"},
+      {n:"test_execution.py"},
+      {n:"test_fencing.py"},
+      {n:"test_grounding.py"},
+      {n:"test_manifest.py"},
+      {n:"test_memory_facts.py"},
+      {n:"test_memory_runtime.py"},
+      {n:"test_memory_stores.py"},
+      {n:"test_presentation.py"},
+      {n:"test_prompt_assembly.py"},
+      {n:"test_skills.py"},
+      {n:"test_streaming.py"},
+      {n:"test_turn.py"}
+    ]}
+  ]},
+
+  // ── SHOPPING-AGENT ───────────────────────────
+  {n:"shopping-agent/", role:"shopping", ch:[
+    {n:"core/", role:"shopping", ch:[
+      {n:"README.md"},
+      {n:"pyproject.toml"},
+      {n:"shopping_agent/", role:"shopping", ch:[
+        {n:"__init__.py"},
+        {n:"backend.py",     a:"StorefrontBackend ABC", ac:"shop"},
+        {n:"types.py",       a:"buyer-side types"},
+        {n:"config.py"},
+        {n:"prompt.py",      a:"static system prompt"},
+        {n:"executor.py",    a:"agentic turn loop"},
+        {n:"gates.py",       a:"quantity caps, checkout guard"},
+        {n:"fencing.py"},
+        {n:"enrichment.py",  a:"product enrichment pipeline"},
+        {n:"grounding.py"},
+        {n:"memory.py",      a:"buyer preference memory"},
+        {n:"serialization.py"},
+        {n:"tools/", ch:[
+          {n:"__init__.py"},
+          {n:"registry.py",    a:"tool definitions + descriptions"},
+          {n:"presentation.py",a:"show_products, show_cart, show_order, …"}
+        ]}
+      ]},
+      {n:"tests/", ch:[
+        {n:"test_executor.py"},
+        {n:"test_gates.py"},
+        {n:"test_grounding.py"},
+        {n:"test_presentation.py"},
+        {n:"test_prompt.py"},
+        {n:"test_serialization.py"}
+      ]}
+    ]},
+    {n:"skills/", role:"shopping", ch:[
+      {n:"search-discovery/",      ch:[{n:"SKILL.md"}]},
+      {n:"purchase-research/",     ch:[{n:"SKILL.md"}]},
+      {n:"planning-goals/",        ch:[{n:"SKILL.md"}]},
+      {n:"customer-care/",         ch:[{n:"SKILL.md"}]},
+      {n:"quote-management/",      ch:[{n:"SKILL.md"}]},
+      {n:"approval-workflow/",     ch:[{n:"SKILL.md"}]},
+      {n:"asset-management/",      ch:[{n:"SKILL.md"}]},
+      {n:"promotions/",            ch:[{n:"SKILL.md"}]},
+      {n:"subscriptions/",         ch:[{n:"SKILL.md"}]},
+      {n:"memory-personalization/",ch:[{n:"SKILL.md"}]}
+    ]},
+    {n:"runtime-messages-api/", role:"shopping", ch:[
+      {n:"README.md", a:"path 1: direct Anthropic SDK loop"},
+      {n:"pyproject.toml"},
+      {n:"shopping_agent_runtime/", ch:[
+        {n:"__init__.py"},
+        {n:"orchestrator.py", a:"ShoppingAgent class"}
+      ]},
+      {n:"tests/", ch:[
+        {n:"test_orchestrator.py"}
+      ]}
+    ]},
+    {n:"runtime-agent-sdk/", role:"shopping", ch:[
+      {n:"README.md", a:"path 2: ClaudeAgentOptions + console"},
+      {n:"pyproject.toml"},
+      {n:"main.py", a:"interactive console entry point"},
+      {n:"shopping_agent_sdk/", ch:[
+        {n:"__init__.py"},
+        {n:"agent.py",           a:"ClaudeAgentOptions config"},
+        {n:"shopping_tools.py",  a:"tool bindings for SDK"},
+        {n:"_paths.py"}
+      ]},
+      {n:"tests/", ch:[
+        {n:"conftest.py"},
+        {n:"test_agent.py"},
+        {n:"test_grounding_helpers.py"}
+      ]}
+    ]},
+    {n:"managed-agents/", role:"shopping", ch:[
+      {n:"README.md", a:"path 3: manifest → system.md + MCP server"},
+      {n:"shopping-agent/", ch:[
+        {n:"agent.yaml", a:"manifest source"},
+        {n:"system.md",  a:"derived by scripts/check.py — do not hand-edit"}
+      ]},
+      {n:"storefront-mcp-server/", ch:[
+        {n:"README.md"},
+        {n:"storefront_mcp_server.py", a:"MCP server exposing shopping tools"},
+        {n:"tests/", ch:[{n:"test_server.py"}]}
+      ]}
+    ]}
+  ]},
+
+  // ── MERCHANT-AGENT ───────────────────────────
+  {n:"merchant-agent/", role:"merchant", ch:[
+    {n:"core/", role:"merchant", ch:[
+      {n:"pyproject.toml"},
+      {n:"merchant_agent/", role:"merchant", ch:[
+        {n:"__init__.py"},
+        {n:"backend.py",      a:"MerchantBackend ABC", ac:"merch"},
+        {n:"types.py",        a:"merchant-side types"},
+        {n:"config.py"},
+        {n:"prompt.py",       a:"static system prompt"},
+        {n:"executor.py",     a:"agentic turn loop"},
+        {n:"gates.py"},
+        {n:"fencing.py"},
+        {n:"changes.py",      a:"staged-write protocol", ac:"merch"},
+        {n:"analysis.py",     a:"analysis delegate dispatch", ac:"merch"},
+        {n:"enrichment.py"},
+        {n:"grounding.py"},
+        {n:"memory.py"},
+        {n:"serialization.py"},
+        {n:"tools/", ch:[
+          {n:"__init__.py"},
+          {n:"registry.py",     a:"tool definitions"},
+          {n:"presentation.py", a:"show_metrics_chart, show_change_preview, …"}
+        ]}
+      ]},
+      {n:"tests/", ch:[
+        {n:"test_analysis.py"},
+        {n:"test_changes.py"},
+        {n:"test_executor.py"},
+        {n:"test_gates.py"},
+        {n:"test_grounding.py"},
+        {n:"test_memory_prompt.py"},
+        {n:"test_presentation.py"},
+        {n:"test_prompt.py"}
+      ]}
+    ]},
+    {n:"skills/", role:"merchant", ch:[
+      {n:"performance-insights/", ch:[{n:"SKILL.md"}]},
+      {n:"pricing-promotions/",   ch:[{n:"SKILL.md"}]},
+      {n:"inventory-operations/", ch:[{n:"SKILL.md"}]},
+      {n:"catalog-listings/",     ch:[{n:"SKILL.md"}]},
+      {n:"marketing-campaigns/",  ch:[{n:"SKILL.md"}]}
+    ]},
+    {n:"runtime-messages-api/", role:"merchant", ch:[
+      {n:"README.md"},
+      {n:"pyproject.toml"},
+      {n:"merchant_agent_runtime/", ch:[
+        {n:"__init__.py"},
+        {n:"orchestrator.py", a:"MerchantAgent class"},
+        {n:"analysis.py",     a:"MerchantAnalysisDelegate sub-agent", ac:"merch"}
+      ]},
+      {n:"tests/", ch:[
+        {n:"test_analysis.py"},
+        {n:"test_orchestrator_followthrough.py"},
+        {n:"test_orchestrator_partial.py"},
+        {n:"test_orchestrator_progress.py"},
+        {n:"test_scheduled_digest.py"}
+      ]}
+    ]},
+    {n:"runtime-agent-sdk/", role:"merchant", ch:[
+      {n:"README.md"},
+      {n:"pyproject.toml"},
+      {n:"main.py"},
+      {n:"merchant_agent_sdk/", ch:[
+        {n:"__init__.py"},
+        {n:"agent.py"},
+        {n:"merchant_tools.py"},
+        {n:"_paths.py"}
+      ]},
+      {n:"tests/", ch:[
+        {n:"conftest.py"},
+        {n:"test_agent.py"}
+      ]}
+    ]},
+    {n:"managed-agents/", role:"merchant", ch:[
+      {n:"README.md"},
+      {n:"merchant-agent/", ch:[
+        {n:"agent.yaml"},
+        {n:"system.md"}
+      ]},
+      {n:"merchant-mcp-server/", ch:[
+        {n:"README.md"},
+        {n:"merchant_mcp_server.py"},
+        {n:"tests/", ch:[{n:"test_server.py"}]}
+      ]},
+      {n:"scheduled-digest/", ch:[
+        {n:"README.md", a:"morning digest cron job"},
+        {n:"run_morning_digest.py"}
+      ]}
+    ]}
+  ]},
+
+  // ── EXAMPLES ─────────────────────────────────
+  {n:"examples/", role:"example", ch:[
+    {n:"README.md"},
+    {n:"package.json", a:"npm workspace root"},
+    {n:"package-lock.json"},
+    {n:"demo_common/", role:"example", ch:[
+      {n:"__init__.py"},
+      {n:"host.py",               a:"FastAPI app factory"},
+      {n:"storefront.py",         a:"storefront route handlers"},
+      {n:"merchant.py",           a:"merchant route handlers"},
+      {n:"sessions.py",           a:"session store"},
+      {n:"memory.py",             a:"memory seeder"},
+      {n:"storefront_fixtures.py",a:"mock buyer data"},
+      {n:"merchant_fixtures.py",  a:"mock merchant data"},
+      {n:"tests/", ch:[
+        {n:"__init__.py"},
+        {n:"contract.py"},
+        {n:"fixtures.py"},
+        {n:"test_host.py"},
+        {n:"test_memory_seeder.py"},
+        {n:"test_merchant_fixtures.py"},
+        {n:"test_sessions.py"},
+        {n:"test_storefront_fixtures.py"}
+      ]}
+    ]},
+
+    // retail vertical
+    {n:"retail/", role:"example", ch:[
+      {n:"README.md"},
+      {n:"__init__.py"},
+      {n:"api/", ch:[
+        {n:"__init__.py"},
+        {n:"main.py",           a:"FastAPI :8000"},
+        {n:"main_production.py"},
+        {n:"agent_config.py"},
+        {n:"mock_retail.py",    a:"in-memory product catalog"},
+        {n:"mock_merchant.py"},
+        {n:"merchant.py"},
+        {n:"tests/", ch:[
+          {n:"__init__.py"},
+          {n:"conftest.py"},
+          {n:"test_contract.py"},
+          {n:"test_disclosure.py"},
+          {n:"test_retail_backend.py"},
+          {n:"test_routes.py"}
+        ]}
+      ]},
+      {n:"data/", ch:[
+        {n:"catalog.json"},
+        {n:"inventory.json"},
+        {n:"memory-seed.json"},
+        {n:"merchant_campaigns.json"},
+        {n:"merchant_messages.json"},
+        {n:"merchant_metrics.json"},
+        {n:"orders.json"},
+        {n:"policies.json"},
+        {n:"users.json"}
+      ]},
+      {n:"storefront-web/", ch:[
+        {n:"app/", ch:[{n:"globals.css"},{n:"layout.tsx"},{n:"page.tsx"},{n:"showcase/", ch:[{n:"page.tsx"}]}]},
+        {n:"components/", ch:[
+          {n:"generative/", ch:[{n:"index.tsx"},{n:"…cards…"}]},
+          {n:"views/", ch:[{n:"HomeView.tsx"}]}
+        ]},
+        {n:"lib/", ch:[{n:"api.ts"},{n:"types.ts"},{n:"format.ts"},{n:"…"}]},
+        {n:"next.config.ts"},{n:"package.json"},{n:"tsconfig.json"}
+      ]},
+      {n:"merchant-web/", ch:[
+        {n:"app/", ch:[{n:"globals.css"},{n:"layout.tsx"},{n:"page.tsx"}]},
+        {n:"components/", ch:[{n:"generative/"},{n:"views/"}]},
+        {n:"lib/", ch:[{n:"api.ts"},{n:"types.ts"},{n:"…"}]},
+        {n:"next.config.ts"},{n:"package.json"},{n:"tsconfig.json"}
+      ]}
+    ]},
+
+    // travel vertical
+    {n:"travel/", role:"example", ch:[
+      {n:"README.md"},
+      {n:"api/", ch:[
+        {n:"main.py", a:"FastAPI :8001"},
+        {n:"agent_config.py"},
+        {n:"mock_travel.py", a:"date-bound trip catalog"},
+        {n:"merchant.py"},
+        {n:"tests/", ch:[{n:"test_contract.py"},{n:"test_routes.py"},{n:"…"}]}
+      ]},
+      {n:"data/", ch:[{n:"catalog.json"},{n:"inventory.json"},{n:"…"}]},
+      {n:"storefront-web/", ch:[{n:"app/"},{n:"components/"},{n:"lib/"},{n:"package.json"}]},
+      {n:"merchant-web/", ch:[{n:"app/"},{n:"components/"},{n:"package.json"}]}
+    ]},
+
+    // telecom vertical
+    {n:"telecom/", role:"example", ch:[
+      {n:"README.md"},
+      {n:"api/", ch:[
+        {n:"main.py", a:"FastAPI :8002"},
+        {n:"agent_config.py"},
+        {n:"mock_telecom.py", a:"carrier plans + subscriber data"},
+        {n:"merchant.py"},
+        {n:"tests/", ch:[{n:"test_contract.py"},{n:"test_routes.py"},{n:"…"}]}
+      ]},
+      {n:"data/", ch:[{n:"catalog.json"},{n:"inventory.json"},{n:"…"}]},
+      {n:"storefront-web/", ch:[{n:"app/"},{n:"components/"},{n:"lib/"},{n:"package.json"}]},
+      {n:"merchant-web/", ch:[{n:"app/"},{n:"components/"},{n:"package.json"}]}
+    ]},
+
+    // entertainment vertical
+    {n:"entertainment/", role:"example", ch:[
+      {n:"README.md"},
+      {n:"api/", ch:[
+        {n:"main.py",          a:"FastAPI :8003"},
+        {n:"agent_config.py"},
+        {n:"mock_ticketing.py",a:"seat holds + transfers"},
+        {n:"ticketing.py"},
+        {n:"venue_map.py"},
+        {n:"hold_view.py"},
+        {n:"event_pacing.py"},
+        {n:"merchant.py"},
+        {n:"mock_merchant.py"},
+        {n:"tests/", ch:[
+          {n:"test_contract.py"},{n:"test_disclosure.py"},
+          {n:"test_entertainment_merchant_backend.py"},
+          {n:"test_entertainment_merchant_pacing.py"},
+          {n:"test_hold_view_extension.py"},{n:"test_holds.py"},
+          {n:"test_routes.py"},{n:"test_scarcity.py"},
+          {n:"test_transfer.py"},{n:"test_venue_map_extension.py"},
+          {n:"test_waitlist.py"}
+        ]}
+      ]},
+      {n:"data/", ch:[
+        {n:"catalog.json"},{n:"inventory.json"},{n:"memory-seed.json"},
+        {n:"merchant_campaigns.json"},{n:"merchant_messages.json"},
+        {n:"merchant_metrics.json"},{n:"merchant_pacing.json"},
+        {n:"orders.json"},{n:"policies.json"},{n:"tickets.json"},
+        {n:"users.json"},{n:"venues.json"}
+      ]},
+      {n:"storefront-web/", ch:[
+        {n:"app/"},{n:"components/generative/"},{n:"components/views/"},
+        {n:"lib/"},{n:"package.json"}
+      ]},
+      {n:"merchant-web/", ch:[
+        {n:"app/"},{n:"components/generative/"},{n:"components/views/"},
+        {n:"lib/"},{n:"package.json"}
+      ]}
+    ]},
+
+    // salesforce vertical
+    {n:"salesforce/", role:"sf", ch:[
+      {n:"__init__.py"},
+      {n:".env", a:"SF_INSTANCE_URL / SF_CLIENT_ID / SF_CLIENT_SECRET", ac:"sf"},
+      {n:"memory-seed.json"},
+      {n:"setup_products.py"},
+      {n:"api/", ch:[
+        {n:"__init__.py"},
+        {n:"main.py",           a:"FastAPI — Railway :8005 local"},
+        {n:"main_production.py",a:"Railway production entry"},
+        {n:"agent_config.py"},
+        {n:"merchant.py",       a:"merchant route handlers"},
+        {n:"sf_oms_backend.py", a:"SalesforceOMSBackend — live SF B2B APIs", ac:"sf"}
+      ]},
+      {n:"storefront-web/", role:"sf", ch:[
+        {n:".env.local",        a:"NEXT_PUBLIC_API_URL=Railway", ac:"sf"},
+        {n:"app/", ch:[{n:"globals.css"},{n:"layout.tsx"},{n:"page.tsx"},{n:"showcase/", ch:[{n:"page.tsx"}]}]},
+        {n:"components/", ch:[
+          {n:"CartPanel.tsx"},
+          {n:"Chat.tsx"},
+          {n:"ProductTile.tsx"},
+          {n:"generative/", ch:[
+            {n:"CheckoutSummary.tsx"},
+            {n:"ComparisonGrid.tsx"},
+            {n:"GuideCard.tsx"},
+            {n:"OrderStatusCard.tsx"},
+            {n:"PlanChecklist.tsx"},
+            {n:"ProductCarousel.tsx"},
+            {n:"index.tsx"}
+          ]},
+          {n:"views/", ch:[
+            {n:"HomeView.tsx", a:"buyer starters + featured products", ac:"sf"}
+          ]}
+        ]},
+        {n:"lib/", ch:[
+          {n:"api.ts",              a:"AgentApi + SSE event handling"},
+          {n:"types.ts"},
+          {n:"format.ts"},
+          {n:"orders.tsx"},
+          {n:"flight.ts"},
+          {n:"storePolicy.ts"},
+          {n:"showcase-fixtures.ts"}
+        ]},
+        {n:"public/products/",  a:"product images (.webp/.jpg)"},
+        {n:"next.config.ts"},{n:"package.json"},{n:"tsconfig.json"}
+      ]},
+      {n:"merchant-web/", role:"sf", ch:[
+        {n:"app/", ch:[{n:"globals.css"},{n:"layout.tsx"},{n:"page.tsx"}]},
+        {n:"components/", ch:[
+          {n:"AssistantPanel.tsx"},
+          {n:"generative/", ch:[
+            {n:"ChangePreviewCard.tsx"},
+            {n:"DigestCard.tsx"},
+            {n:"MetricsCard.tsx"},
+            {n:"index.tsx"}
+          ]},
+          {n:"views/", ch:[
+            {n:"HomeView.tsx"},
+            {n:"CatalogView.tsx"},
+            {n:"InventoryView.tsx"},
+            {n:"OrdersView.tsx"}
+          ]}
+        ]},
+        {n:"lib/", ch:[{n:"api.ts"},{n:"types.ts"},{n:"format.ts"},{n:"kinds.ts"},{n:"showcase-fixtures.ts"}]},
+        {n:"next.config.ts"},{n:"package.json"},{n:"tsconfig.json"}
+      ]}
+    ]}
+  ]},
+
+  // ── EMBED / LWC ──────────────────────────────
+  {n:"embed/", role:"sf", ch:[
+    {n:"commerce-agent-embed.js", a:"embed script for LWC iframe"},
+    {n:"docker-compose.yml"},
+    {n:"Dockerfile.litellm"},
+    {n:"litellm-config.yaml", a:"Bedrock via LiteLLM proxy config"},
+    {n:"package.xml"},
+    {n:"lwc/", ch:[
+      {n:"commerceAgentPanel/", ch:[
+        {n:"commerceAgentPanel.html"},
+        {n:"commerceAgentPanel.js",          a:"embedded chat panel"},
+        {n:"commerceAgentPanel.css"},
+        {n:"commerceAgentPanel.js-meta.xml"}
+      ]},
+      {n:"salesforceStorefront/", ch:[
+        {n:"salesforceStorefront.html"},
+        {n:"salesforceStorefront.js",         a:"buyer storefront LWC"},
+        {n:"salesforceStorefront.css"},
+        {n:"salesforceStorefront.js-meta.xml"}
+      ]},
+      {n:"salesforceMerchant/", ch:[
+        {n:"salesforceMerchant.html"},
+        {n:"salesforceMerchant.js",           a:"merchant portal LWC"},
+        {n:"salesforceMerchant.css"},
+        {n:"salesforceMerchant.js-meta.xml"}
+      ]}
+    ]}
+  ]},
+
+  // ── SALESFORCE SFDX ──────────────────────────
+  {n:"salesforce/", role:"sf", ch:[
+    {n:"sfdx-project.json"},
+    {n:"README.md"},
+    {n:".forceignore"},
+    {n:".eslintrc.json"},
+    {n:"jest.config.js"},
+    {n:"package.json"},
+    {n:"force-app/main/default/", ch:[
+      {n:"classes/", ch:[
+        {n:"CommerceAgentController.cls",     a:"Apex REST endpoint"},
+        {n:"CommerceAgentController.cls-meta.xml"},
+        {n:"CommerceAgentControllerTest.cls"},
+        {n:"CommerceAgentControllerTest.cls-meta.xml"},
+        {n:"CommerceAgentService.cls",        a:"callout to Railway"},
+        {n:"CommerceAgentService.cls-meta.xml"},
+        {n:"IHttpService.cls"},
+        {n:"IHttpService.cls-meta.xml"},
+        {n:"OrderService.cls"},
+        {n:"OrderService.cls-meta.xml"},
+        {n:"OrderTriggerHandler.cls"},
+        {n:"OrderTriggerHandler.cls-meta.xml"},
+        {n:"OrderTriggerHandlerTest.cls"},
+        {n:"OrderTriggerHandlerTest.cls-meta.xml"},
+        {n:"TriggerHandler.cls"},
+        {n:"TriggerHandler.cls-meta.xml"}
+      ]},
+      {n:"lwc/", ch:[
+        {n:"commerceAgentPanel/", ch:[
+          {n:"commerceAgentPanel.html"},
+          {n:"commerceAgentPanel.js"},
+          {n:"commerceAgentPanel.css"},
+          {n:"commerceAgentPanel.js-meta.xml"},
+          {n:"__tests__/", ch:[{n:"commerceAgentPanel.test.js"}]}
+        ]},
+        {n:"salesforceStorefront/", ch:[
+          {n:"salesforceStorefront.html"},
+          {n:"salesforceStorefront.js"},
+          {n:"salesforceStorefront.css"},
+          {n:"salesforceStorefront.js-meta.xml"},
+          {n:"__tests__/", ch:[{n:"salesforceStorefront.test.js"}]}
+        ]},
+        {n:"salesforceMerchant/", ch:[
+          {n:"salesforceMerchant.html"},
+          {n:"salesforceMerchant.js"},
+          {n:"salesforceMerchant.css"},
+          {n:"salesforceMerchant.js-meta.xml"},
+          {n:"__tests__/", ch:[{n:"salesforceMerchant.test.js"}]}
+        ]}
+      ]},
+      {n:"triggers/", ch:[
+        {n:"OrderTrigger.trigger"},
+        {n:"OrderTrigger.trigger-meta.xml"}
+      ]},
+      {n:"namedCredentials/", ch:[
+        {n:"Commerce_Agent_API.namedCredential-meta.xml", a:"→ Railway URL"}
+      ]},
+      {n:"permissionsets/", ch:[
+        {n:"Commerce_Agent_User.permissionset-meta.xml"}
+      ]}
+    ]},
+    {n:"scripts/", ch:[
+      {n:"check_coverage.py"},
+      {n:"explain_pmd_violations.py"},
+      {n:"post_ai_review.py"}
+    ]},
+    {n:"jest-mocks/", ch:[
+      {n:"apex.js"},{n:"schema.js"},{n:"user.js"},
+      {n:"lightning/", ch:[{n:"navigation.js"},{n:"platformShowToastEvent.js"}]}
+    ]},
+    {n:"config/", ch:[{n:"project-scratch-def.json"}]},
+    {n:"docs/", ch:[{n:"ai-workflow.html"}]}
+  ]},
+
+  // ── PLUGIN ───────────────────────────────────
+  {n:"plugins/commerce-builder/", role:"plugin", ch:[
+    {n:"README.md"},
+    {n:".claude-plugin/", ch:[{n:"plugin.json"}]},
+    {n:"commands/", ch:[
+      {n:"scaffold-commerce-agent.md"},
+      {n:"add-commerce-flow.md"},
+      {n:"author-commerce-evals.md"},
+      {n:"review-commerce-agent.md"}
+    ]},
+    {n:"skills/", ch:[
+      {n:"commerce-architecture/",        ch:[{n:"SKILL.md"}]},
+      {n:"commerce-ui-tools/",            ch:[{n:"SKILL.md"}]},
+      {n:"commerce-trust-safety/",        ch:[{n:"SKILL.md"}]},
+      {n:"commerce-prompt-caching/",      ch:[{n:"SKILL.md"}]},
+      {n:"commerce-merchant-operations/", ch:[{n:"SKILL.md"}]},
+      {n:"commerce-evals/",               ch:[{n:"SKILL.md"}]}
+    ]}
+  ]}
+
+]};
+
+// ── Render ─────────────────────────────────────────────
+function extClass(name) {
+  if (name.endsWith('/')) return 'dir';
+  const m = name.match(/\.([a-z]+)$/i);
+  if (!m) return '';
+  const e = m[1].toLowerCase();
+  if (e === 'py') return 'py';
+  if (e === 'tsx') return 'tsx';
+  if (e === 'ts') return 'ts';
+  if (e === 'md') return 'md';
+  if (e === 'json') return 'json';
+  if (e === 'toml') return 'toml';
+  if (e === 'yml' || e === 'yaml') return 'yml';
+  if (e === 'sh') return 'sh';
+  if (e === 'html') return 'html';
+  if (e === 'env' || name.startsWith('.env')) return 'env';
+  if (e === 'cls' || e === 'trigger') return 'py'; // Apex
+  return '';
+}
+
+function fileIcon(name) {
+  if (name.endsWith('/')) return '📁';
+  const n = name.toLowerCase();
+  if (n.endsWith('.py') || n.endsWith('.cls') || n.endsWith('.trigger')) return '🐍';
+  if (n.endsWith('.tsx')) return '⚛️';
+  if (n.endsWith('.ts') && !n.endsWith('.tsx')) return '📘';
+  if (n.endsWith('.md')) return '📝';
+  if (n.endsWith('.json') || n.endsWith('.toml')) return '{}';
+  if (n.endsWith('.yml') || n.endsWith('.yaml')) return '⚙️';
+  if (n.endsWith('.sh')) return '🖥';
+  if (n.endsWith('.html')) return '🌐';
+  if (n.startsWith('.env') || n === '.env') return '🔑';
+  if (n.endsWith('.css')) return '🎨';
+  if (n.endsWith('.xml')) return '🏷';
+  if (n.endsWith('.txt')) return '📄';
+  return '📄';
+}
+
+let idCounter = 0;
+function buildNode(node, depth) {
+  const li = document.createElement('li');
+  const isDir = Array.isArray(node.ch);
+  const nodeDiv = document.createElement('div');
+  nodeDiv.className = 'node' + (node.role ? ' role-' + node.role : '');
+  nodeDiv.dataset.name = node.n.toLowerCase();
+
+  // toggle
+  const tog = document.createElement('span');
+  tog.className = 'toggle';
+  if (isDir) {
+    tog.textContent = '▾';
+  } else {
+    tog.textContent = ' ';
+    tog.style.cursor = 'default';
+  }
+  nodeDiv.appendChild(tog);
+
+  // icon
+  const icon = document.createElement('span');
+  icon.className = 'icon';
+  icon.textContent = fileIcon(node.n);
+  nodeDiv.appendChild(icon);
+
+  // name
+  const nameSpan = document.createElement('span');
+  nameSpan.className = 'name ' + (isDir ? 'dir' : extClass(node.n));
+  nameSpan.textContent = node.n;
+  nodeDiv.appendChild(nameSpan);
+
+  // annotation
+  if (node.a) {
+    const anno = document.createElement('span');
+    anno.className = 'anno ' + (node.ac || '');
+    anno.textContent = '— ' + node.a;
+    nodeDiv.appendChild(anno);
+  }
+
+  li.appendChild(nodeDiv);
+
+  if (isDir) {
+    const childId = 'ch-' + (++idCounter);
+    const childUl = document.createElement('ul');
+    childUl.id = childId;
+    childUl.className = 'children';
+    // default: collapse at depth >=3
+    if (depth >= 3) childUl.classList.add('collapsed');
+
+    for (const child of node.ch) {
+      childUl.appendChild(buildNode(child, depth + 1));
+    }
+    li.appendChild(childUl);
+
+    tog.addEventListener('click', () => {
+      const collapsed = childUl.classList.toggle('collapsed');
+      tog.textContent = collapsed ? '▸' : '▾';
+    });
+    if (depth >= 3) tog.textContent = '▸';
+  }
+
+  return li;
+}
+
+function render() {
+  const root = document.getElementById('tree-root');
+  root.appendChild(buildNode(T, 0));
+}
+
+function expandAll() {
+  document.querySelectorAll('.children').forEach(el => el.classList.remove('collapsed'));
+  document.querySelectorAll('.toggle').forEach(el => { if (el.textContent.trim() !== ' ') el.textContent = '▾'; });
+}
+function collapseAll() {
+  document.querySelectorAll('.children').forEach(el => el.classList.add('collapsed'));
+  document.querySelectorAll('.toggle').forEach(el => { if (el.textContent.trim() !== ' ') el.textContent = '▸'; });
+}
+
+function doSearch(q) {
+  q = q.toLowerCase().trim();
+  const nodes = document.querySelectorAll('.node');
+  if (!q) {
+    nodes.forEach(n => { n.classList.remove('hidden', 'match'); });
+    return;
+  }
+  nodes.forEach(n => {
+    const name = n.dataset.name || '';
+    if (name.includes(q)) {
+      n.classList.remove('hidden');
+      n.classList.add('match');
+      // show all ancestor <ul>
+      let p = n.parentElement;
+      while (p) {
+        if (p.tagName === 'UL' && p.classList.contains('children')) {
+          p.classList.remove('collapsed');
+          const tog = p.previousElementSibling?.querySelector?.('.toggle');
+          if (tog && tog.textContent.trim() !== ' ') tog.textContent = '▾';
+        }
+        p = p.parentElement;
+      }
+    } else {
+      n.classList.add('hidden');
+      n.classList.remove('match');
+    }
+  });
+}
+
+render();
+</script>
+</body>
+</html>

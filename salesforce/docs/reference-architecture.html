@@ -1,0 +1,1146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Salesforce Commerce Agent — Reference Architecture</title>
+<style>
+/* ── Design tokens ──────────────────────────────────────────────────────── */
+:root {
+  --bg:          #f0f2f7;
+  --surface:     #ffffff;
+  --ink:         #1a2540;
+  --ink-2:       #374261;
+  --ink-soft:    #6272a0;
+  --ink-faint:   #9aaad0;
+  --line:        rgba(26,37,64,.10);
+  --line-str:    rgba(26,37,64,.18);
+
+  /* Layer palette */
+  --dev:         #1e3a5f;   /* developer toolchain */
+  --dev-soft:    #dce8f5;
+  --git:         #6d28d9;   /* source control */
+  --git-soft:    #ede9fe;
+  --ci:          #c2410c;   /* CI/CD */
+  --ci-soft:     #ffedd5;
+  --sf:          #0284c7;   /* Salesforce platform */
+  --sf-soft:     #e0f2fe;
+  --backend:     #047857;   /* backend services */
+  --backend-soft:#d1fae5;
+  --ai:          #b45309;   /* AI services */
+  --ai-soft:     #fef3c7;
+  --accent:      #d97f5f;
+
+  --shadow-sm:   0 1px 2px rgba(26,37,64,.06),0 1px 4px -2px rgba(26,37,64,.10);
+  --shadow:      0 2px 8px -2px rgba(26,37,64,.12),0 1px 3px rgba(26,37,64,.08);
+  --shadow-lg:   0 8px 30px -8px rgba(26,37,64,.22),0 2px 8px rgba(26,37,64,.08);
+  --radius:      10px;
+  font-family: "Instrument Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-size: 13px;
+  color: var(--ink);
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); padding: 24px 20px 40px; min-height: 100vh; }
+
+/* ── Page header ─────────────────────────────────────────────────────────── */
+.page-hdr {
+  text-align: center; margin-bottom: 28px;
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+}
+.page-hdr h1 { font-size: 22px; font-weight: 800; color: var(--ink); letter-spacing: -.4px; }
+.page-hdr p  { font-size: 13px; color: var(--ink-soft); max-width: 560px; }
+.badge-row   { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+.badge {
+  font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 999px;
+  letter-spacing: .04em; text-transform: uppercase;
+}
+
+/* ── Architecture canvas ─────────────────────────────────────────────────── */
+.arch { display: flex; flex-direction: column; gap: 4px; max-width: 1100px; margin: 0 auto; }
+
+/* ── Layer row ───────────────────────────────────────────────────────────── */
+.layer {
+  display: flex; align-items: stretch; border-radius: var(--radius);
+  background: var(--surface); border: 1px solid var(--line);
+  box-shadow: var(--shadow-sm); overflow: visible;
+  position: relative;
+}
+.layer-label {
+  writing-mode: vertical-lr; transform: rotate(180deg);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase;
+  padding: 12px 10px; border-radius: var(--radius) 0 0 var(--radius);
+  color: #fff; min-width: 36px; flex-shrink: 0;
+}
+.layer-body {
+  flex: 1; padding: 14px 16px;
+  display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+}
+.layer-body.cols { flex-direction: column; }
+
+/* ── Component box ───────────────────────────────────────────────────────── */
+.comp {
+  display: flex; flex-direction: column; align-items: center;
+  gap: 5px; padding: 10px 12px;
+  border-radius: 8px; border: 1.5px solid var(--line);
+  background: var(--surface); box-shadow: var(--shadow-sm);
+  cursor: pointer; transition: all 140ms; min-width: 90px;
+  text-align: center; flex-shrink: 0;
+  position: relative;
+}
+.comp:hover { box-shadow: var(--shadow); transform: translateY(-2px); border-color: var(--line-str); }
+.comp.active { border-width: 2px; box-shadow: var(--shadow-lg); transform: translateY(-2px); }
+.comp-icon  { font-size: 22px; line-height: 1; }
+.comp-name  { font-size: 11px; font-weight: 700; color: var(--ink); line-height: 1.3; }
+.comp-sub   { font-size: 10px; color: var(--ink-soft); line-height: 1.3; }
+.comp-tag {
+  position: absolute; top: -8px; right: -6px;
+  font-size: 9px; font-weight: 800; padding: 2px 6px; border-radius: 999px;
+  text-transform: uppercase; letter-spacing: .05em; color: #fff;
+}
+
+/* ── Group box (for clusters of related comps) ───────────────────────────── */
+.group {
+  border: 1.5px dashed var(--line-str); border-radius: 10px;
+  padding: 10px 14px; display: flex; flex-direction: column; gap: 8px;
+  background: var(--bg); position: relative;
+}
+.group-label {
+  position: absolute; top: -10px; left: 12px;
+  font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: .08em;
+  background: var(--surface); padding: 1px 8px; border-radius: 999px;
+  color: var(--ink-soft); border: 1px solid var(--line-str);
+}
+.group-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-start; }
+
+/* ── Connector SVG ───────────────────────────────────────────────────────── */
+.connectors {
+  position: absolute; left: 0; top: 0; width: 100%; height: 100%;
+  pointer-events: none; overflow: visible;
+}
+
+/* ── Arrow between layers ────────────────────────────────────────────────── */
+.layer-arrow {
+  display: flex; align-items: center; justify-content: center;
+  height: 28px; position: relative; gap: 12px;
+}
+.arrow-line {
+  flex: 1; height: 1.5px; background: var(--line-str);
+  position: relative; max-width: 200px;
+}
+.arrow-line::after {
+  content: ''; position: absolute; right: -6px; top: 50%;
+  transform: translateY(-50%);
+  border: 5px solid transparent; border-left-color: var(--line-str);
+}
+.arrow-label {
+  font-size: 10px; font-weight: 600; color: var(--ink-soft);
+  background: var(--bg); padding: 2px 8px; border-radius: 999px;
+  border: 1px solid var(--line); white-space: nowrap; z-index: 1;
+}
+.arrow-cluster {
+  display: flex; gap: 24px; width: 100%; justify-content: space-around;
+  align-items: center;
+}
+.arrow-single {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+}
+.arrow-v {
+  width: 2px; height: 20px; background: var(--line-str);
+  position: relative;
+}
+.arrow-v::after {
+  content: ''; position: absolute; bottom: -6px; left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent; border-top-color: var(--line-str);
+}
+.arrow-lbl {
+  font-size: 9px; font-weight: 700; color: var(--ink-soft);
+  white-space: nowrap;
+}
+
+/* ── Detail panel ────────────────────────────────────────────────────────── */
+.detail-panel {
+  background: var(--surface); border-radius: var(--radius);
+  border: 1.5px solid var(--line-str); box-shadow: var(--shadow-lg);
+  padding: 20px 24px; max-width: 1100px; margin: 12px auto 0;
+  animation: slideIn 180ms ease both;
+  display: none;
+}
+.detail-panel.visible { display: block; }
+@keyframes slideIn { from{opacity:0;transform:translateY(4px)} to{opacity:1;transform:none} }
+
+.dp-header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+.dp-icon   { font-size: 36px; }
+.dp-title  { font-size: 17px; font-weight: 700; color: var(--ink); }
+.dp-sub    { font-size: 12px; color: var(--ink-soft); margin-top: 2px; }
+
+.dp-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+.dp-card {
+  background: var(--bg); border-radius: 8px; padding: 12px 14px;
+}
+.dp-card h4 {
+  font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .07em;
+  color: var(--ink-soft); margin-bottom: 8px;
+}
+.dp-card ul { list-style: none; display: flex; flex-direction: column; gap: 5px; }
+.dp-card li { font-size: 12px; color: var(--ink-2); line-height: 1.4; }
+.dp-card li::before { content: "· "; color: var(--accent); font-weight: 900; }
+
+.dp-code {
+  margin-top: 14px; background: #1a2540; color: #e2e8f0;
+  border-radius: 8px; padding: 12px 16px; font-family: "SF Mono","Fira Code",monospace;
+  font-size: 11.5px; line-height: 1.6; white-space: pre; overflow-x: auto;
+}
+.dp-code .c  { color: #94a3b8; }
+.dp-code .k  { color: #93c5fd; }
+.dp-code .s  { color: #86efac; }
+.dp-code .kw { color: #c084fc; }
+
+/* ── Legend ──────────────────────────────────────────────────────────────── */
+.legend {
+  max-width: 1100px; margin: 16px auto 0;
+  display: flex; flex-wrap: wrap; gap: 12px; justify-content: center;
+  padding: 12px 16px; background: var(--surface); border-radius: var(--radius);
+  border: 1px solid var(--line);
+}
+.leg-item { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--ink-soft); }
+.leg-swatch { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }
+
+/* ── Colours per layer ───────────────────────────────────────────────────── */
+.l-dev     { background: var(--dev); }
+.l-git     { background: var(--git); }
+.l-ci      { background: var(--ci);  }
+.l-sf      { background: var(--sf);  }
+.l-backend { background: var(--backend); }
+.l-ai      { background: var(--ai);  }
+
+.c-dev     { border-color: var(--dev);     }
+.c-dev.active  { border-color: var(--dev);  }
+.c-git     { border-color: var(--git);     }
+.c-git.active  { border-color: var(--git);  }
+.c-ci      { border-color: var(--ci);      }
+.c-ci.active   { border-color: var(--ci);   }
+.c-sf      { border-color: var(--sf);      }
+.c-sf.active   { border-color: var(--sf);   }
+.c-be      { border-color: var(--backend); }
+.c-be.active   { border-color: var(--backend); }
+.c-ai      { border-color: var(--ai);      }
+.c-ai.active   { border-color: var(--ai);   }
+
+.t-dev { background: var(--dev); }
+.t-git { background: var(--git); }
+.t-ci  { background: var(--ci);  }
+.t-sf  { background: var(--sf);  }
+.t-be  { background: var(--backend); }
+.t-ai  { background: var(--ai);  }
+
+/* Soft tints for group backgrounds */
+.bg-dev { background: var(--dev-soft); }
+.bg-git { background: var(--git-soft); }
+.bg-ci  { background: var(--ci-soft);  }
+.bg-sf  { background: var(--sf-soft);  }
+.bg-be  { background: var(--backend-soft); }
+.bg-ai  { background: var(--ai-soft);  }
+
+/* ── Responsive ──────────────────────────────────────────────────────────── */
+@media (max-width: 700px) {
+  .layer-label { font-size: 8px; padding: 8px 6px; min-width: 28px; }
+  .comp        { min-width: 70px; padding: 8px; }
+  .comp-icon   { font-size: 18px; }
+}
+</style>
+</head>
+<body>
+
+<!-- ── Header ─────────────────────────────────────────────────────────────── -->
+<div class="page-hdr">
+  <h1>Salesforce Commerce Agent — Reference Architecture</h1>
+  <p>End-to-end architecture: developer toolchain → source control → CI/CD → Salesforce orgs → backend services → AI</p>
+  <div class="badge-row">
+    <span class="badge" style="background:var(--dev-soft);color:var(--dev)">Developer Tooling</span>
+    <span class="badge" style="background:var(--git-soft);color:var(--git)">Source Control</span>
+    <span class="badge" style="background:var(--ci-soft);color:var(--ci)">CI / CD</span>
+    <span class="badge" style="background:var(--sf-soft);color:var(--sf)">Salesforce Platform</span>
+    <span class="badge" style="background:var(--backend-soft);color:var(--backend)">Backend Services</span>
+    <span class="badge" style="background:var(--ai-soft);color:var(--ai)">AI Layer</span>
+  </div>
+</div>
+
+<!-- ── Architecture ───────────────────────────────────────────────────────── -->
+<div class="arch">
+
+  <!-- Layer 1: Developer Toolchain -->
+  <div class="layer">
+    <div class="layer-label l-dev">Developer</div>
+    <div class="layer-body" style="gap:12px">
+      <div class="comp c-dev" data-id="vscode" onclick="showDetail('vscode')">
+        <div class="comp-icon">🖥️</div>
+        <div class="comp-name">VS Code</div>
+        <div class="comp-sub">+ Salesforce Ext</div>
+        <div class="comp-tag t-dev">IDE</div>
+      </div>
+      <div class="comp c-dev" data-id="sf-cli" onclick="showDetail('sf-cli')">
+        <div class="comp-icon">⌨️</div>
+        <div class="comp-name">Salesforce CLI</div>
+        <div class="comp-sub">sf v2 / sfdx</div>
+      </div>
+      <div class="comp c-ai" data-id="claude-code" onclick="showDetail('claude-code')">
+        <div class="comp-icon">🤖</div>
+        <div class="comp-name">Claude Code</div>
+        <div class="comp-sub">/review /test /explain</div>
+        <div class="comp-tag t-ai">AI</div>
+      </div>
+      <div class="comp c-ai" data-id="ghcp" onclick="showDetail('ghcp')">
+        <div class="comp-icon">🐙</div>
+        <div class="comp-name">GitHub Copilot</div>
+        <div class="comp-sub">Inline + Chat</div>
+        <div class="comp-tag t-ai">AI</div>
+      </div>
+      <div class="comp c-dev" data-id="pmd-local" onclick="showDetail('pmd-local')">
+        <div class="comp-icon">🔍</div>
+        <div class="comp-name">PMD</div>
+        <div class="comp-sub">Local Apex lint</div>
+      </div>
+      <div class="comp c-dev" data-id="jest-local" onclick="showDetail('jest-local')">
+        <div class="comp-icon">🧪</div>
+        <div class="comp-name">Jest</div>
+        <div class="comp-sub">LWC unit tests</div>
+      </div>
+
+      <!-- Scratch org — developer's local target -->
+      <div class="group bg-dev" style="margin-left:auto">
+        <span class="group-label">Dev scratch org</span>
+        <div class="group-row">
+          <div class="comp c-sf" data-id="scratch-dev" onclick="showDetail('scratch-dev')" style="min-width:78px">
+            <div class="comp-icon">🧱</div>
+            <div class="comp-name">Scratch Org</div>
+            <div class="comp-sub">B2B Commerce</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Arrow 1→2 -->
+  <div class="layer-arrow">
+    <div class="arrow-cluster">
+      <div class="arrow-single">
+        <div class="arrow-lbl">git push / pr create</div>
+        <div class="arrow-v"></div>
+      </div>
+      <div class="arrow-single">
+        <div class="arrow-lbl">sf project deploy start</div>
+        <div class="arrow-v"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Layer 2: Source Control -->
+  <div class="layer">
+    <div class="layer-label l-git">GitHub</div>
+    <div class="layer-body">
+
+      <div class="group bg-git">
+        <span class="group-label">Branch Strategy</span>
+        <div class="group-row">
+          <div class="comp c-git" data-id="branch-feature" onclick="showDetail('branch-feature')">
+            <div class="comp-icon">🌿</div>
+            <div class="comp-name">feature/*</div>
+            <div class="comp-sub">→ Scratch org</div>
+          </div>
+          <div class="comp c-git" data-id="branch-develop" onclick="showDetail('branch-develop')">
+            <div class="comp-icon">🔀</div>
+            <div class="comp-name">develop</div>
+            <div class="comp-sub">→ Sandbox</div>
+          </div>
+          <div class="comp c-git" data-id="branch-main" onclick="showDetail('branch-main')">
+            <div class="comp-icon">🏷️</div>
+            <div class="comp-name">main</div>
+            <div class="comp-sub">→ Production</div>
+          </div>
+          <div class="comp c-git" data-id="branch-hotfix" onclick="showDetail('branch-hotfix')">
+            <div class="comp-icon">🚨</div>
+            <div class="comp-name">hotfix/*</div>
+            <div class="comp-sub">→ main + develop</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="group bg-git" style="margin-left:auto">
+        <span class="group-label">Governance</span>
+        <div class="group-row">
+          <div class="comp c-git" data-id="codeowners" onclick="showDetail('codeowners')" style="min-width:80px">
+            <div class="comp-icon">🔐</div>
+            <div class="comp-name">CODEOWNERS</div>
+            <div class="comp-sub">apex/lwc/platform</div>
+          </div>
+          <div class="comp c-git" data-id="pr-template" onclick="showDetail('pr-template')" style="min-width:80px">
+            <div class="comp-icon">📋</div>
+            <div class="comp-name">PR Template</div>
+            <div class="comp-sub">Checklist + gate</div>
+          </div>
+          <div class="comp c-git" data-id="env-protection" onclick="showDetail('env-protection')" style="min-width:80px">
+            <div class="comp-icon">🛡️</div>
+            <div class="comp-name">Env Protection</div>
+            <div class="comp-sub">sandbox / prod</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Arrow 2→3 -->
+  <div class="layer-arrow">
+    <div class="arrow-cluster">
+      <div class="arrow-single">
+        <div class="arrow-lbl">on: push + pull_request → salesforce/**</div>
+        <div class="arrow-v"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Layer 3: CI/CD -->
+  <div class="layer">
+    <div class="layer-label l-ci">CI / CD</div>
+    <div class="layer-body">
+
+      <div class="group bg-ci">
+        <span class="group-label">Stage 1–2 (every PR, ~5 min)</span>
+        <div class="group-row">
+          <div class="comp c-ci" data-id="ci-pmd" onclick="showDetail('ci-pmd')">
+            <div class="comp-icon">🔎</div>
+            <div class="comp-name">apex-scan</div>
+            <div class="comp-sub">PMD priority 1–3</div>
+            <div class="comp-tag t-ci">~2 min</div>
+          </div>
+          <div class="comp c-ci" data-id="ci-jest" onclick="showDetail('ci-jest')">
+            <div class="comp-icon">🧪</div>
+            <div class="comp-name">lwc-unit-tests</div>
+            <div class="comp-sub">Jest ≥80% branch cov</div>
+            <div class="comp-tag t-ci">~3 min</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="group bg-ci">
+        <span class="group-label">Stage 3 (feature/* PRs, ~10 min)</span>
+        <div class="group-row">
+          <div class="comp c-ci" data-id="ci-scratch" onclick="showDetail('ci-scratch')">
+            <div class="comp-icon">🧱</div>
+            <div class="comp-name">scratch-org-validate</div>
+            <div class="comp-sub">Deploy + Apex tests ≥75%</div>
+            <div class="comp-tag t-ci">~10 min</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="group bg-ai">
+        <span class="group-label">AI review (every PR)</span>
+        <div class="group-row">
+          <div class="comp c-ai" data-id="ci-ai-review" onclick="showDetail('ci-ai-review')">
+            <div class="comp-icon">🤖</div>
+            <div class="comp-name">ai-pr-review</div>
+            <div class="comp-sub">Claude PR comment</div>
+            <div class="comp-tag t-ai">AI</div>
+          </div>
+          <div class="comp c-ai" data-id="ci-pmd-explain" onclick="showDetail('ci-pmd-explain')">
+            <div class="comp-icon">💬</div>
+            <div class="comp-name">pmd-explain</div>
+            <div class="comp-sub">Claude plain-English</div>
+            <div class="comp-tag t-ai">AI</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="group bg-ci">
+        <span class="group-label">Stage 4–5 (deploy gates)</span>
+        <div class="group-row">
+          <div class="comp c-ci" data-id="ci-sandbox-deploy" onclick="showDetail('ci-sandbox-deploy')">
+            <div class="comp-icon">📦</div>
+            <div class="comp-name">sandbox-deploy</div>
+            <div class="comp-sub">→ develop merge</div>
+            <div class="comp-tag t-ci">~8 min</div>
+          </div>
+          <div class="comp c-ci" data-id="ci-prod-deploy" onclick="showDetail('ci-prod-deploy')">
+            <div class="comp-icon">🚀</div>
+            <div class="comp-name">production-deploy</div>
+            <div class="comp-sub">→ main + env approval</div>
+            <div class="comp-tag t-ci">Gate</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Arrow 3→4 -->
+  <div class="layer-arrow">
+    <div class="arrow-cluster">
+      <div class="arrow-single">
+        <div class="arrow-lbl">sf org create scratch</div>
+        <div class="arrow-v"></div>
+      </div>
+      <div class="arrow-single">
+        <div class="arrow-lbl">sf project deploy start → sandbox</div>
+        <div class="arrow-v"></div>
+      </div>
+      <div class="arrow-single">
+        <div class="arrow-lbl">sf project deploy start → production</div>
+        <div class="arrow-v"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Layer 4: Salesforce Platform -->
+  <div class="layer">
+    <div class="layer-label l-sf">Salesforce</div>
+    <div class="layer-body" style="align-items:flex-start">
+
+      <!-- Dev Hub + Scratch orgs -->
+      <div class="group bg-sf">
+        <span class="group-label">Dev Hub</span>
+        <div class="group-row">
+          <div class="comp c-sf" data-id="devhub" onclick="showDetail('devhub')" style="min-width:80px">
+            <div class="comp-icon">🏛️</div>
+            <div class="comp-name">Dev Hub</div>
+            <div class="comp-sub">SFDX_AUTH_URL</div>
+          </div>
+          <div class="comp c-sf" data-id="scratch-ci" onclick="showDetail('scratch-ci')" style="min-width:80px">
+            <div class="comp-icon">🧱</div>
+            <div class="comp-name">CI Scratch Org</div>
+            <div class="comp-sub">Ephemeral 1 day</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sandbox -->
+      <div class="group bg-sf" style="flex:1">
+        <span class="group-label">Sandbox (ets2-org--1storedpro)</span>
+        <div class="group-row" style="align-items:flex-start">
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div class="group bg-sf" style="padding:8px 10px">
+              <span class="group-label">LWC Components</span>
+              <div class="group-row">
+                <div class="comp c-sf" data-id="lwc-storefront" onclick="showDetail('lwc-storefront')" style="min-width:78px">
+                  <div class="comp-icon">🛍️</div>
+                  <div class="comp-name">Storefront</div>
+                  <div class="comp-sub">B2B shopping</div>
+                </div>
+                <div class="comp c-sf" data-id="lwc-merchant" onclick="showDetail('lwc-merchant')" style="min-width:78px">
+                  <div class="comp-icon">🏪</div>
+                  <div class="comp-name">Merchant</div>
+                  <div class="comp-sub">OMS workspace</div>
+                </div>
+                <div class="comp c-sf" data-id="lwc-panel" onclick="showDetail('lwc-panel')" style="min-width:78px">
+                  <div class="comp-icon">💬</div>
+                  <div class="comp-name">Agent Panel</div>
+                  <div class="comp-sub">Floating widget</div>
+                </div>
+              </div>
+            </div>
+            <div class="group bg-sf" style="padding:8px 10px">
+              <span class="group-label">Apex</span>
+              <div class="group-row">
+                <div class="comp c-sf" data-id="apex-trigger" onclick="showDetail('apex-trigger')" style="min-width:74px">
+                  <div class="comp-icon">⚡</div>
+                  <div class="comp-name">OrderTrigger</div>
+                  <div class="comp-sub">→ Handler.run()</div>
+                </div>
+                <div class="comp c-sf" data-id="apex-handler" onclick="showDetail('apex-handler')" style="min-width:74px">
+                  <div class="comp-icon">🔧</div>
+                  <div class="comp-name">TriggerHandler</div>
+                  <div class="comp-sub">Base + bypass()</div>
+                </div>
+                <div class="comp c-sf" data-id="apex-service" onclick="showDetail('apex-service')" style="min-width:74px">
+                  <div class="comp-icon">⚙️</div>
+                  <div class="comp-name">OrderService</div>
+                  <div class="comp-sub">Bulkified logic</div>
+                </div>
+                <div class="comp c-sf" data-id="apex-ctrl" onclick="showDetail('apex-ctrl')" style="min-width:74px">
+                  <div class="comp-icon">🎛️</div>
+                  <div class="comp-name">AgentController</div>
+                  <div class="comp-sub">@AuraEnabled</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div class="group bg-sf" style="padding:8px 10px">
+              <span class="group-label">Metadata</span>
+              <div class="group-row" style="flex-direction:column">
+                <div class="comp c-sf" data-id="named-cred" onclick="showDetail('named-cred')" style="min-width:100px">
+                  <div class="comp-icon">🔑</div>
+                  <div class="comp-name">Named Credential</div>
+                  <div class="comp-sub">Commerce_Agent_API</div>
+                </div>
+                <div class="comp c-sf" data-id="perm-set" onclick="showDetail('perm-set')" style="min-width:100px">
+                  <div class="comp-icon">🛡️</div>
+                  <div class="comp-name">Permission Set</div>
+                  <div class="comp-sub">Commerce_Agent_User</div>
+                </div>
+              </div>
+            </div>
+            <div class="group bg-sf" style="padding:8px 10px">
+              <span class="group-label">Objects</span>
+              <div class="group-row" style="flex-direction:column">
+                <div class="comp c-sf" data-id="obj-ordersummary" onclick="showDetail('obj-ordersummary')" style="min-width:100px">
+                  <div class="comp-icon">📦</div>
+                  <div class="comp-name">OrderSummary</div>
+                  <div class="comp-sub">OMS order record</div>
+                </div>
+                <div class="comp c-sf" data-id="obj-product" onclick="showDetail('obj-product')" style="min-width:100px">
+                  <div class="comp-icon">🏷️</div>
+                  <div class="comp-name">Product2</div>
+                  <div class="comp-sub">+ PricebookEntry</div>
+                </div>
+                <div class="comp c-sf" data-id="obj-account" onclick="showDetail('obj-account')" style="min-width:100px">
+                  <div class="comp-icon">🏢</div>
+                  <div class="comp-name">Account</div>
+                  <div class="comp-sub">Buyer org</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Production (mirror) -->
+      <div class="group bg-sf">
+        <span class="group-label">Production</span>
+        <div class="group-row" style="flex-direction:column">
+          <div class="comp c-sf" data-id="prod-org" onclick="showDetail('prod-org')" style="min-width:84px">
+            <div class="comp-icon">🏭</div>
+            <div class="comp-name">Production Org</div>
+            <div class="comp-sub">JWT auth, env gate</div>
+          </div>
+          <div class="comp c-sf" onclick="" style="min-width:84px;opacity:.5;cursor:default">
+            <div class="comp-icon">↕️</div>
+            <div class="comp-name">Same metadata</div>
+            <div class="comp-sub">as sandbox</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Arrow 4→5 -->
+  <div class="layer-arrow">
+    <div class="arrow-cluster">
+      <div class="arrow-single">
+        <div class="arrow-lbl">Named Credential callout (HTTPS)</div>
+        <div class="arrow-v"></div>
+      </div>
+      <div class="arrow-single">
+        <div class="arrow-lbl">OAuth2 client_credentials</div>
+        <div class="arrow-v"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Layer 5: Backend Services -->
+  <div class="layer">
+    <div class="layer-label l-backend">Backend</div>
+    <div class="layer-body">
+
+      <div class="group bg-be">
+        <span class="group-label">Railway — commerce-api (FastAPI)</span>
+        <div class="group-row">
+          <div class="comp c-be" data-id="api-session" onclick="showDetail('api-session')" style="min-width:76px">
+            <div class="comp-icon">🔐</div>
+            <div class="comp-name">POST /session</div>
+            <div class="comp-sub">SF user → session</div>
+          </div>
+          <div class="comp c-be" data-id="api-products" onclick="showDetail('api-products')" style="min-width:76px">
+            <div class="comp-icon">🏷️</div>
+            <div class="comp-name">GET /products</div>
+            <div class="comp-sub">Catalog from SF</div>
+          </div>
+          <div class="comp c-be" data-id="api-orders" onclick="showDetail('api-orders')" style="min-width:76px">
+            <div class="comp-icon">📦</div>
+            <div class="comp-name">GET /orders</div>
+            <div class="comp-sub">OrderSummary SOQL</div>
+          </div>
+          <div class="comp c-be" data-id="api-chat" onclick="showDetail('api-chat')" style="min-width:76px">
+            <div class="comp-icon">💬</div>
+            <div class="comp-name">POST /chat</div>
+            <div class="comp-sub">SSE stream</div>
+          </div>
+          <div class="comp c-be" data-id="api-merchant" onclick="showDetail('api-merchant')" style="min-width:76px">
+            <div class="comp-icon">🏪</div>
+            <div class="comp-name">/merchant/*</div>
+            <div class="comp-sub">Merchant agent</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="group bg-be">
+        <span class="group-label">Railway — vivacious-mercy (LiteLLM)</span>
+        <div class="group-row">
+          <div class="comp c-be" data-id="litellm" onclick="showDetail('litellm')" style="min-width:100px">
+            <div class="comp-icon">🔄</div>
+            <div class="comp-name">LiteLLM Proxy</div>
+            <div class="comp-sub">Anthropic → Bedrock</div>
+          </div>
+          <div class="comp c-be" data-id="litellm-config" onclick="showDetail('litellm-config')" style="min-width:100px">
+            <div class="comp-icon">⚙️</div>
+            <div class="comp-name">Model Routing</div>
+            <div class="comp-sub">sonnet-4-5 / haiku-4-5</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="group bg-be">
+        <span class="group-label">Auth — Salesforce REST API v62.0</span>
+        <div class="group-row">
+          <div class="comp c-be" data-id="sf-oauth" onclick="showDetail('sf-oauth')" style="min-width:90px">
+            <div class="comp-icon">🔓</div>
+            <div class="comp-name">OAuth2 CC</div>
+            <div class="comp-sub">client_credentials</div>
+          </div>
+          <div class="comp c-be" data-id="sf-rest" onclick="showDetail('sf-rest')" style="min-width:90px">
+            <div class="comp-icon">🌐</div>
+            <div class="comp-name">SOQL REST API</div>
+            <div class="comp-sub">/services/data/v62.0</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Arrow 5→6 -->
+  <div class="layer-arrow">
+    <div class="arrow-cluster">
+      <div class="arrow-single">
+        <div class="arrow-lbl">Anthropic SDK / HTTPS</div>
+        <div class="arrow-v"></div>
+      </div>
+      <div class="arrow-single">
+        <div class="arrow-lbl">AWS Bedrock (us-east-1)</div>
+        <div class="arrow-v"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Layer 6: AI Services -->
+  <div class="layer">
+    <div class="layer-label l-ai">AI</div>
+    <div class="layer-body">
+
+      <div class="group bg-ai">
+        <span class="group-label">Anthropic API (direct)</span>
+        <div class="group-row">
+          <div class="comp c-ai" data-id="claude-sonnet" onclick="showDetail('claude-sonnet')" style="min-width:90px">
+            <div class="comp-icon">✨</div>
+            <div class="comp-name">claude-sonnet-5</div>
+            <div class="comp-sub">Shopping agent + CI review</div>
+          </div>
+          <div class="comp c-ai" data-id="claude-haiku" onclick="showDetail('claude-haiku')" style="min-width:90px">
+            <div class="comp-icon">⚡</div>
+            <div class="comp-name">claude-haiku-4-5</div>
+            <div class="comp-sub">PMD explain (fast)</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="group bg-ai">
+        <span class="group-label">AWS Bedrock (via LiteLLM)</span>
+        <div class="group-row">
+          <div class="comp c-ai" data-id="bedrock-sonnet" onclick="showDetail('bedrock-sonnet')" style="min-width:100px">
+            <div class="comp-icon">☁️</div>
+            <div class="comp-name">bedrock/us.claude-sonnet-4-5</div>
+            <div class="comp-sub">Cross-region inference</div>
+          </div>
+          <div class="comp c-ai" data-id="bedrock-haiku" onclick="showDetail('bedrock-haiku')" style="min-width:100px">
+            <div class="comp-icon">☁️</div>
+            <div class="comp-name">bedrock/us.claude-haiku-4-5</div>
+            <div class="comp-sub">us-east-1 profile</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="group bg-ai">
+        <span class="group-label">Developer AI (local)</span>
+        <div class="group-row">
+          <div class="comp c-ai" data-id="claude-code-local" onclick="showDetail('claude-code-local')" style="min-width:88px">
+            <div class="comp-icon">🖥️</div>
+            <div class="comp-name">Claude Code CLI</div>
+            <div class="comp-sub">commerce-builder plugin</div>
+          </div>
+          <div class="comp c-ai" data-id="ghcp-local" onclick="showDetail('ghcp-local')" style="min-width:88px">
+            <div class="comp-icon">🐙</div>
+            <div class="comp-name">GitHub Copilot</div>
+            <div class="comp-sub">Schema-aware Apex</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div><!-- end .arch -->
+
+<!-- ── Detail panel ───────────────────────────────────────────────────────── -->
+<div class="detail-panel" id="detailPanel">
+  <div id="detailContent"></div>
+</div>
+
+<!-- ── Legend ─────────────────────────────────────────────────────────────── -->
+<div class="legend">
+  <div class="leg-item"><div class="leg-swatch" style="background:var(--dev)"></div>Developer Toolchain</div>
+  <div class="leg-item"><div class="leg-swatch" style="background:var(--git)"></div>Source Control</div>
+  <div class="leg-item"><div class="leg-swatch" style="background:var(--ci)"></div>CI / CD Pipeline</div>
+  <div class="leg-item"><div class="leg-swatch" style="background:var(--sf)"></div>Salesforce Platform</div>
+  <div class="leg-item"><div class="leg-swatch" style="background:var(--backend)"></div>Backend Services</div>
+  <div class="leg-item"><div class="leg-swatch" style="background:var(--ai)"></div>AI Layer</div>
+  <div class="leg-item"><div class="leg-swatch" style="background:var(--accent)"></div>AI Touchpoint</div>
+  <div class="leg-item"><div class="leg-swatch" style="background:var(--line-str);border-radius:1px"></div>Data / Control Flow</div>
+</div>
+
+<script>
+/* ── Component detail data ────────────────────────────────────────────────── */
+const DETAILS = {
+  'vscode': {
+    icon: '🖥️', title: 'VS Code + Salesforce Extension Pack',
+    sub: 'Primary IDE with schema-aware Apex editing and org management',
+    cards: [
+      { title: 'Extensions', items: ['Salesforce Extension Pack (official)', 'Apex language server (schema-aware completions)', 'Lightning Web Components extension', 'GitHub Copilot + Copilot Chat'] },
+      { title: 'Key capabilities', items: ['Push/pull source to scratch org on save', 'Inline Apex compilation errors', 'SOQL builder and org browser', 'Debug logs and Apex replay debugger'] },
+      { title: 'SF CLI integration', items: ['sf project deploy start — push source', 'sf apex run test — run tests locally', 'sf org open — open org in browser'] },
+    ],
+    code: `# Deploy + run tests in one go
+sf project deploy start --source-dir force-app --target-org dev-scratch
+sf apex run test --target-org dev-scratch --test-level RunLocalTests --wait 10`
+  },
+  'sf-cli': {
+    icon: '⌨️', title: 'Salesforce CLI (sf v2)',
+    sub: 'Command-line tool for all SFDX operations — auth, deploy, test, org management',
+    cards: [
+      { title: 'Auth commands', items: ['sf org login web (Dev Hub)', 'sf org login jwt (sandbox/prod — CI)', 'sf org login sfdx-url (CI Dev Hub)'] },
+      { title: 'Deploy commands', items: ['sf project deploy start (full deploy)', 'sf project deploy validate (dry run)', 'sf project deploy start --dry-run (PR validate)'] },
+      { title: 'Test commands', items: ['sf apex run test --test-level RunLocalTests', '--result-format json (for CI coverage gate)', '--wait 20 (block until complete)'] },
+    ],
+    code: `# JWT auth (headless CI — no browser)
+openssl genrsa -out server.key 2048
+openssl req -new -x509 -nodes -sha256 -days 365 \\
+  -key server.key -out server.crt
+# Upload server.crt to Connected App → Enable Digital Signature
+
+sf org login jwt \\
+  --client-id \$SF_CLIENT_ID \\
+  --jwt-key-file sf_key.key \\
+  --username \$SF_SANDBOX_USERNAME \\
+  --instance-url \$SF_INSTANCE_URL`
+  },
+  'claude-code': {
+    icon: '🤖', title: 'Claude Code (local AI)',
+    sub: 'AI assistant embedded in the terminal — /review, /test, /explain slash commands for Salesforce',
+    cards: [
+      { title: '/review capabilities', items: ['Detects SOQL/DML inside loops', 'Flags missing with sharing', 'Finds non-bulkified patterns', 'Checks @AuraEnabled error handling'] },
+      { title: '/test generation', items: ['Full @isTest class with @TestSetup', 'Bulk test: 200 records auto-included', 'MockHttpService inner class injected', 'AuraHandledException test cases'] },
+      { title: '/explain capabilities', items: ['Explains governor limit implications', 'Decodes SOQL query patterns', 'Clarifies Apex sharing rules', 'Translates PMD violation codes'] },
+    ],
+    code: `# In VS Code terminal (Claude Code):
+/review CommerceAgentService.cls
+# → "Line 45: callout inside loop detected.
+#    Move HttpRequest.send() outside the for-loop
+#    and batch your responses."
+
+/test OrderTriggerHandler.cls
+# → Generates OrderTriggerHandlerTest.cls
+#    with 200-record bulk test + MockHttpService`
+  },
+  'ghcp': {
+    icon: '🐙', title: 'GitHub Copilot',
+    sub: 'Inline AI completions and chat — schema-aware Apex, LWC, and Salesforce CLI patterns',
+    cards: [
+      { title: 'Inline completions', items: ['Schema-aware: knows OrderSummary, Product2 field names', 'Suggests @TestVisible on private methods', 'Fills in @AuraEnabled method signatures', 'Completes SOQL queries with valid field names'] },
+      { title: 'Copilot Chat', items: ['"What governor limits apply here?"', '"Explain this Named Credential pattern"', '"What does this PMD violation mean?"', '"Draft a PR description from my commits"'] },
+      { title: 'LWC completions', items: ['LWC lifecycle hook stubs (connectedCallback)', 'SSE streaming ReadableStream pattern', 'AbortController guard pattern', 'Shadow DOM querySelector patterns'] },
+    ],
+    code: `// In VS Code — type partial, Copilot fills in:
+public with sharing class OrderService {
+    public void syncOrders(List<OrderSummary> orders) {
+        // Copilot suggests bulkified pattern:
+        List<Id> ids = new List<Id>();
+        for (OrderSummary os : orders) {
+            ids.add(os.Id);
+        }
+        // single SOQL outside loop:
+        Map<Id, OrderSummary> enriched = new Map<Id, OrderSummary>(
+            [SELECT Id, Status FROM OrderSummary WHERE Id IN :ids]
+        );
+    }
+}`
+  },
+  'pmd-local': {
+    icon: '🔍', title: 'PMD — Local Apex Static Analysis',
+    sub: 'Runs before commit to catch anti-patterns early — same ruleset as CI',
+    cards: [
+      { title: 'Rulesets used', items: ['category/apex/bestpractices.xml', 'category/apex/errorprone.xml', 'category/apex/performance.xml', 'category/apex/security.xml'] },
+      { title: 'Common violations caught', items: ['ApexSOQLInjection (Priority 1)', 'AvoidDmlStatementsInLoops (Priority 1)', 'ApexCRUDViolation (Priority 2)', 'NcssMethodCount (Priority 3)'] },
+    ],
+    code: `# Run locally (same as CI):
+pmd check \\
+  --dir salesforce/force-app/main/default/classes \\
+  --rulesets category/apex/bestpractices.xml,category/apex/errorprone.xml \\
+  --minimum-priority 3 \\
+  --format text`
+  },
+  'jest-local': {
+    icon: '🧪', title: 'LWC Jest — Local Unit Tests',
+    sub: 'Jest with @lwc/jest-preset — tests all three LWC components before push',
+    cards: [
+      { title: 'Test files', items: ['commerceAgentPanel/__tests__/commerceAgentPanel.test.js', 'salesforceMerchant/__tests__/salesforceMerchant.test.js', 'salesforceStorefront/__tests__/salesforceStorefront.test.js'] },
+      { title: 'Mocks', items: ['jest-mocks/apex.js — @salesforce/apex stub', 'jest-mocks/user.js — @salesforce/user/Id stub', 'jest-mocks/lightning/navigation.js', 'jest-mocks/lightning/platformShowToastEvent.js'] },
+    ],
+    code: `cd salesforce
+npm install
+npm run test:unit:coverage
+# → Jest runs all 3 component tests
+# → Coverage threshold: 80% branches
+# → Fails build if threshold not met`
+  },
+  'codeowners': {
+    icon: '🔐', title: 'CODEOWNERS',
+    sub: 'GitHub CODEOWNERS file — auto-assigns required reviewers by path',
+    cards: [
+      { title: 'Apex ownership', items: ['force-app/classes/ → @commerce-agents/apex-leads', 'force-app/triggers/ → @commerce-agents/apex-leads', 'At least 1 apex-lead review required to merge'] },
+      { title: 'LWC ownership', items: ['force-app/lwc/ → @commerce-agents/lwc-leads', 'embed/lwc/ → @commerce-agents/lwc-leads', 'Required for any LWC change'] },
+      { title: 'Platform ownership', items: ['/.github/workflows/ → @commerce-agents/platform', 'sfdx-project.json → @commerce-agents/platform', 'config/ → @commerce-agents/platform'] },
+    ],
+    code: `# .github/CODEOWNERS
+/salesforce/force-app/main/default/classes/  @commerce-agents/apex-leads
+/salesforce/force-app/main/default/triggers/ @commerce-agents/apex-leads
+/salesforce/force-app/main/default/lwc/      @commerce-agents/lwc-leads
+/.github/workflows/                          @commerce-agents/platform`
+  },
+  'ci-pmd': {
+    icon: '🔎', title: 'apex-scan CI Job',
+    sub: 'PMD static analysis on every push — blocks merge on Priority 1–3 violations',
+    cards: [
+      { title: 'What it checks', items: ['ApexSOQLInjection, ApexCRUDViolation', 'AvoidDmlStatementsInLoops', 'NcssMethodCount, ExcessiveClassLength', 'UnusedLocalVariable, EmptyCatchBlock'] },
+      { title: 'On failure', items: ['Build fails — PR cannot be merged', 'explain_pmd_violations.py runs', 'Claude explains each violation in plain English', 'Fix suggestions posted as PR comment'] },
+    ],
+    code: `# salesforce-ci.yml — apex-scan job
+- uses: pmd/pmd-github-action@v2
+  with:
+    sourcePath: salesforce/force-app/main/default/classes
+    rulesets: >
+      category/apex/bestpractices.xml,
+      category/apex/errorprone.xml,
+      category/apex/security.xml
+    failOnViolation: true
+    minimumPriority: 3`
+  },
+  'ci-ai-review': {
+    icon: '🤖', title: 'ai-pr-review CI Job',
+    sub: 'Claude reads the diff and posts a structured Salesforce risk analysis as a PR comment',
+    cards: [
+      { title: 'What Claude analyses', items: ['Changed Apex classes and triggers', 'LWC component modifications', 'Governor limit risks (SOQL, DML, callouts)', 'FLS and sharing rule issues'] },
+      { title: 'Output', items: ['Posted as first PR comment automatically', 'What changed (bullet list)', 'Salesforce-specific risks flagged', 'Verdict: LGTM / Needs changes'] },
+    ],
+    code: `# post_ai_review.py calls Claude:
+client.messages.create(
+    model="claude-sonnet-5",
+    system="You are a Salesforce architect...",
+    messages=[{
+        "role": "user",
+        "content": f"Review this SF diff:\\n{diff}"
+    }]
+)
+# → Posts comment via: gh pr comment {pr} --body {review}`
+  },
+  'ci-scratch': {
+    icon: '🧱', title: 'scratch-org-validate CI Job',
+    sub: 'Creates ephemeral scratch org, deploys source, runs Apex tests, asserts 75% coverage',
+    cards: [
+      { title: 'Steps', items: ['Auth to Dev Hub via SFDX_AUTH_URL_DEVHUB', 'sf org create scratch --duration-days 1', 'sf project deploy start (--dry-run on PRs)', 'sf apex run test --test-level RunLocalTests', 'check_coverage.py asserts ≥75%'] },
+      { title: 'Auth method', items: ['Dev Hub: sfdxurl stored as GitHub secret', 'Scratch org: created fresh each run', 'Deleted with --no-prompt in always: step', 'JWT key decoded from PRIVATE_KEY_BASE64'] },
+    ],
+    code: `# Scratch org lifecycle in CI (~10 min):
+sf org create scratch \\
+  --definition-file config/project-scratch-def.json \\
+  --alias ci-scratch --duration-days 1
+
+sf project deploy start \\
+  --source-dir salesforce/force-app \\
+  --target-org ci-scratch
+
+sf apex run test --target-org ci-scratch \\
+  --test-level RunLocalTests \\
+  --result-format json --output-dir test-results
+
+python scripts/check_coverage.py test-results/`
+  },
+  'lwc-storefront': {
+    icon: '🛍️', title: 'salesforceStorefront LWC',
+    sub: 'B2B buyer shopping assistant embedded in Salesforce Experience Cloud or Lightning page',
+    cards: [
+      { title: 'Views', items: ['Home: greeting, starters, featured products, arriving orders', 'Chat: transcript + generative UI blocks', 'Orders: order history and status', 'Cart: live cart with checkout handoff'] },
+      { title: 'Generative blocks', items: ['products (scrollable cards)', 'comparison (side-by-side grid)', 'plan (numbered steps)', 'order_status, checkout (with SF links)'] },
+      { title: 'LWS compliance', items: ['No window.* usage', 'AbortController guard: typeof check', 'fetch() not EventSource (sandbox-safe)', '@salesforce/user/Id for buyer resolution'] },
+    ],
+    code: `// salesforceStorefront.js — SSE streaming
+async _readStream(reader) {
+  const decoder = new TextDecoder();
+  let buffer = '';
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    // parse SSE lines...
+  }
+}`
+  },
+  'apex-trigger': {
+    icon: '⚡', title: 'OrderTrigger.trigger',
+    sub: 'Single trigger for OrderSummary — all logic delegated to handler class',
+    cards: [
+      { title: 'Best practice', items: ['One trigger per object — no exceptions', 'Zero business logic inside the trigger file', 'All events enabled and dispatched by handler', 'Bypass mechanism: TriggerHandler.bypass(name)'] },
+    ],
+    code: `// OrderTrigger.trigger — the entire file:
+trigger OrderTrigger on OrderSummary (
+    before insert, before update, before delete,
+    after insert, after update, after delete, after undelete
+) {
+    new OrderTriggerHandler().run();
+}`
+  },
+  'apex-handler': {
+    icon: '🔧', title: 'TriggerHandler Base Class',
+    sub: 'Abstract dispatcher with bypass API — subclasses override only needed hook methods',
+    cards: [
+      { title: 'Dispatch hooks', items: ['beforeInsert, beforeUpdate, beforeDelete', 'afterInsert, afterUpdate, afterDelete', 'beforeUndelete, afterUndelete', 'All virtual — override only what you need'] },
+      { title: 'Bypass API', items: ['TriggerHandler.bypass("OrderTriggerHandler")', 'TriggerHandler.clearBypass("OrderTriggerHandler")', 'TriggerHandler.clearAllBypasses()', 'Used in data migrations and test setup'] },
+    ],
+    code: `// OrderTriggerHandler extends TriggerHandler
+public with sharing class OrderTriggerHandler extends TriggerHandler {
+    override protected void afterInsert(
+        List<SObject> newList, Map<Id, SObject> newMap
+    ) {
+        orderService.syncOrdersToAgent((List<OrderSummary>) newList);
+    }
+}`
+  },
+  'named-cred': {
+    icon: '🔑', title: 'Named Credential — Commerce_Agent_API',
+    sub: 'Stores the backend API endpoint per-org — no hardcoded URLs in Apex code',
+    cards: [
+      { title: 'Why Named Credentials', items: ['Endpoint differs per environment (sandbox vs prod)', 'Never hardcode URLs in Apex — fails deployment', 'No secrets in source control', 'Admins can update endpoint without code deploy'] },
+      { title: 'Usage in Apex', items: ['callout:Commerce_Agent_API/api/session', 'callout:Commerce_Agent_API/api/products', 'callout:Commerce_Agent_API/internal/order-events', 'Set up in Setup → Named Credentials after deploy'] },
+    ],
+    code: `// CommerceAgentService.cls — callout pattern
+private HttpRequest buildRequest(String method, String path) {
+    HttpRequest req = new HttpRequest();
+    // Named Credential — endpoint resolved at runtime by SF
+    req.setEndpoint('callout:Commerce_Agent_API' + path);
+    req.setMethod(method);
+    req.setTimeout(15000);
+    return req;
+}`
+  },
+  'litellm': {
+    icon: '🔄', title: 'LiteLLM Proxy (vivacious-mercy)',
+    sub: 'Translates Anthropic SDK calls to AWS Bedrock — runs on Railway alongside the FastAPI service',
+    cards: [
+      { title: 'Purpose', items: ['Anthropic SDK in Python uses standard API format', 'AWS Bedrock requires different request shape', 'LiteLLM bridges the gap transparently', 'Environment: ANTHROPIC_BASE_URL=http://vivacious-mercy:4000'] },
+      { title: 'Key fix (production)', items: ['eager_input_streaming field stripped before Bedrock', 'main_production.py patches AsyncAnthropic.__init__', 'Adds custom httpx transport for stripping', 'Bedrock rejects unknown top-level tool fields'] },
+    ],
+    code: `# embed/litellm-config.yaml
+model_list:
+  - model_name: claude-sonnet-5
+    litellm_params:
+      model: bedrock/us.anthropic.claude-sonnet-4-5-20250929-v1:0
+      aws_region_name: us-east-1
+  - model_name: claude-haiku-4-5
+    litellm_params:
+      model: bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0
+      aws_region_name: us-east-1`
+  },
+  'claude-sonnet': {
+    icon: '✨', title: 'claude-sonnet-5',
+    sub: 'Primary model for the shopping and merchant agents, and CI PR review',
+    cards: [
+      { title: 'Used for', items: ['Shopping agent conversation turns', 'Merchant agent analysis and recommendations', 'CI: ai-pr-review structured diff analysis', 'CI: post_ai_review.py PR comment generation'] },
+      { title: 'Access paths', items: ['Direct Anthropic API (dev + CI review)', 'Via LiteLLM proxy → AWS Bedrock (runtime agent)', 'Model ID: claude-sonnet-5', 'Bedrock: us.anthropic.claude-sonnet-4-5-20250929-v1:0'] },
+    ],
+    code: `# post_ai_review.py — CI review call
+client.messages.create(
+    model="claude-sonnet-5",
+    max_tokens=1024,
+    system="You are a Salesforce architect...",
+    messages=[{"role": "user", "content": diff_content}]
+)`
+  },
+  'bedrock-sonnet': {
+    icon: '☁️', title: 'AWS Bedrock — claude-sonnet-4-5 (us-east-1)',
+    sub: 'Production runtime for the shopping and merchant agents via LiteLLM proxy',
+    cards: [
+      { title: 'Config', items: ['Region: us-east-1', 'Profile: cross-region inference (us.anthropic.*)', 'Auth: AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY', 'Set as Railway env vars on vivacious-mercy service'] },
+      { title: 'Why cross-region profile', items: ['Bedrock model IDs must use us.anthropic.* prefix', 'Standard anthropic.* IDs rejected for inference profiles', 'Cross-region routing improves availability', 'Configured in litellm-config.yaml'] },
+    ],
+    code: `# Railway env vars on vivacious-mercy:
+AWS_ACCESS_KEY_ID=AKIA...
+AWS_SECRET_ACCESS_KEY=...
+AWS_DEFAULT_REGION=us-east-1
+
+# Model ID in litellm-config.yaml:
+# bedrock/us.anthropic.claude-sonnet-4-5-20250929-v1:0
+# NOT: bedrock/anthropic.claude-sonnet-4-5-v1:0  ← WRONG`
+  },
+};
+
+/* ── Interaction ──────────────────────────────────────────────────────────── */
+let activeId = null;
+
+function showDetail(id) {
+  const data = DETAILS[id];
+  if (!data) return;
+
+  // Toggle off
+  if (activeId === id) {
+    activeId = null;
+    document.getElementById('detailPanel').classList.remove('visible');
+    document.querySelectorAll('.comp').forEach(c => c.classList.remove('active'));
+    return;
+  }
+
+  activeId = id;
+  document.querySelectorAll('.comp').forEach(c => {
+    c.classList.toggle('active', c.dataset.id === id);
+  });
+
+  const cardsHtml = data.cards.map(card => `
+    <div class="dp-card">
+      <h4>${card.title}</h4>
+      <ul>${card.items.map(i => `<li>${i}</li>`).join('')}</ul>
+    </div>`).join('');
+
+  const codeHtml = data.code ? `<div class="dp-code">${escHtml(data.code)}</div>` : '';
+
+  document.getElementById('detailContent').innerHTML = `
+    <div class="dp-header">
+      <div class="dp-icon">${data.icon}</div>
+      <div>
+        <div class="dp-title">${data.title}</div>
+        <div class="dp-sub">${data.sub}</div>
+      </div>
+    </div>
+    <div class="dp-grid">${cardsHtml}</div>
+    ${codeHtml}`;
+
+  const panel = document.getElementById('detailPanel');
+  panel.classList.add('visible');
+  setTimeout(() => panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 50);
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agentic Commerce — Channel Architecture</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: #0d1117;
+    color: #e6edf3;
+    min-height: 100vh;
+  }
+
+  /* ── Header ── */
+  .header {
+    background: linear-gradient(135deg, #0d1b2e 0%, #112240 60%, #0d2137 100%);
+    border-bottom: 1px solid #1e3a5f;
+    padding: 28px 48px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .header-left h1 {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.3px;
+    color: #e6edf3;
+  }
+  .header-left p {
+    margin-top: 4px;
+    font-size: 13px;
+    color: #7d9ab5;
+    letter-spacing: 0.4px;
+  }
+  .header-badge {
+    background: #1e3a5f;
+    border: 1px solid #2d5986;
+    border-radius: 20px;
+    padding: 6px 16px;
+    font-size: 12px;
+    color: #58a6ff;
+    font-weight: 500;
+    letter-spacing: 0.3px;
+  }
+
+  /* ── Main content area ── */
+  .content {
+    max-width: 1160px;
+    margin: 0 auto;
+    padding: 36px 32px 48px;
+  }
+
+  /* ── Section labels ── */
+  .section-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    color: #58a6ff;
+    margin-bottom: 14px;
+    padding-left: 2px;
+  }
+
+  /* ── SVG diagram wrapper ── */
+  .diagram-wrap {
+    background: #0d1b2e;
+    border: 1px solid #1e3a5f;
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 36px;
+    overflow-x: auto;
+  }
+  .diagram-wrap svg {
+    display: block;
+    margin: 0 auto;
+  }
+
+  /* ── Channel cards ── */
+  .cards-section {
+    margin-bottom: 36px;
+  }
+  .cards-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 14px;
+  }
+  @media (max-width: 1000px) {
+    .cards-grid { grid-template-columns: repeat(3, 1fr); }
+  }
+  @media (max-width: 640px) {
+    .cards-grid { grid-template-columns: 1fr 1fr; }
+  }
+
+  .channel-card {
+    background: #0d1b2e;
+    border: 1px solid #1e3a5f;
+    border-radius: 10px;
+    padding: 18px 16px;
+    transition: border-color 0.2s, transform 0.15s;
+    cursor: default;
+  }
+  .channel-card:hover {
+    transform: translateY(-2px);
+  }
+  .channel-card.lwc       { border-top: 3px solid #d4a017; }
+  .channel-card.nextjs    { border-top: 3px solid #4493f8; }
+  .channel-card.ucp       { border-top: 3px solid #a371f7; }
+  .channel-card.mcp       { border-top: 3px solid #3fb950; }
+  .channel-card.plugin    { border-top: 3px solid #2dd4bf; }
+
+  .card-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    font-weight: 800;
+    margin-bottom: 12px;
+    letter-spacing: -0.5px;
+  }
+  .icon-lwc    { background: rgba(212,160,23,0.18); color: #d4a017; }
+  .icon-nextjs { background: rgba(68,147,248,0.18); color: #4493f8; }
+  .icon-ucp    { background: rgba(163,113,247,0.18); color: #a371f7; }
+  .icon-mcp    { background: rgba(63,185,80,0.18);   color: #3fb950; }
+  .icon-plugin { background: rgba(45,212,191,0.18);  color: #2dd4bf; }
+
+  .card-name {
+    font-size: 13px;
+    font-weight: 700;
+    margin-bottom: 5px;
+    color: #e6edf3;
+  }
+  .card-cap {
+    font-size: 11.5px;
+    color: #7d9ab5;
+    line-height: 1.55;
+    margin-bottom: 10px;
+  }
+  .card-user {
+    display: inline-block;
+    font-size: 10.5px;
+    font-weight: 600;
+    padding: 2px 9px;
+    border-radius: 20px;
+    letter-spacing: 0.3px;
+  }
+  .user-lwc    { background: rgba(212,160,23,0.15); color: #d4a017; }
+  .user-nextjs { background: rgba(68,147,248,0.15); color: #4493f8; }
+  .user-ucp    { background: rgba(163,113,247,0.15); color: #a371f7; }
+  .user-mcp    { background: rgba(63,185,80,0.15);   color: #3fb950; }
+  .user-plugin { background: rgba(45,212,191,0.15);  color: #2dd4bf; }
+
+  /* ── Capabilities row ── */
+  .caps-section {}
+  .caps-grid {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 10px;
+  }
+  @media (max-width: 900px) {
+    .caps-grid { grid-template-columns: repeat(3, 1fr); }
+  }
+  .cap-badge {
+    background: #112240;
+    border: 1px solid #1e3a5f;
+    border-radius: 8px;
+    padding: 14px 12px;
+    text-align: center;
+  }
+  .cap-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin: 0 auto 8px;
+  }
+  .cap-name {
+    font-size: 11.5px;
+    font-weight: 600;
+    color: #c9d1d9;
+    line-height: 1.35;
+  }
+  .cap-desc {
+    font-size: 10px;
+    color: #58788a;
+    margin-top: 3px;
+    line-height: 1.4;
+  }
+
+  /* dot colors */
+  .dot-blue   { background: #4493f8; }
+  .dot-purple { background: #a371f7; }
+  .dot-green  { background: #3fb950; }
+  .dot-red    { background: #f85149; }
+  .dot-amber  { background: #d4a017; }
+  .dot-teal   { background: #2dd4bf; }
+</style>
+</head>
+<body>
+
+<!-- ════════════════════ HEADER ════════════════════ -->
+<header class="header">
+  <div class="header-left">
+    <h1>Agentic Commerce — Channel Architecture</h1>
+    <p>Five access channels · One AI platform core · Multi-backend support</p>
+  </div>
+  <div class="header-badge">Reference Architecture</div>
+</header>
+
+<!-- ════════════════════ CONTENT ════════════════════ -->
+<div class="content">
+
+  <!-- ── Diagram ── -->
+  <p class="section-label">Architecture Overview</p>
+  <div class="diagram-wrap">
+    <svg viewBox="0 0 1000 500" width="1000" height="500" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif">
+
+      <!-- ── Background grid dots ── -->
+      <defs>
+        <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse">
+          <circle cx="1" cy="1" r="0.8" fill="#1e3a5f" opacity="0.5"/>
+        </pattern>
+        <!-- glow filters -->
+        <filter id="glow-amber" x="-20%" y="-20%" width="140%" height="140%">
+          <feGaussianBlur stdDeviation="3" result="blur"/>
+          <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+        </filter>
+        <filter id="glow-blue" x="-20%" y="-20%" width="140%" height="140%">
+          <feGaussianBlur stdDeviation="3" result="blur"/>
+          <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+        </filter>
+        <!-- arrow marker definitions -->
+        <marker id="arr-amber" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+          <path d="M0,0 L0,6 L8,3 z" fill="#d4a017"/>
+        </marker>
+        <marker id="arr-blue" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+          <path d="M0,0 L0,6 L8,3 z" fill="#4493f8"/>
+        </marker>
+        <marker id="arr-purple" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+          <path d="M0,0 L0,6 L8,3 z" fill="#a371f7"/>
+        </marker>
+        <marker id="arr-green" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+          <path d="M0,0 L0,6 L8,3 z" fill="#3fb950"/>
+        </marker>
+        <marker id="arr-teal" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+          <path d="M0,0 L0,6 L8,3 z" fill="#2dd4bf"/>
+        </marker>
+        <marker id="arr-gray" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+          <path d="M0,0 L0,6 L8,3 z" fill="#4a6785"/>
+        </marker>
+      </defs>
+
+      <rect width="1000" height="500" fill="url(#grid)" rx="8"/>
+      <rect width="1000" height="500" fill="url(#grid)" rx="8" opacity="0.3"/>
+
+      <!-- ══════════════════════════════════════
+           CHANNEL ROW (top, y=20–140)
+      ══════════════════════════════════════ -->
+      <!-- col centers: 90, 270, 500, 730, 910 -->
+
+      <!-- ── Col 1: LWC (amber) ── -->
+      <rect x="16" y="20" width="148" height="120" rx="8" fill="#1a2030" stroke="#d4a017" stroke-width="1.5" opacity="0.9"/>
+      <circle cx="90" cy="52" r="18" fill="rgba(212,160,23,0.18)" stroke="#d4a017" stroke-width="1.5"/>
+      <text x="90" y="57" text-anchor="middle" fill="#d4a017" font-size="12" font-weight="800">LWC</text>
+      <text x="90" y="82" text-anchor="middle" fill="#e6edf3" font-size="10.5" font-weight="700">Lightning Web</text>
+      <text x="90" y="96" text-anchor="middle" fill="#e6edf3" font-size="10.5" font-weight="700">Components</text>
+      <text x="90" y="112" text-anchor="middle" fill="#7d9ab5" font-size="9.5">Salesforce-embedded</text>
+      <text x="90" y="126" text-anchor="middle" fill="#7d9ab5" font-size="9.5">Buyer + Merchant UIs</text>
+
+      <!-- ── Col 2: Next.js (blue) ── -->
+      <rect x="196" y="20" width="148" height="120" rx="8" fill="#1a2030" stroke="#4493f8" stroke-width="1.5" opacity="0.9"/>
+      <circle cx="270" cy="52" r="18" fill="rgba(68,147,248,0.18)" stroke="#4493f8" stroke-width="1.5"/>
+      <text x="270" y="57" text-anchor="middle" fill="#4493f8" font-size="12" font-weight="800">NJS</text>
+      <text x="270" y="82" text-anchor="middle" fill="#e6edf3" font-size="10.5" font-weight="700">Next.js Headless</text>
+      <text x="270" y="96" text-anchor="middle" fill="#e6edf3" font-size="10.5" font-weight="700">Storefront</text>
+      <text x="270" y="112" text-anchor="middle" fill="#7d9ab5" font-size="9.5">4 vertical examples</text>
+      <text x="270" y="126" text-anchor="middle" fill="#7d9ab5" font-size="9.5">Buyer + Merchant apps</text>
+
+      <!-- ── Col 3: UCP (purple) ── -->
+      <rect x="426" y="20" width="148" height="120" rx="8" fill="#1a2030" stroke="#a371f7" stroke-width="1.5" opacity="0.9"/>
+      <circle cx="500" cy="52" r="18" fill="rgba(163,113,247,0.18)" stroke="#a371f7" stroke-width="1.5"/>
+      <text x="500" y="57" text-anchor="middle" fill="#a371f7" font-size="12" font-weight="800">UCP</text>
+      <text x="500" y="82" text-anchor="middle" fill="#e6edf3" font-size="10.5" font-weight="700">Universal Commerce</text>
+      <text x="500" y="96" text-anchor="middle" fill="#e6edf3" font-size="10.5" font-weight="700">Protocol</text>
+      <text x="500" y="112" text-anchor="middle" fill="#7d9ab5" font-size="9.5">Google open standard</text>
+      <text x="500" y="126" text-anchor="middle" fill="#7d9ab5" font-size="9.5">Any agent auto-discovers</text>
+
+      <!-- ── Col 4: MCP Apps (green) ── -->
+      <rect x="656" y="20" width="148" height="120" rx="8" fill="#1a2030" stroke="#3fb950" stroke-width="1.5" opacity="0.9"/>
+      <circle cx="730" cy="52" r="18" fill="rgba(63,185,80,0.18)" stroke="#3fb950" stroke-width="1.5"/>
+      <text x="730" y="57" text-anchor="middle" fill="#3fb950" font-size="12" font-weight="800">MCP</text>
+      <text x="730" y="82" text-anchor="middle" fill="#e6edf3" font-size="10.5" font-weight="700">MCP Apps</text>
+      <text x="730" y="96" text-anchor="middle" fill="#e6edf3" font-size="10.5" font-weight="700">Claude + SEP-1865</text>
+      <text x="730" y="112" text-anchor="middle" fill="#7d9ab5" font-size="9.5">Tools + UI resources</text>
+      <text x="730" y="126" text-anchor="middle" fill="#7d9ab5" font-size="9.5">Interactive iframe chat</text>
+
+      <!-- ── Col 5: Plugin (teal) ── -->
+      <rect x="836" y="20" width="148" height="120" rx="8" fill="#1a2030" stroke="#2dd4bf" stroke-width="1.5" opacity="0.9"/>
+      <circle cx="910" cy="52" r="18" fill="rgba(45,212,191,0.18)" stroke="#2dd4bf" stroke-width="1.5"/>
+      <text x="910" y="57" text-anchor="middle" fill="#2dd4bf" font-size="12" font-weight="800">PLG</text>
+      <text x="910" y="82" text-anchor="middle" fill="#e6edf3" font-size="10.5" font-weight="700">Claude Code</text>
+      <text x="910" y="96" text-anchor="middle" fill="#e6edf3" font-size="10.5" font-weight="700">Plugin</text>
+      <text x="910" y="112" text-anchor="middle" fill="#7d9ab5" font-size="9.5">commerce-builder</text>
+      <text x="910" y="126" text-anchor="middle" fill="#7d9ab5" font-size="9.5">6 skills · 4 commands</text>
+
+      <!-- ══════════════════════════════════════
+           ARROWS: Channels → Platform Core
+           (channel box bottom = y=140, core top = y=210)
+      ══════════════════════════════════════ -->
+      <!-- LWC -->
+      <line x1="90" y1="140" x2="90" y2="170" stroke="#d4a017" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr-amber)"/>
+      <!-- LWC foot → platform left edge (converge line) -->
+      <line x1="90" y1="175" x2="370" y2="200" stroke="#d4a017" stroke-width="1.2" opacity="0.5"/>
+
+      <!-- Next.js -->
+      <line x1="270" y1="140" x2="270" y2="170" stroke="#4493f8" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr-blue)"/>
+      <line x1="270" y1="175" x2="410" y2="200" stroke="#4493f8" stroke-width="1.2" opacity="0.5"/>
+
+      <!-- UCP -->
+      <line x1="500" y1="140" x2="500" y2="202" stroke="#a371f7" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr-purple)"/>
+
+      <!-- MCP -->
+      <line x1="730" y1="140" x2="730" y2="170" stroke="#3fb950" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr-green)"/>
+      <line x1="730" y1="175" x2="590" y2="200" stroke="#3fb950" stroke-width="1.2" opacity="0.5"/>
+
+      <!-- Plugin -->
+      <line x1="910" y1="140" x2="910" y2="170" stroke="#2dd4bf" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr-teal)"/>
+      <line x1="910" y1="175" x2="628" y2="200" stroke="#2dd4bf" stroke-width="1.2" opacity="0.5"/>
+
+      <!-- ══════════════════════════════════════
+           PLATFORM CORE (center box, y=205–330)
+      ══════════════════════════════════════ -->
+      <!-- Outer glow -->
+      <rect x="250" y="203" width="500" height="130" rx="10" fill="none" stroke="#2d5986" stroke-width="6" opacity="0.3"/>
+      <!-- Main box -->
+      <rect x="255" y="208" width="490" height="120" rx="8" fill="#0d1e38" stroke="#2d5986" stroke-width="1.5"/>
+
+      <!-- Platform title bar -->
+      <rect x="255" y="208" width="490" height="26" rx="8" fill="#112240"/>
+      <rect x="255" y="226" width="490" height="8" fill="#112240"/>
+      <text x="500" y="226" text-anchor="middle" fill="#58a6ff" font-size="11" font-weight="700" letter-spacing="0.8">PLATFORM CORE</text>
+
+      <!-- Inner cells (3 cols) -->
+      <!-- Cell 1: AI Engine -->
+      <rect x="266" y="242" width="148" height="76" rx="6" fill="#0d2137" stroke="#1e3a5f" stroke-width="1"/>
+      <text x="340" y="259" text-anchor="middle" fill="#7d9ab5" font-size="9" font-weight="600" letter-spacing="0.8">AI ENGINE</text>
+      <text x="340" y="275" text-anchor="middle" fill="#c9d1d9" font-size="10" font-weight="700">Claude AI</text>
+      <text x="340" y="290" text-anchor="middle" fill="#7d9ab5" font-size="9">claude-sonnet-4-x</text>
+      <text x="340" y="305" text-anchor="middle" fill="#7d9ab5" font-size="9">Shopping + Merchant</text>
+
+      <!-- Cell 2: Skills + Memory -->
+      <rect x="426" y="242" width="148" height="76" rx="6" fill="#0d2137" stroke="#1e3a5f" stroke-width="1"/>
+      <text x="500" y="259" text-anchor="middle" fill="#7d9ab5" font-size="9" font-weight="600" letter-spacing="0.8">SKILLS + MEMORY</text>
+      <text x="500" y="275" text-anchor="middle" fill="#c9d1d9" font-size="10" font-weight="700">10 Skills / Role</text>
+      <text x="500" y="290" text-anchor="middle" fill="#7d9ab5" font-size="9">JsonFile · InMemory</text>
+      <text x="500" y="305" text-anchor="middle" fill="#7d9ab5" font-size="9">Personalized sessions</text>
+
+      <!-- Cell 3: Safety + UI -->
+      <rect x="586" y="242" width="148" height="76" rx="6" fill="#0d2137" stroke="#1e3a5f" stroke-width="1"/>
+      <text x="660" y="259" text-anchor="middle" fill="#7d9ab5" font-size="9" font-weight="600" letter-spacing="0.8">SAFETY + UI</text>
+      <text x="660" y="275" text-anchor="middle" fill="#c9d1d9" font-size="10" font-weight="700">Provenance Gates</text>
+      <text x="660" y="290" text-anchor="middle" fill="#7d9ab5" font-size="9">Write caps · Fencing</text>
+      <text x="660" y="305" text-anchor="middle" fill="#7d9ab5" font-size="9">Generative UI stream</text>
+
+      <!-- ══════════════════════════════════════
+           ARROWS: Core → Backend row
+           (core bottom = y=328, backend top = y=385)
+      ══════════════════════════════════════ -->
+      <!-- Center down arrow -->
+      <line x1="500" y1="328" x2="500" y2="380" stroke="#2d5986" stroke-width="2" marker-end="url(#arr-gray)"/>
+      <!-- left fan -->
+      <line x1="360" y1="328" x2="200" y2="378" stroke="#2d5986" stroke-width="1.2" opacity="0.6"/>
+      <!-- right fan -->
+      <line x1="640" y1="328" x2="800" y2="378" stroke="#2d5986" stroke-width="1.2" opacity="0.6"/>
+
+      <!-- ══════════════════════════════════════
+           BACKEND ROW (y=382–470)
+      ══════════════════════════════════════ -->
+      <!-- Backend 1: Salesforce OMS -->
+      <rect x="32" y="382" width="280" height="80" rx="8" fill="#1a2030" stroke="#2d5986" stroke-width="1.2"/>
+      <rect x="32" y="382" width="280" height="22" rx="8" fill="#112240"/>
+      <rect x="32" y="396" width="280" height="8" fill="#112240"/>
+      <text x="172" y="397" text-anchor="middle" fill="#7d9ab5" font-size="9" font-weight="600" letter-spacing="0.8">SALESFORCE OMS</text>
+      <text x="172" y="417" text-anchor="middle" fill="#c9d1d9" font-size="10" font-weight="600">Product Catalog · Orders · Quotes</text>
+      <text x="172" y="432" text-anchor="middle" fill="#58788a" font-size="9">Railway proxy endpoint</text>
+      <text x="172" y="447" text-anchor="middle" fill="#58788a" font-size="9">Apex controllers · LWC deployment</text>
+      <text x="172" y="462" text-anchor="middle" fill="#58788a" font-size="9">Quote Approvals tab live</text>
+
+      <!-- Backend 2: Vertical Mock Backends -->
+      <rect x="360" y="382" width="280" height="80" rx="8" fill="#1a2030" stroke="#2d5986" stroke-width="1.2"/>
+      <rect x="360" y="382" width="280" height="22" rx="8" fill="#112240"/>
+      <rect x="360" y="396" width="280" height="8" fill="#112240"/>
+      <text x="500" y="397" text-anchor="middle" fill="#7d9ab5" font-size="9" font-weight="600" letter-spacing="0.8">VERTICAL MOCK BACKENDS</text>
+      <text x="500" y="417" text-anchor="middle" fill="#c9d1d9" font-size="10" font-weight="600">Retail · Entertainment · Food · B2B</text>
+      <text x="500" y="432" text-anchor="middle" fill="#58788a" font-size="9">Ports 8000–8003  ·  FastAPI</text>
+      <text x="500" y="447" text-anchor="middle" fill="#58788a" font-size="9">Storefront-web 3001–3003</text>
+      <text x="500" y="462" text-anchor="middle" fill="#58788a" font-size="9">Merchant-web 3101–3103</text>
+
+      <!-- Backend 3: Salesforce Org -->
+      <rect x="688" y="382" width="280" height="80" rx="8" fill="#1a2030" stroke="#2d5986" stroke-width="1.2"/>
+      <rect x="688" y="382" width="280" height="22" rx="8" fill="#112240"/>
+      <rect x="688" y="396" width="280" height="8" fill="#112240"/>
+      <text x="828" y="397" text-anchor="middle" fill="#7d9ab5" font-size="9" font-weight="600" letter-spacing="0.8">SALESFORCE ORG</text>
+      <text x="828" y="417" text-anchor="middle" fill="#c9d1d9" font-size="10" font-weight="600">LWC Components Deployed</text>
+      <text x="828" y="432" text-anchor="middle" fill="#58788a" font-size="9">commerceAgentPanel (buyer chat)</text>
+      <text x="828" y="447" text-anchor="middle" fill="#58788a" font-size="9">salesforceMerchant (merchant portal)</text>
+      <text x="828" y="462" text-anchor="middle" fill="#58788a" font-size="9">B2B POC sandbox org</text>
+
+    </svg>
+  </div>
+
+  <!-- ── Channel Cards ── -->
+  <p class="section-label">Access Channels</p>
+  <div class="cards-section">
+    <div class="cards-grid">
+
+      <div class="channel-card lwc">
+        <div class="card-icon icon-lwc">LWC</div>
+        <div class="card-name">Lightning Web Components</div>
+        <div class="card-cap">Salesforce-embedded buyer chat panel and merchant portal with Quote Approvals tab. Apex controllers bridge to the AI backend over HTTPS.</div>
+        <span class="card-user user-lwc">Salesforce Users</span>
+      </div>
+
+      <div class="channel-card nextjs">
+        <div class="card-icon icon-nextjs">NJS</div>
+        <div class="card-name">Next.js Headless Storefront</div>
+        <div class="card-cap">Four vertical storefronts (Retail, Entertainment, Food, B2B) each with a buyer UI and merchant dashboard. Streaming AI assistant sidebar on every page.</div>
+        <span class="card-user user-nextjs">Web Shoppers</span>
+      </div>
+
+      <div class="channel-card ucp">
+        <div class="card-icon icon-ucp">UCP</div>
+        <div class="card-name">Universal Commerce Protocol</div>
+        <div class="card-cap">Google open-standard REST endpoints for discovery, product search, and checkout. Any AI agent auto-discovers capabilities — no custom integration needed.</div>
+        <span class="card-user user-ucp">External AI Agents</span>
+      </div>
+
+      <div class="channel-card mcp">
+        <div class="card-icon icon-mcp">MCP</div>
+        <div class="card-name">MCP Apps — Claude + SEP-1865</div>
+        <div class="card-cap">Claude MCP server exposes tools plus a ui:// product-grid resource. Host renders an interactive iframe alongside chat; postMessage bridge for cart actions.</div>
+        <span class="card-user user-mcp">Claude Desktop Users</span>
+      </div>
+
+      <div class="channel-card plugin">
+        <div class="card-icon icon-plugin">PLG</div>
+        <div class="card-name">Claude Code Plugin</div>
+        <div class="card-cap">commerce-builder plugin with 6 developer skills and 4 commands: scaffold new agents, review flows, add skill templates, and author evaluation sets.</div>
+        <span class="card-user user-plugin">Developers</span>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── Key Capabilities ── -->
+  <p class="section-label">Key Capabilities</p>
+  <div class="caps-section">
+    <div class="caps-grid">
+
+      <div class="cap-badge">
+        <div class="cap-dot dot-blue"></div>
+        <div class="cap-name">Multi-channel</div>
+        <div class="cap-desc">LWC, headless, protocol, MCP, and plugin — one backend</div>
+      </div>
+
+      <div class="cap-badge">
+        <div class="cap-dot dot-purple"></div>
+        <div class="cap-name">Protocol-agnostic</div>
+        <div class="cap-desc">UCP lets any AI agent shop without custom connectors</div>
+      </div>
+
+      <div class="cap-badge">
+        <div class="cap-dot dot-green"></div>
+        <div class="cap-name">Generative UI</div>
+        <div class="cap-desc">Server-streamed UI events render interactive components</div>
+      </div>
+
+      <div class="cap-badge">
+        <div class="cap-dot dot-red"></div>
+        <div class="cap-name">Provenance-gated writes</div>
+        <div class="cap-desc">All cart and order writes are fenced and capped in code</div>
+      </div>
+
+      <div class="cap-badge">
+        <div class="cap-dot dot-amber"></div>
+        <div class="cap-name">Memory-personalized</div>
+        <div class="cap-desc">Per-session JsonFile and InMemory stores across all channels</div>
+      </div>
+
+      <div class="cap-badge">
+        <div class="cap-dot dot-teal"></div>
+        <div class="cap-name">Vertical-ready</div>
+        <div class="cap-desc">PresentationExtension adds vertical UI without touching core</div>
+      </div>
+
+    </div>
+  </div>
+
+</div><!-- /content -->
+</body>
+</html>

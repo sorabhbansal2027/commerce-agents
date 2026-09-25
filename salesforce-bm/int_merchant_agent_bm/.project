@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<projectDescription>
+    <name>int_merchant_agent_bm</name>
+    <comment>Merchant AI Agent — Business Manager extension cartridge</comment>
+    <projects/>
+    <buildSpec/>
+    <natures>
+        <nature>com.demandware.studio.core.beehiveNature</nature>
+    </natures>
+</projectDescription>

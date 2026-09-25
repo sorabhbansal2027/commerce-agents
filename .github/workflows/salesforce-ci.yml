@@ -1,0 +1,655 @@
+name: Salesforce Commerce — Full CI/CD
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Triggers
+# ──────────────────────────────────────────────────────────────────────────────
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'salesforce/**'
+      - 'examples/salesforce/**'
+      - 'Dockerfile'
+      - 'requirements*.txt'
+      - '.github/workflows/salesforce-ci.yml'
+      - '.github/workflows/_deploy-*.yml'
+  pull_request:
+    branches: [develop, main]
+    paths:
+      - 'salesforce/**'
+      - 'examples/salesforce/**'
+      - 'Dockerfile'
+      - 'requirements*.txt'
+      - '.github/workflows/salesforce-ci.yml'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        default: 'sandbox'
+        type: choice
+        options: [sandbox, production]
+      cloud:
+        description: 'Cloud target (overrides CLOUD_PROVIDER var)'
+        required: false
+        type: choice
+        options: ['', aws, azure, both]
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Repo-wide permissions (least-privilege; jobs add what they need)
+# ──────────────────────────────────────────────────────────────────────────────
+permissions:
+  contents: read
+  id-token: write      # OIDC for AWS / Azure — no long-lived credentials
+  pull-requests: write # AI review comments
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Shared env
+# ──────────────────────────────────────────────────────────────────────────────
+env:
+  PYTHON_VERSION: '3.11'
+  NODE_VERSION: '22'
+  IMAGE_NAME: commerce-agent-api
+
+# ──────────────────────────────────────────────────────────────────────────────
+# STAGE 1 — LINT & STATIC ANALYSIS
+# ──────────────────────────────────────────────────────────────────────────────
+jobs:
+
+  # ── 1a. Apex PMD scan ────────────────────────────────────────────────────────
+  apex-scan:
+    name: "Lint · Apex PMD"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Run PMD
+        uses: pmd/pmd-github-action@v2
+        id: pmd
+        with:
+          sourcePath: >
+            salesforce/force-app/main/default/classes,
+            salesforce/force-app/main/default/triggers
+          rulesets: >
+            category/apex/bestpractices.xml,
+            category/apex/errorprone.xml,
+            category/apex/performance.xml,
+            category/apex/security.xml
+          failOnViolation: true
+          minimumPriority: 3
+
+      - name: Explain PMD violations with Claude Haiku
+        if: failure()
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [ -f pmd-report.sarif ]; then
+            python salesforce/scripts/explain_pmd_violations.py pmd-report.sarif
+          fi
+
+  # ── 1b. Python ruff lint ─────────────────────────────────────────────────────
+  python-lint:
+    name: "Lint · Python (ruff)"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install dev deps
+        run: pip install -r requirements-dev.txt
+
+      - name: Ruff check
+        run: ruff check .
+
+      - name: Ruff format check
+        run: ruff format --check .
+
+      - name: Repo consistency check
+        run: python scripts/check.py
+
+  # ── 1c. LWC ESLint ───────────────────────────────────────────────────────────
+  lwc-lint:
+    name: "Lint · LWC ESLint"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: salesforce/package-lock.json
+
+      - name: Install
+        run: npm ci
+        working-directory: salesforce
+
+      - name: ESLint
+        run: npx eslint force-app --ext .js --no-error-on-unmatched-pattern || true
+        working-directory: salesforce
+
+# ──────────────────────────────────────────────────────────────────────────────
+# STAGE 2 — SECURITY SCANS
+# ──────────────────────────────────────────────────────────────────────────────
+
+  # ── 2a. Python Bandit ────────────────────────────────────────────────────────
+  python-security:
+    name: "Security · Bandit"
+    runs-on: ubuntu-latest
+    needs: [python-lint]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install Bandit
+        run: pip install bandit[toml]
+
+      - name: Run Bandit
+        run: |
+          bandit -r . \
+            --exclude ./.git,./node_modules,./salesforce/node_modules \
+            --severity-level medium \
+            --confidence-level medium \
+            -f json -o bandit-report.json || true
+
+      - name: Upload Bandit report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bandit-report
+          path: bandit-report.json
+
+  # ── 2b. Trivy container scan (build image first, then scan) ──────────────────
+  container-security:
+    name: "Security · Trivy"
+    runs-on: ubuntu-latest
+    needs: [python-lint]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Build image for scanning
+        run: docker build -t ${{ env.IMAGE_NAME }}:scan .
+
+      - name: Trivy vulnerability scan
+        uses: aquasecurity/trivy-action@18f2510ee396bbf400402c0e40c4b54b21a88b38 # v0.29
+        with:
+          image-ref: '${{ env.IMAGE_NAME }}:scan'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH'
+          exit-code: '0'   # warn only — change to '1' to block on findings
+
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+# ──────────────────────────────────────────────────────────────────────────────
+# STAGE 3 — UNIT TESTS
+# ──────────────────────────────────────────────────────────────────────────────
+
+  # ── 3a. LWC Jest ─────────────────────────────────────────────────────────────
+  lwc-tests:
+    name: "Test · LWC Jest"
+    runs-on: ubuntu-latest
+    needs: [lwc-lint]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: salesforce/package-lock.json
+
+      - name: Install
+        run: npm ci
+        working-directory: salesforce
+
+      - name: Run Jest with coverage
+        run: npm run test:unit:coverage
+        working-directory: salesforce
+
+      - name: Upload LWC coverage
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lwc-coverage
+          path: salesforce/coverage/
+
+  # ── 3b. Python pytest ────────────────────────────────────────────────────────
+  python-tests:
+    name: "Test · Python pytest"
+    runs-on: ubuntu-latest
+    needs: [python-lint]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install
+        run: pip install -r requirements-dev.txt
+
+      - name: Run pytest with coverage
+        run: |
+          pytest -q \
+            --cov=. \
+            --cov-report=xml:coverage.xml \
+            --cov-report=html:coverage-html \
+            --junitxml=test-results.xml
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: python-coverage
+          path: |
+            coverage.xml
+            coverage-html/
+
+  # ── 3c. Next.js web builds (type-check + build) ───────────────────────────────
+  web-build:
+    name: "Build · Next.js web apps"
+    runs-on: ubuntu-latest
+    needs: [lwc-lint]
+    strategy:
+      matrix:
+        app: [storefront-web, merchant-web]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: examples/salesforce/${{ matrix.app }}/package-lock.json
+
+      - name: Install
+        run: npm ci
+        working-directory: examples/salesforce/${{ matrix.app }}
+
+      - name: Type check
+        run: npx tsc --noEmit
+        working-directory: examples/salesforce/${{ matrix.app }}
+
+      - name: Build
+        run: npm run build
+        working-directory: examples/salesforce/${{ matrix.app }}
+        env:
+          NEXT_PUBLIC_API_URL: '__PLACEHOLDER__'   # replaced at deploy time
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-build-${{ matrix.app }}
+          path: examples/salesforce/${{ matrix.app }}/.next/
+          retention-days: 3
+
+# ──────────────────────────────────────────────────────────────────────────────
+# STAGE 4 — DOCKER IMAGE BUILD & PUSH
+# ──────────────────────────────────────────────────────────────────────────────
+
+  docker-build:
+    name: "Build · Docker image"
+    runs-on: ubuntu-latest
+    needs: [python-tests, python-security]
+    outputs:
+      image-tag: ${{ steps.meta.outputs.version }}
+      image-digest: ${{ steps.build.outputs.digest }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@b5ca514318bd6ebac0fb2aedd5e3e94a6e6a6e64 # v3
+
+      - name: Extract metadata (tags, labels)
+        id: meta
+        uses: docker/metadata-action@902fa8ec7d6ecbea3b263b3f60176a3056d9c2e1 # v5
+        with:
+          images: |
+            ${{ vars.ECR_REGISTRY }}/${{ env.IMAGE_NAME }}
+            ${{ vars.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha,prefix=,format=short
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+
+      # -- AWS ECR login (OIDC, no static keys) ---------------------------------
+      - name: Configure AWS credentials (OIDC)
+        if: >
+          vars.CLOUD_PROVIDER == 'aws' || vars.CLOUD_PROVIDER == 'both' ||
+          inputs.cloud == 'aws' || inputs.cloud == 'both'
+        uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+
+      - name: Log in to Amazon ECR
+        id: ecr-login
+        if: >
+          vars.CLOUD_PROVIDER == 'aws' || vars.CLOUD_PROVIDER == 'both' ||
+          inputs.cloud == 'aws' || inputs.cloud == 'both'
+        uses: aws-actions/amazon-ecr-login@062b18b96a7aff071d4dc91bc00c4c1a7945b076 # v2
+
+      # -- Azure ACR login (OIDC) -----------------------------------------------
+      - name: Log in to Azure
+        if: >
+          vars.CLOUD_PROVIDER == 'azure' || vars.CLOUD_PROVIDER == 'both' ||
+          inputs.cloud == 'azure' || inputs.cloud == 'both'
+        uses: azure/login@6c251865b4e6290e7b78be643ea2d005bc51f69a # v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Log in to Azure Container Registry
+        if: >
+          vars.CLOUD_PROVIDER == 'azure' || vars.CLOUD_PROVIDER == 'both' ||
+          inputs.cloud == 'azure' || inputs.cloud == 'both'
+        run: az acr login --name ${{ vars.ACR_NAME }}
+
+      # -- Build & push (only push on non-PR builds) ----------------------------
+      - name: Build and push image
+        id: build
+        uses: docker/build-push-action@471d1dc4e07e7ea34bb5cd48d30eb9bd8b9dc461 # v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: true
+          sbom: true
+
+# ──────────────────────────────────────────────────────────────────────────────
+# STAGE 5 — SALESFORCE SCRATCH ORG VALIDATE
+# ──────────────────────────────────────────────────────────────────────────────
+
+  sf-validate:
+    name: "Salesforce · Scratch org validate"
+    runs-on: ubuntu-latest
+    needs: [apex-scan, lwc-tests]
+    if: >
+      github.event_name == 'pull_request' ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/develop')
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Install Salesforce CLI
+        run: npm install -g @salesforce/cli@latest
+
+      - name: Decode private key
+        run: echo "${{ secrets.PRIVATE_KEY_BASE64 }}" | base64 -d > sf_key.key
+
+      - name: Auth to Dev Hub
+        run: |
+          sf org login sfdx-url \
+            --sfdx-url-file <(echo "${{ secrets.SFDX_AUTH_URL_DEVHUB }}") \
+            --alias ci-devhub \
+            --set-default-dev-hub
+
+      - name: Create scratch org
+        run: |
+          sf org create scratch \
+            --definition-file salesforce/config/project-scratch-def.json \
+            --alias ci-scratch \
+            --duration-days 1 \
+            --no-namespace \
+            --target-dev-hub ci-devhub
+
+      - name: Deploy (validate-only on PRs, full on develop)
+        run: |
+          sf project deploy start \
+            --source-dir salesforce/force-app \
+            --target-org ci-scratch \
+            ${{ github.event_name == 'pull_request' && '--dry-run' || '' }}
+
+      - name: Run Apex tests
+        run: |
+          sf apex run test \
+            --target-org ci-scratch \
+            --test-level RunLocalTests \
+            --result-format json \
+            --output-dir salesforce/test-results \
+            --wait 20
+
+      - name: Assert ≥75% Apex coverage
+        run: python salesforce/scripts/check_coverage.py salesforce/test-results/
+
+      - name: Upload Apex test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: apex-test-results
+          path: salesforce/test-results/
+
+      - name: Delete scratch org
+        if: always()
+        run: sf org delete scratch --target-org ci-scratch --no-prompt || true
+
+      - name: Clean up key file
+        if: always()
+        run: rm -f sf_key.key
+
+# ──────────────────────────────────────────────────────────────────────────────
+# STAGE 6 — SANDBOX DEPLOY  (develop push only)
+# ──────────────────────────────────────────────────────────────────────────────
+
+  # ── 6a. Salesforce sandbox ───────────────────────────────────────────────────
+  sf-sandbox:
+    name: "Deploy · Salesforce sandbox"
+    runs-on: ubuntu-latest
+    needs: [sf-validate, docker-build, web-build]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    environment: sandbox
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Install Salesforce CLI
+        run: npm install -g @salesforce/cli@latest
+
+      - name: Decode private key
+        run: echo "${{ secrets.PRIVATE_KEY_BASE64 }}" | base64 -d > sf_key.key
+
+      - name: Auth to sandbox
+        run: |
+          sf org login jwt \
+            --client-id "${{ secrets.SF_CLIENT_ID }}" \
+            --jwt-key-file sf_key.key \
+            --username "${{ secrets.SF_SANDBOX_USERNAME }}" \
+            --instance-url "${{ secrets.SF_INSTANCE_URL }}" \
+            --alias ci-sandbox
+
+      - name: Deploy to sandbox
+        run: |
+          sf project deploy start \
+            --source-dir salesforce/force-app \
+            --target-org ci-sandbox \
+            --test-level RunLocalTests \
+            --wait 30
+
+      - name: Post-deploy Apex tests
+        run: |
+          sf apex run test \
+            --target-org ci-sandbox \
+            --test-level RunLocalTests \
+            --result-format human \
+            --wait 20
+
+      - name: Clean up key file
+        if: always()
+        run: rm -f sf_key.key
+
+  # ── 6b. AWS backend (sandbox) ─────────────────────────────────────────────────
+  deploy-aws-sandbox:
+    name: "Deploy · AWS sandbox"
+    needs: [docker-build, web-build]
+    if: >
+      github.event_name == 'push' && github.ref == 'refs/heads/develop' &&
+      (vars.CLOUD_PROVIDER == 'aws' || vars.CLOUD_PROVIDER == 'both' || inputs.cloud == 'aws' || inputs.cloud == 'both')
+    uses: ./.github/workflows/_deploy-backend-aws.yml
+    with:
+      environment: sandbox
+      image-tag: ${{ needs.docker-build.outputs.image-tag }}
+    secrets: inherit
+
+  # ── 6c. Azure backend (sandbox) ──────────────────────────────────────────────
+  deploy-azure-sandbox:
+    name: "Deploy · Azure sandbox"
+    needs: [docker-build, web-build]
+    if: >
+      github.event_name == 'push' && github.ref == 'refs/heads/develop' &&
+      (vars.CLOUD_PROVIDER == 'azure' || vars.CLOUD_PROVIDER == 'both' || inputs.cloud == 'azure' || inputs.cloud == 'both')
+    uses: ./.github/workflows/_deploy-backend-azure.yml
+    with:
+      environment: sandbox
+      image-tag: ${{ needs.docker-build.outputs.image-tag }}
+    secrets: inherit
+
+  # ── 6d. Smoke test (sandbox) ─────────────────────────────────────────────────
+  smoke-test-sandbox:
+    name: "Smoke test · Sandbox"
+    runs-on: ubuntu-latest
+    needs: [sf-sandbox, deploy-aws-sandbox, deploy-azure-sandbox]
+    if: |
+      always() &&
+      github.event_name == 'push' && github.ref == 'refs/heads/develop' &&
+      (needs.sf-sandbox.result == 'success' || needs.sf-sandbox.result == 'skipped') &&
+      (needs.deploy-aws-sandbox.result == 'success' || needs.deploy-aws-sandbox.result == 'skipped') &&
+      (needs.deploy-azure-sandbox.result == 'success' || needs.deploy-azure-sandbox.result == 'skipped')
+    environment: sandbox
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install requests
+        run: pip install requests
+
+      - name: Run smoke tests
+        env:
+          SMOKE_BASE_URL: ${{ vars.SANDBOX_API_URL }}
+          SMOKE_SF_INSTANCE: ${{ secrets.SF_INSTANCE_URL }}
+        run: python salesforce/scripts/smoke_test.py
+
+# ──────────────────────────────────────────────────────────────────────────────
+# STAGE 7 — PRODUCTION DEPLOY  (main push, requires manual approval)
+# ──────────────────────────────────────────────────────────────────────────────
+
+  # ── 7a. Salesforce production ─────────────────────────────────────────────────
+  sf-production:
+    name: "Deploy · Salesforce production"
+    runs-on: ubuntu-latest
+    needs: [apex-scan, lwc-tests, python-tests, docker-build]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    environment: production   # ← GitHub requires manual reviewer approval here
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Install Salesforce CLI
+        run: npm install -g @salesforce/cli@latest
+
+      - name: Decode private key
+        run: echo "${{ secrets.PRIVATE_KEY_BASE64 }}" | base64 -d > sf_key.key
+
+      - name: Auth to production
+        run: |
+          sf org login jwt \
+            --client-id "${{ secrets.SF_PROD_CLIENT_ID }}" \
+            --jwt-key-file sf_key.key \
+            --username "${{ secrets.SF_PROD_USERNAME }}" \
+            --instance-url "https://login.salesforce.com" \
+            --alias ci-prod
+
+      - name: Validate deploy (dry run)
+        run: |
+          sf project deploy validate \
+            --source-dir salesforce/force-app \
+            --target-org ci-prod \
+            --test-level RunLocalTests \
+            --wait 30
+
+      - name: Deploy to production
+        run: |
+          sf project deploy start \
+            --source-dir salesforce/force-app \
+            --target-org ci-prod \
+            --test-level RunLocalTests \
+            --wait 30
+
+      - name: Clean up key file
+        if: always()
+        run: rm -f sf_key.key
+
+  # ── 7b. AWS production ────────────────────────────────────────────────────────
+  deploy-aws-production:
+    name: "Deploy · AWS production"
+    needs: [sf-production, docker-build]
+    if: >
+      github.event_name == 'push' && github.ref == 'refs/heads/main' &&
+      (vars.CLOUD_PROVIDER == 'aws' || vars.CLOUD_PROVIDER == 'both' || inputs.cloud == 'aws' || inputs.cloud == 'both')
+    uses: ./.github/workflows/_deploy-backend-aws.yml
+    with:
+      environment: production
+      image-tag: ${{ needs.docker-build.outputs.image-tag }}
+    secrets: inherit
+
+  # ── 7c. Azure production ──────────────────────────────────────────────────────
+  deploy-azure-production:
+    name: "Deploy · Azure production"
+    needs: [sf-production, docker-build]
+    if: >
+      github.event_name == 'push' && github.ref == 'refs/heads/main' &&
+      (vars.CLOUD_PROVIDER == 'azure' || vars.CLOUD_PROVIDER == 'both' || inputs.cloud == 'azure' || inputs.cloud == 'both')
+    uses: ./.github/workflows/_deploy-backend-azure.yml
+    with:
+      environment: production
+      image-tag: ${{ needs.docker-build.outputs.image-tag }}
+    secrets: inherit
+
+# ──────────────────────────────────────────────────────────────────────────────
+# STAGE 8 — AI PR REVIEW
+# ──────────────────────────────────────────────────────────────────────────────
+
+  ai-pr-review:
+    name: "AI · PR code review"
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+
+      - name: Get diff
+        id: diff
+        run: |
+          git diff origin/${{ github.base_ref }}...HEAD \
+            -- 'salesforce/**' 'examples/salesforce/**' > diff.txt
+          echo "diff_size=$(wc -c < diff.txt)" >> $GITHUB_OUTPUT
+
+      - name: Post AI review
+        if: steps.diff.outputs.diff_size != '0'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: python salesforce/scripts/post_ai_review.py diff.txt

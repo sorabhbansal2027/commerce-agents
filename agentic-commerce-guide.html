@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Agentic Commerce — Architecture, Structure & Demo Guide</title>
+<style>
+:root{
+  --navy:#1e2c4f;--navy2:#2d4270;--ink:#1a1f2e;--ink2:#4b5563;--ink3:#9ca3af;
+  --bg:#f8f9fc;--card:#fff;--line:#e5e7eb;
+  --blue:#2563eb;--blue-bg:#eff6ff;--blue-bd:#bfdbfe;
+  --green:#16a34a;--green-bg:#f0fdf4;--green-bd:#86efac;
+  --purple:#7c3aed;--purple-bg:#f5f3ff;--purple-bd:#c4b5fd;
+  --amber:#d97706;--amber-bg:#fffbeb;--amber-bd:#fcd34d;
+  --red:#dc2626;--red-bg:#fef2f2;--red-bd:#fca5a5;
+  --r:10px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--bg);color:var(--ink);line-height:1.6}
+a{color:var(--blue);text-decoration:none}
+
+/* ── Header ── */
+.hdr{background:var(--navy);color:#fff;padding:28px 40px 24px}
+.hdr-inner{max-width:1100px;margin:0 auto}
+.hdr h1{font-size:22px;font-weight:700;letter-spacing:-.01em;margin-bottom:6px}
+.hdr p{font-size:14px;opacity:.7;max-width:680px}
+.hdr-tags{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+.htag{font-size:11px;font-weight:600;padding:3px 10px;border-radius:20px;background:rgba(255,255,255,.12);color:#fff}
+
+/* ── Tabs ── */
+.tabs-bar{background:var(--card);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:10}
+.tabs-inner{max-width:1100px;margin:0 auto;display:flex;gap:0}
+.tab{padding:14px 24px;font-size:13.5px;font-weight:500;color:var(--ink2);cursor:pointer;border-bottom:2px solid transparent;transition:color .15s,border-color .15s;white-space:nowrap}
+.tab:hover{color:var(--ink)}
+.tab.active{color:var(--navy);border-bottom-color:var(--navy)}
+
+/* ── Content ── */
+.content{max-width:1100px;margin:0 auto;padding:32px 40px 60px}
+.section{display:none}
+.section.active{display:block}
+
+/* ── Section headings ── */
+.sec-title{font-size:18px;font-weight:700;color:var(--ink);margin-bottom:6px}
+.sec-sub{font-size:13.5px;color:var(--ink2);margin-bottom:28px;max-width:700px}
+
+/* ── Architecture SVG card ── */
+.arch-card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;margin-bottom:28px}
+.arch-card svg{width:100%;height:auto;display:block}
+
+/* ── Layer legend ── */
+.legend{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:28px}
+.legend-item{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink2)}
+.legend-dot{width:12px;height:12px;border-radius:3px;flex-shrink:0}
+
+/* ── Flow cards ── */
+.flow-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:28px}
+.flow-card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:16px 18px}
+.flow-card h3{font-size:13px;font-weight:700;margin-bottom:10px;display:flex;align-items:center;gap:7px}
+.flow-step{display:flex;gap:10px;align-items:flex-start;margin-bottom:7px;font-size:12.5px;color:var(--ink2)}
+.step-num{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0;margin-top:1px}
+
+/* ── Folder tree ── */
+.tree{background:#0f172a;border-radius:var(--r);padding:20px 22px;font-family:"SF Mono","Fira Code",monospace;font-size:12.5px;line-height:1.9;overflow:auto;margin-bottom:24px}
+.tree-line{display:flex;align-items:center;gap:0;white-space:nowrap}
+.t-dir{color:#7dd3fc;font-weight:600}
+.t-py{color:#86efac}
+.t-ts{color:#67e8f9}
+.t-html{color:#fda4af}
+.t-json{color:#fcd34d}
+.t-md{color:#d8b4fe}
+.t-env{color:#fb923c}
+.t-indent{color:#334155;user-select:none}
+.t-comment{color:#475569;font-style:italic}
+.t-new{color:#4ade80;background:rgba(74,222,128,.12);padding:0 4px;border-radius:3px}
+.t-badge{font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;margin-left:6px;vertical-align:middle}
+.badge-ucp{background:#1d4ed8;color:#bfdbfe}
+.badge-mcp{background:#15803d;color:#bbf7d0}
+.badge-gem{background:#6d28d9;color:#ddd6fe}
+
+/* ── File detail cards ── */
+.file-cards{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:28px}
+.file-card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px}
+.file-card .path{font-family:monospace;font-size:11px;color:var(--ink3);margin-bottom:6px;word-break:break-all}
+.file-card .name{font-size:13px;font-weight:600;margin-bottom:6px}
+.file-card .desc{font-size:12px;color:var(--ink2);line-height:1.5}
+
+/* ── Demo guide ── */
+.demo-flow{margin-bottom:36px}
+.demo-flow h3{font-size:15px;font-weight:700;margin-bottom:4px;display:flex;align-items:center;gap:8px}
+.demo-flow .subtitle{font-size:13px;color:var(--ink2);margin-bottom:16px}
+.demo-steps{display:flex;flex-direction:column;gap:0}
+.demo-step{display:flex;gap:0;position:relative}
+.demo-step:not(:last-child)::before{content:'';position:absolute;left:17px;top:38px;bottom:0;width:1px;background:var(--line)}
+.step-circle{width:35px;height:35px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0;margin-top:0;margin-right:14px;z-index:1}
+.step-body{flex:1;padding-bottom:20px}
+.step-body h4{font-size:13.5px;font-weight:600;margin-bottom:6px}
+.step-body p{font-size:13px;color:var(--ink2);margin-bottom:8px;line-height:1.5}
+.cmd{background:#0f172a;color:#e2e8f0;font-family:"SF Mono","Fira Code",monospace;font-size:12px;padding:10px 14px;border-radius:6px;margin-bottom:8px;overflow:auto;white-space:pre}
+.cmd .c-comment{color:#475569}
+.cmd .c-key{color:#7dd3fc}
+.cmd .c-val{color:#86efac}
+.cmd .c-cmd{color:#fda4af}
+.expected{background:var(--green-bg);border:1px solid var(--green-bd);border-radius:6px;padding:8px 12px;font-size:12px;color:#14532d;margin-bottom:0}
+.tip{background:var(--amber-bg);border:1px solid var(--amber-bd);border-radius:6px;padding:8px 12px;font-size:12px;color:#78350f;margin-top:6px}
+
+/* ── Inline badge ── */
+.pill{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px;margin:0 2px}
+.pill-blue{background:var(--blue-bg);color:var(--blue);border:1px solid var(--blue-bd)}
+.pill-green{background:var(--green-bg);color:var(--green);border:1px solid var(--green-bd)}
+.pill-purple{background:var(--purple-bg);color:var(--purple);border:1px solid var(--purple-bd)}
+
+/* ── Responsive ── */
+@media(max-width:780px){
+  .content{padding:20px}
+  .flow-grid,.file-cards{grid-template-columns:1fr}
+  .hdr{padding:20px}
+}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <div class="hdr-inner">
+    <h1>Agentic B2B Commerce — Reference Guide</h1>
+    <p>Architecture, codebase structure, and step-by-step demo for Universal Commerce Protocol (UCP) and MCP Apps UI.</p>
+    <div class="hdr-tags">
+      <span class="htag">UCP REST · Google Standard</span>
+      <span class="htag">MCP Apps SEP-1865</span>
+      <span class="htag">Gemini 3.6 Flash</span>
+      <span class="htag">Claude + Salesforce</span>
+      <span class="htag">Railway · Live</span>
+    </div>
+  </div>
+</div>
+
+<div class="tabs-bar">
+  <div class="tabs-inner">
+    <div class="tab active" onclick="show('arch',this)">Reference Architecture</div>
+    <div class="tab" onclick="show('folder',this)">Folder Structure</div>
+    <div class="tab" onclick="show('demo',this)">How to Demo</div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ ARCHITECTURE -->
+<div class="content">
+<div id="arch" class="section active">
+  <div class="sec-title">Reference Architecture</div>
+  <div class="sec-sub">Three layers work together: any AI agent discovers the store via UCP, Claude's MCP server adds rich tool access and interactive UI, and Gemini connects both through the same standard REST contract.</div>
+
+  <div class="arch-card">
+    <svg viewBox="0 0 1020 540" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif">
+      <!-- bg -->
+      <rect width="1020" height="540" fill="#f8f9fc"/>
+
+      <!-- Layer labels -->
+      <text x="18" y="100" font-size="9.5" fill="#9ca3af" font-weight="600" transform="rotate(-90,18,100)">AGENTS</text>
+      <text x="18" y="260" font-size="9.5" fill="#9ca3af" font-weight="600" transform="rotate(-90,18,260)">PROTOCOLS</text>
+      <text x="18" y="410" font-size="9.5" fill="#9ca3af" font-weight="600" transform="rotate(-90,18,410)">BACKENDS</text>
+
+      <!-- Layer bands -->
+      <rect x="30" y="30" width="978" height="145" rx="8" fill="#eff6ff" opacity=".5"/>
+      <rect x="30" y="190" width="978" height="155" rx="8" fill="#f5f3ff" opacity=".5"/>
+      <rect x="30" y="360" width="978" height="155" rx="8" fill="#f0fdf4" opacity=".5"/>
+
+      <!-- ── AGENT LAYER ── -->
+      <!-- Buyer/User -->
+      <rect x="55" y="50" width="120" height="54" rx="7" fill="#fff" stroke="#bfdbfe" stroke-width="1.5"/>
+      <text x="115" y="72" text-anchor="middle" font-size="11" font-weight="600" fill="#1e40af">Buyer / User</text>
+      <text x="115" y="88" text-anchor="middle" font-size="9.5" fill="#6b7280">Chat or portal</text>
+
+      <!-- Gemini Agent -->
+      <rect x="225" y="45" width="145" height="64" rx="7" fill="#fff" stroke="#c4b5fd" stroke-width="1.5"/>
+      <text x="297" y="68" text-anchor="middle" font-size="11" font-weight="700" fill="#6d28d9">Gemini Agent</text>
+      <text x="297" y="84" text-anchor="middle" font-size="9" fill="#7c3aed">GeminiUCPAgent</text>
+      <text x="297" y="97" text-anchor="middle" font-size="9" fill="#6b7280">Auto-discovers via UCP</text>
+
+      <!-- Claude Shopping Agent -->
+      <rect x="420" y="45" width="170" height="64" rx="7" fill="#fff" stroke="#bfdbfe" stroke-width="1.5"/>
+      <text x="505" y="68" text-anchor="middle" font-size="11" font-weight="700" fill="#1e40af">Claude Shopping Agent</text>
+      <text x="505" y="84" text-anchor="middle" font-size="9" fill="#2563eb">ShoppingAgent (Messages API)</text>
+      <text x="505" y="97" text-anchor="middle" font-size="9" fill="#6b7280">Skills · memory · provenance</text>
+
+      <!-- Claude MCP Server -->
+      <rect x="645" y="45" width="175" height="64" rx="7" fill="#fff" stroke="#86efac" stroke-width="1.5"/>
+      <text x="732" y="68" text-anchor="middle" font-size="11" font-weight="700" fill="#15803d">Claude MCP Server</text>
+      <text x="732" y="84" text-anchor="middle" font-size="9" fill="#16a34a">storefront_mcp_server.py</text>
+      <text x="732" y="97" text-anchor="middle" font-size="9" fill="#6b7280">Tools + ui:// resources</text>
+
+      <!-- Merchant Agent -->
+      <rect x="875" y="50" width="118" height="54" rx="7" fill="#fff" stroke="#fcd34d" stroke-width="1.5"/>
+      <text x="934" y="72" text-anchor="middle" font-size="11" font-weight="600" fill="#92400e">Merchant Agent</text>
+      <text x="934" y="88" text-anchor="middle" font-size="9.5" fill="#6b7280">Quotes · orders</text>
+
+      <!-- ── PROTOCOL LAYER ── -->
+      <!-- UCP box -->
+      <rect x="55" y="205" width="330" height="120" rx="7" fill="#fff" stroke="#c4b5fd" stroke-width="1.5"/>
+      <text x="220" y="226" text-anchor="middle" font-size="11" font-weight="700" fill="#6d28d9">Universal Commerce Protocol (UCP)</text>
+      <text x="220" y="242" text-anchor="middle" font-size="9.5" fill="#6b7280">GET /.well-known/ucp — machine-readable capability manifest</text>
+      <!-- endpoints -->
+      <rect x="70" y="251" width="142" height="30" rx="5" fill="#f5f3ff" stroke="#c4b5fd" stroke-width="1"/>
+      <text x="141" y="263" text-anchor="middle" font-size="9" fill="#6d28d9" font-weight="600">GET /ucp/products</text>
+      <text x="141" y="275" text-anchor="middle" font-size="8.5" fill="#7c3aed">Search · filter · paginate</text>
+      <rect x="228" y="251" width="142" height="30" rx="5" fill="#f5f3ff" stroke="#c4b5fd" stroke-width="1"/>
+      <text x="299" y="263" text-anchor="middle" font-size="9" fill="#6d28d9" font-weight="600">POST /ucp/checkout-sessions</text>
+      <text x="299" y="275" text-anchor="middle" font-size="8.5" fill="#7c3aed">Pending · no charge</text>
+      <rect x="70" y="288" width="300" height="28" rx="5" fill="#fdf4ff" stroke="#e9d5ff" stroke-width="1"/>
+      <text x="220" y="299" text-anchor="middle" font-size="9" fill="#7c3aed">Any UCP-aware agent (Gemini, GPT, custom bot) can discover and transact</text>
+      <text x="220" y="311" text-anchor="middle" font-size="8.5" fill="#9ca3af">No custom adapter needed per AI vendor</text>
+
+      <!-- MCP box -->
+      <rect x="415" y="205" width="580" height="120" rx="7" fill="#fff" stroke="#86efac" stroke-width="1.5"/>
+      <text x="705" y="226" text-anchor="middle" font-size="11" font-weight="700" fill="#15803d">Model Context Protocol (MCP) + MCP Apps (SEP-1865)</text>
+      <text x="705" y="242" text-anchor="middle" font-size="9.5" fill="#6b7280">Streamable HTTP · tool definitions · ui:// resource registry</text>
+      <!-- mcp endpoints -->
+      <rect x="430" y="251" width="165" height="30" rx="5" fill="#f0fdf4" stroke="#86efac" stroke-width="1"/>
+      <text x="512" y="263" text-anchor="middle" font-size="9" fill="#15803d" font-weight="600">search_products_ui</text>
+      <text x="512" y="275" text-anchor="middle" font-size="8.5" fill="#16a34a">Returns _meta.ui.resourceUri</text>
+      <rect x="607" y="251" width="165" height="30" rx="5" fill="#f0fdf4" stroke="#86efac" stroke-width="1"/>
+      <text x="689" y="263" text-anchor="middle" font-size="9" fill="#15803d" font-weight="600">ui://storefront/product-grid</text>
+      <text x="689" y="275" text-anchor="middle" font-size="8.5" fill="#16a34a">Interactive HTML iframe</text>
+      <rect x="784" y="251" width="196" height="30" rx="5" fill="#f0fdf4" stroke="#86efac" stroke-width="1"/>
+      <text x="882" y="263" text-anchor="middle" font-size="9" fill="#15803d" font-weight="600">postMessage bridge</text>
+      <text x="882" y="275" text-anchor="middle" font-size="8.5" fill="#16a34a">add_to_cart fires back to host</text>
+      <rect x="430" y="288" width="550" height="28" rx="5" fill="#f0fdf4" stroke="#d1fae5" stroke-width="1"/>
+      <text x="705" y="299" text-anchor="middle" font-size="9" fill="#15803d">Claude (or any MCP Apps host) renders the product grid alongside the response — no portal switch</text>
+      <text x="705" y="311" text-anchor="middle" font-size="8.5" fill="#9ca3af">Users click "Add to cart" directly in chat; tool call fires without extra turns</text>
+
+      <!-- ── BACKEND LAYER ── -->
+      <!-- Salesforce / Railway -->
+      <rect x="55" y="377" width="260" height="118" rx="7" fill="#fff" stroke="#fcd34d" stroke-width="1.5"/>
+      <text x="185" y="398" text-anchor="middle" font-size="11" font-weight="700" fill="#92400e">Salesforce OMS + Railway</text>
+      <text x="185" y="414" text-anchor="middle" font-size="9" fill="#6b7280">SalesforceOMSBackend · product catalog</text>
+      <rect x="70" y="422" width="110" height="26" rx="5" fill="#fffbeb" stroke="#fcd34d" stroke-width="1"/>
+      <text x="125" y="434" text-anchor="middle" font-size="9" fill="#92400e" font-weight="600">SOQL product cache</text>
+      <text x="125" y="444" text-anchor="middle" font-size="8" fill="#b45309">Async pre-load</text>
+      <rect x="195" y="422" width="105" height="26" rx="5" fill="#fffbeb" stroke="#fcd34d" stroke-width="1"/>
+      <text x="247" y="434" text-anchor="middle" font-size="9" fill="#92400e" font-weight="600">Quote Approvals</text>
+      <text x="247" y="444" text-anchor="middle" font-size="8" fill="#b45309">LWC · merchant portal</text>
+      <text x="185" y="464" text-anchor="middle" font-size="9" fill="#9ca3af">diligent-flow-production-afd7.up.railway.app</text>
+      <text x="185" y="478" text-anchor="middle" font-size="9" fill="#9ca3af">Port 8005 (local)</text>
+
+      <!-- Demo server -->
+      <rect x="345" y="377" width="245" height="118" rx="7" fill="#fff" stroke="#86efac" stroke-width="1.5"/>
+      <text x="467" y="398" text-anchor="middle" font-size="11" font-weight="700" fill="#15803d">Demo Server</text>
+      <text x="467" y="414" text-anchor="middle" font-size="9" fill="#6b7280">gemini_mcp_ui_server.py · port 8099</text>
+      <rect x="360" y="422" width="107" height="26" rx="5" fill="#f0fdf4" stroke="#86efac" stroke-width="1"/>
+      <text x="413" y="434" text-anchor="middle" font-size="9" fill="#15803d" font-weight="600">GET /ui/product-grid</text>
+      <text x="413" y="444" text-anchor="middle" font-size="8" fill="#16a34a">Serves HTML resource</text>
+      <rect x="478" y="422" width="100" height="26" rx="5" fill="#f0fdf4" stroke="#86efac" stroke-width="1"/>
+      <text x="528" y="434" text-anchor="middle" font-size="9" fill="#15803d" font-weight="600">POST /api/chat</text>
+      <text x="528" y="444" text-anchor="middle" font-size="8" fill="#16a34a">GeminiUCPAgent</text>
+      <text x="467" y="464" text-anchor="middle" font-size="9" fill="#9ca3af">Split-screen: Gemini chat left · product grid right</text>
+      <text x="467" y="478" text-anchor="middle" font-size="9" fill="#9ca3af">postMessage bridges iframe ↔ parent ↔ Gemini</text>
+
+      <!-- Memory / Skills -->
+      <rect x="620" y="377" width="175" height="118" rx="7" fill="#fff" stroke="#bfdbfe" stroke-width="1.5"/>
+      <text x="707" y="398" text-anchor="middle" font-size="11" font-weight="700" fill="#1e40af">Skills + Memory</text>
+      <text x="707" y="414" text-anchor="middle" font-size="9" fill="#6b7280">Per-role, per-vertical</text>
+      <rect x="635" y="422" width="75" height="26" rx="5" fill="#eff6ff" stroke="#bfdbfe" stroke-width="1"/>
+      <text x="672" y="434" text-anchor="middle" font-size="9" fill="#1e40af" font-weight="600">shopping/</text>
+      <text x="672" y="444" text-anchor="middle" font-size="8" fill="#3b82f6">5 skills</text>
+      <rect x="722" y="422" width="58" height="26" rx="5" fill="#eff6ff" stroke="#bfdbfe" stroke-width="1"/>
+      <text x="751" y="434" text-anchor="middle" font-size="9" fill="#1e40af" font-weight="600">merchant/</text>
+      <text x="751" y="444" text-anchor="middle" font-size="8" fill="#3b82f6">5 skills</text>
+      <text x="707" y="464" text-anchor="middle" font-size="9" fill="#9ca3af">JsonFileMemoryStore</text>
+      <text x="707" y="478" text-anchor="middle" font-size="9" fill="#9ca3af">InMemoryMemoryStore</text>
+
+      <!-- Salesforce Org -->
+      <rect x="820" y="377" width="180" height="118" rx="7" fill="#fff" stroke="#fca5a5" stroke-width="1.5"/>
+      <text x="910" y="398" text-anchor="middle" font-size="11" font-weight="700" fill="#b91c1c">Salesforce Org</text>
+      <text x="910" y="414" text-anchor="middle" font-size="9" fill="#6b7280">atci-b2b-lex--b2bpoc.sandbox</text>
+      <rect x="836" y="422" width="75" height="26" rx="5" fill="#fef2f2" stroke="#fca5a5" stroke-width="1"/>
+      <text x="873" y="434" text-anchor="middle" font-size="9" fill="#b91c1c" font-weight="600">salesforceMerchant</text>
+      <text x="873" y="444" text-anchor="middle" font-size="8" fill="#dc2626">LWC deployed</text>
+      <rect x="924" y="422" width="60" height="26" rx="5" fill="#fef2f2" stroke="#fca5a5" stroke-width="1"/>
+      <text x="954" y="434" text-anchor="middle" font-size="9" fill="#b91c1c" font-weight="600">Quote Approvals</text>
+      <text x="954" y="444" text-anchor="middle" font-size="8" fill="#dc2626">Tab live</text>
+      <text x="910" y="464" text-anchor="middle" font-size="9" fill="#9ca3af">sf project deploy start</text>
+      <text x="910" y="478" text-anchor="middle" font-size="9" fill="#9ca3af">--target-org b2bpoc</text>
+
+      <!-- ── Arrows ── -->
+      <!-- Buyer → Gemini -->
+      <line x1="175" y1="77" x2="224" y2="77" stroke="#c4b5fd" stroke-width="1.5" marker-end="url(#arr-p)"/>
+      <!-- Buyer → Claude Shopping -->
+      <path d="M175,85 Q300,130 420,77" fill="none" stroke="#bfdbfe" stroke-width="1.5" stroke-dasharray="4,2" marker-end="url(#arr-b)"/>
+      <!-- Gemini → UCP -->
+      <line x1="297" y1="109" x2="297" y2="204" stroke="#c4b5fd" stroke-width="1.5" marker-end="url(#arr-p)"/>
+      <!-- Claude Shopping → MCP -->
+      <line x1="505" y1="109" x2="660" y2="204" stroke="#86efac" stroke-width="1.5" marker-end="url(#arr-g)"/>
+      <!-- Claude MCP → MCP box -->
+      <line x1="732" y1="109" x2="732" y2="204" stroke="#86efac" stroke-width="1.5" marker-end="url(#arr-g)"/>
+      <!-- UCP → Railway -->
+      <line x1="220" y1="325" x2="185" y2="376" stroke="#c4b5fd" stroke-width="1.5" marker-end="url(#arr-p)"/>
+      <!-- MCP → Demo server -->
+      <line x1="600" y1="325" x2="467" y2="376" stroke="#86efac" stroke-width="1.5" marker-end="url(#arr-g)"/>
+      <!-- MCP → Skills -->
+      <line x1="760" y1="325" x2="720" y2="376" stroke="#bfdbfe" stroke-width="1.5" marker-end="url(#arr-b)"/>
+      <!-- Merchant → SF Org -->
+      <line x1="934" y1="104" x2="934" y2="376" stroke="#fca5a5" stroke-width="1.5" stroke-dasharray="4,2" marker-end="url(#arr-r)"/>
+
+      <!-- markers -->
+      <defs>
+        <marker id="arr-p" markerWidth="7" markerHeight="7" refX="6" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3z" fill="#c4b5fd"/></marker>
+        <marker id="arr-b" markerWidth="7" markerHeight="7" refX="6" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3z" fill="#bfdbfe"/></marker>
+        <marker id="arr-g" markerWidth="7" markerHeight="7" refX="6" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3z" fill="#86efac"/></marker>
+        <marker id="arr-r" markerWidth="7" markerHeight="7" refX="6" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3z" fill="#fca5a5"/></marker>
+      </defs>
+
+      <!-- Layer labels inside -->
+      <text x="44" y="110" font-size="9" fill="#6b7280" font-weight="600">AI Agents</text>
+      <text x="44" y="270" font-size="9" fill="#6b7280" font-weight="600">Protocols</text>
+      <text x="44" y="440" font-size="9" fill="#6b7280" font-weight="600">Backends</text>
+    </svg>
+  </div>
+
+  <div class="legend">
+    <div class="legend-item"><div class="legend-dot" style="background:#c4b5fd"></div>Gemini / UCP path</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#86efac"></div>Claude / MCP path</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#fcd34d"></div>Salesforce / Railway backend</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#fca5a5"></div>Salesforce Org (LWC deployed)</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#bfdbfe;border:1px solid #bfdbfe"></div>Dashed = optional/secondary path</div>
+  </div>
+
+  <div class="flow-grid">
+    <div class="flow-card">
+      <h3><span style="color:#6d28d9">⬡</span> UCP Flow — any AI agent</h3>
+      <div class="flow-step"><div class="step-num" style="background:#f5f3ff;color:#6d28d9">1</div><span>Agent fetches <code>/.well-known/ucp</code> → reads manifest</span></div>
+      <div class="flow-step"><div class="step-num" style="background:#f5f3ff;color:#6d28d9">2</div><span>Auto-generates function declarations from capabilities block</span></div>
+      <div class="flow-step"><div class="step-num" style="background:#f5f3ff;color:#6d28d9">3</div><span>Calls <code>GET /ucp/products?q=…&max_price=…</code></span></div>
+      <div class="flow-step"><div class="step-num" style="background:#f5f3ff;color:#6d28d9">4</div><span>Creates checkout session with confirmed items</span></div>
+      <div class="flow-step"><div class="step-num" style="background:#f5f3ff;color:#6d28d9">5</div><span>No custom adapter — works with Gemini, GPT, any LLM</span></div>
+    </div>
+    <div class="flow-card">
+      <h3><span style="color:#16a34a">⬡</span> MCP Apps UI Flow — Claude host</h3>
+      <div class="flow-step"><div class="step-num" style="background:#f0fdf4;color:#15803d">1</div><span>User asks Claude to search products</span></div>
+      <div class="flow-step"><div class="step-num" style="background:#f0fdf4;color:#15803d">2</div><span>Agent calls <code>search_products_ui</code> tool</span></div>
+      <div class="flow-step"><div class="step-num" style="background:#f0fdf4;color:#15803d">3</div><span>Result includes <code>_meta.ui.resourceUri: "ui://storefront/product-grid"</code></span></div>
+      <div class="flow-step"><div class="step-num" style="background:#f0fdf4;color:#15803d">4</div><span>Host fetches resource, renders HTML iframe alongside chat</span></div>
+      <div class="flow-step"><div class="step-num" style="background:#f0fdf4;color:#15803d">5</div><span>User clicks Add to Cart → <code>postMessage</code> → <code>add_to_cart</code> fires</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ FOLDER -->
+<div id="folder" class="section">
+  <div class="sec-title">Folder Structure</div>
+  <div class="sec-sub">Key files added or modified in this session. New files are highlighted in green. Full repo structure follows.</div>
+
+  <div class="tree">
+<div class="tree-line"><span class="t-dir">commerce-agents-main/</span></div>
+<div class="tree-line"><span class="t-indent">├── </span><span class="t-dir">examples/</span></div>
+<div class="tree-line"><span class="t-indent">│   └── demo_common/</span></div>
+<div class="tree-line"><span class="t-indent">│       ├── </span><span class="t-py">ucp.py</span><span class="t-badge badge-ucp">UCP</span>  <span class="t-comment">  ← UCP manifest + 5 REST endpoints</span></div>
+<div class="tree-line"><span class="t-indent">│       ├── </span><span class="t-py t-new">gemini_ucp_agent.py</span><span class="t-badge badge-gem">NEW</span>  <span class="t-comment">  ← GeminiUCPAgent: auto-discovers manifest, agentic loop</span></div>
+<div class="tree-line"><span class="t-indent">│       ├── </span><span class="t-py">host.py</span>  <span class="t-comment">  ← FastAPI app, session middleware</span></div>
+<div class="tree-line"><span class="t-indent">│       └── </span><span class="t-py">storefront.py</span>  <span class="t-comment">  ← StorefrontHost, cart routes</span></div>
+<div class="tree-line"><span class="t-indent">│   └── salesforce/</span></div>
+<div class="tree-line"><span class="t-indent">│       ├── api/</span></div>
+<div class="tree-line"><span class="t-indent">│       │   └── </span><span class="t-py">main.py</span><span class="t-badge badge-ucp">UCP</span>  <span class="t-comment">  ← includes build_ucp_router(backend)</span></div>
+<div class="tree-line"><span class="t-indent">│       └── storefront-web/  </span><span class="t-comment">← Next.js buyer UI (port 3005)</span></div>
+<div class="tree-line">&nbsp;</div>
+<div class="tree-line"><span class="t-indent">├── </span><span class="t-dir">shopping-agent/</span></div>
+<div class="tree-line"><span class="t-indent">│   └── managed-agents/storefront-mcp-server/</span></div>
+<div class="tree-line"><span class="t-indent">│       ├── </span><span class="t-py">storefront_mcp_server.py</span><span class="t-badge badge-mcp">MCP</span>  <span class="t-comment">  ← registers ui:// resource + search_products_ui tool</span></div>
+<div class="tree-line"><span class="t-indent">│       └── </span><span class="t-html t-new">product_grid_ui.html</span><span class="t-badge badge-mcp">NEW</span>  <span class="t-comment">  ← MCP Apps HTML: postMessage bridge, card grid</span></div>
+<div class="tree-line">&nbsp;</div>
+<div class="tree-line"><span class="t-indent">├── </span><span class="t-dir">embed/lwc/salesforceMerchant/</span></div>
+<div class="tree-line"><span class="t-indent">│   ├── </span><span class="t-js">salesforceMerchant.js</span>  <span class="t-comment">  ← Quote Approvals getters + handlers added</span></div>
+<div class="tree-line"><span class="t-indent">│   ├── </span><span class="t-html">salesforceMerchant.html</span>  <span class="t-comment">  ← Quote Approvals tab markup</span></div>
+<div class="tree-line"><span class="t-indent">│   └── </span><span class="t-css">salesforceMerchant.css</span>  <span class="t-comment">  ← .sf-qa-* styles added</span></div>
+<div class="tree-line">&nbsp;</div>
+<div class="tree-line"><span class="t-indent">├── </span><span class="t-dir">salesforce/</span></div>
+<div class="tree-line"><span class="t-indent">│   ├── force-app/main/default/lwc/salesforceMerchant/  </span><span class="t-comment">← synced + deployed to Salesforce Org</span></div>
+<div class="tree-line"><span class="t-indent">│   └── </span><span class="t-md">.forceignore</span>  <span class="t-comment">  ← **/__tests__/** added to exclude test files</span></div>
+<div class="tree-line">&nbsp;</div>
+<div class="tree-line"><span class="t-indent">├── </span><span class="t-dir">scripts/</span></div>
+<div class="tree-line"><span class="t-indent">│   ├── </span><span class="t-py t-new">gemini_ucp_demo.py</span><span class="t-badge badge-gem">NEW</span>  <span class="t-comment">  ← 4-turn terminal demo, --interactive REPL</span></div>
+<div class="tree-line"><span class="t-indent">│   └── </span><span class="t-py t-new">gemini_mcp_ui_server.py</span><span class="t-badge badge-gem badge-mcp">NEW</span>  <span class="t-comment">  ← split-screen web demo (port 8099)</span></div>
+<div class="tree-line">&nbsp;</div>
+<div class="tree-line"><span class="t-indent">├── </span><span class="t-md t-new">requirements-gemini.txt</span><span class="t-badge badge-gem">NEW</span>  <span class="t-comment">  ← google-genai>=1.0.0</span></div>
+<div class="tree-line"><span class="t-indent">└── </span><span class="t-html t-new">agentic-commerce-guide.html</span><span class="t-badge badge-mcp">NEW</span>  <span class="t-comment">  ← this file</span></div>
+  </div>
+
+  <div class="file-cards">
+    <div class="file-card">
+      <div class="path">examples/demo_common/ucp.py</div>
+      <div class="name" style="color:#6d28d9">UCP Router</div>
+      <div class="desc">5 FastAPI endpoints: manifest, product search, product detail, checkout session create/status. Mounted at app root — no prefix so <code>/.well-known/ucp</code> resolves correctly.</div>
+    </div>
+    <div class="file-card">
+      <div class="path">examples/demo_common/gemini_ucp_agent.py</div>
+      <div class="name" style="color:#6d28d9">GeminiUCPAgent</div>
+      <div class="desc">Fetches the UCP manifest at init. Auto-builds Gemini <code>FunctionDeclaration</code> objects from the capabilities block. Stateful multi-turn <code>send()</code> with agentic loop. Works against any UCP store.</div>
+    </div>
+    <div class="file-card">
+      <div class="path">shopping-agent/managed-agents/storefront-mcp-server/product_grid_ui.html</div>
+      <div class="name" style="color:#15803d">MCP Apps HTML</div>
+      <div class="desc">Self-contained product card grid. Receives products via <code>postMessage</code>. "Add to cart" fires <code>mcp/call_tool</code> back to host. Light/dark mode. Served at <code>ui://storefront/product-grid</code>.</div>
+    </div>
+    <div class="file-card">
+      <div class="path">shopping-agent/managed-agents/storefront-mcp-server/storefront_mcp_server.py</div>
+      <div class="name" style="color:#15803d">MCP Server</div>
+      <div class="desc">Registers the <code>ui://storefront/product-grid</code> resource and <code>search_products_ui</code> tool. Tool result includes <code>_meta.ui.resourceUri</code> — older hosts ignore it safely.</div>
+    </div>
+    <div class="file-card">
+      <div class="path">scripts/gemini_ucp_demo.py</div>
+      <div class="name" style="color:#6d28d9">Terminal Demo</div>
+      <div class="desc">4-turn canned shopping conversation or <code>--interactive</code> REPL. Prints manifest capabilities, tool names, and full Gemini responses. Runs with just a <code>GEMINI_API_KEY</code>.</div>
+    </div>
+    <div class="file-card">
+      <div class="path">scripts/gemini_mcp_ui_server.py</div>
+      <div class="name" style="color:#6d28d9">Split-screen Demo Server</div>
+      <div class="desc">FastAPI server on port 8099. Left panel: Gemini chat via UCP. Right panel: MCP Apps product-grid iframe. postMessage bridge connects both. <code>POST /api/cart</code> triggers Gemini checkout.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ DEMO -->
+<div id="demo" class="section">
+  <div class="sec-title">How to Demo — UCP + MCP Apps UI</div>
+  <div class="sec-sub">Three demo scenarios from simplest (curl) to most impressive (live split-screen). Run them in this order for a leadership presentation.</div>
+
+  <!-- Demo 1 -->
+  <div class="demo-flow">
+    <h3>
+      <span style="width:28px;height:28px;border-radius:50%;background:#f5f3ff;color:#6d28d9;display:inline-flex;align-items:center;justify-content:center;font-size:13px;font-weight:700">1</span>
+      UCP Discovery — "Any agent can find us"
+    </h3>
+    <div class="subtitle">30-second curl demo. Shows leadership that the storefront is already discoverable by any AI agent on the internet.</div>
+    <div class="demo-steps">
+      <div class="demo-step">
+        <div class="step-circle" style="background:#f5f3ff;color:#6d28d9">①</div>
+        <div class="step-body">
+          <h4>Fetch the capability manifest</h4>
+          <p>Any UCP-aware agent starts here. This single call tells it everything about your storefront — no docs, no custom SDK.</p>
+          <div class="cmd">curl <span class="c-val">https://diligent-flow-production-afd7.up.railway.app/.well-known/ucp</span> | python3 -m json.tool</div>
+          <div class="expected">✓ Returns JSON with business name, 3 capabilities (product_discovery, cart_management, checkout), 2 payment handlers, REST + MCP transport URLs.</div>
+        </div>
+      </div>
+      <div class="demo-step">
+        <div class="step-circle" style="background:#f5f3ff;color:#6d28d9">②</div>
+        <div class="step-body">
+          <h4>Search the product catalog (sessionless)</h4>
+          <p>No login, no session token. Any agent can query the catalog immediately after reading the manifest.</p>
+          <div class="cmd">curl "<span class="c-val">https://diligent-flow-production-afd7.up.railway.app/ucp/products?q=laptop&max_price=2000</span>"</div>
+          <div class="expected">✓ Returns JSON array of 3 laptops — ProBook Ultra 13 ($949), ProBook Elite 15 ($1,299), ProBook Ruggedized ($1,799) — with product_id, price, in_stock, image_url.</div>
+        </div>
+      </div>
+      <div class="demo-step">
+        <div class="step-circle" style="background:#f5f3ff;color:#6d28d9">③</div>
+        <div class="step-body">
+          <h4>Create a checkout session</h4>
+          <p>Show that the entire journey from discovery to checkout initiation requires zero custom code on the agent side.</p>
+          <div class="cmd">curl -X POST <span class="c-val">https://diligent-flow-production-afd7.up.railway.app/ucp/checkout-sessions</span> \
+  -H "Content-Type: application/json" \
+  -d '{"line_items":[{"product_id":"01tDS00000KIpo9YAD","quantity":1}],"buyer":{"name":"Alex Rivera"}}'</div>
+          <div class="expected">✓ Returns checkout_session_id (ucp-xxxxx), status: "pending", line_items with prices, subtotal $949.00. No charge made.</div>
+          <div class="tip">💡 Leadership talking point: "This is the same API call Gemini, GPT, or our procurement bot would make — same schema, same response, zero custom glue."</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Demo 2 -->
+  <div class="demo-flow">
+    <h3>
+      <span style="width:28px;height:28px;border-radius:50%;background:#f5f3ff;color:#6d28d9;display:inline-flex;align-items:center;justify-content:center;font-size:13px;font-weight:700">2</span>
+      Gemini × UCP — "Google's AI shops our catalog"
+    </h3>
+    <div class="subtitle">Terminal demo. Gemini auto-discovers the store, searches products, and creates a checkout session through a natural conversation.</div>
+    <div class="demo-steps">
+      <div class="demo-step">
+        <div class="step-circle" style="background:#f5f3ff;color:#6d28d9">①</div>
+        <div class="step-body">
+          <h4>Install the Gemini SDK (one-time)</h4>
+          <div class="cmd">pip install -r requirements.txt -r requirements-gemini.txt</div>
+        </div>
+      </div>
+      <div class="demo-step">
+        <div class="step-circle" style="background:#f5f3ff;color:#6d28d9">②</div>
+        <div class="step-body">
+          <h4>Run the 4-turn canned demo</h4>
+          <div class="cmd">GEMINI_API_KEY=<span class="c-val">your-key</span> python3 scripts/gemini_ucp_demo.py</div>
+          <div class="expected">✓ Prints: store name "Salesforce", tools auto-generated from manifest: search_products, get_product, create_checkout_session. Then 4 turns: catalog overview → 3 laptops → product detail → checkout confirmation.</div>
+        </div>
+      </div>
+      <div class="demo-step">
+        <div class="step-circle" style="background:#f5f3ff;color:#6d28d9">③</div>
+        <div class="step-body">
+          <h4>Or: interactive REPL for live Q&amp;A with leadership</h4>
+          <div class="cmd">GEMINI_API_KEY=<span class="c-val">your-key</span> python3 scripts/gemini_ucp_demo.py <span class="c-key">--interactive</span></div>
+          <div class="tip">💡 Suggested prompts for leadership: <br>• "What networking equipment do you carry under $500?"<br>• "Compare your two cheapest laptops"<br>• "I need 5 workstations for a dev team, what do you recommend?"</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Demo 3 -->
+  <div class="demo-flow">
+    <h3>
+      <span style="width:28px;height:28px;border-radius:50%;background:#f0fdf4;color:#15803d;display:inline-flex;align-items:center;justify-content:center;font-size:13px;font-weight:700">3</span>
+      Gemini + MCP Apps UI — Split-screen live demo
+    </h3>
+    <div class="subtitle">The flagship demo. Gemini chat on the left, interactive product grid on the right. Clicking "Add to cart" triggers a full checkout loop.</div>
+    <div class="demo-steps">
+      <div class="demo-step">
+        <div class="step-circle" style="background:#f0fdf4;color:#15803d">①</div>
+        <div class="step-body">
+          <h4>Start the demo server</h4>
+          <div class="cmd">pip install fastapi uvicorn   <span class="c-comment"># one-time</span>
+GEMINI_API_KEY=<span class="c-val">your-key</span> python3 scripts/gemini_mcp_ui_server.py</div>
+          <div class="expected">✓ Prints: "Gemini × UCP + MCP Apps UI Demo" · URL: http://localhost:8099 · Storefront: Railway URL</div>
+        </div>
+      </div>
+      <div class="demo-step">
+        <div class="step-circle" style="background:#f0fdf4;color:#15803d">②</div>
+        <div class="step-body">
+          <h4>Open the browser demo</h4>
+          <div class="cmd">open http://localhost:8099</div>
+          <div class="expected">✓ Split screen: left panel shows "Gemini 3.6 Flash — UCP shopping agent", right panel shows "MCP Apps product grid · ui://storefront/product-grid" with "Waiting for product data…"</div>
+        </div>
+      </div>
+      <div class="demo-step">
+        <div class="step-circle" style="background:#f0fdf4;color:#15803d">③</div>
+        <div class="step-body">
+          <h4>Type a search query</h4>
+          <p>Type in the chat input and press Enter (or click Send).</p>
+          <div class="cmd">show me laptops under $2000</div>
+          <div class="expected">✓ Left: Gemini responds listing 3 laptops with prices. Bottom bar shows: "→ search_products(q="laptop", max_price=2000)" Right: 3 product cards appear with images, prices, "Add to cart" buttons. The MCP Apps iframe updated via postMessage.</div>
+        </div>
+      </div>
+      <div class="demo-step">
+        <div class="step-circle" style="background:#f0fdf4;color:#15803d">④</div>
+        <div class="step-body">
+          <h4>Click "Add to cart" in the product grid</h4>
+          <p>Click any "Add to cart" button in the right panel. Watch both sides update simultaneously.</p>
+          <div class="expected">✓ Right: button turns green "Added ✓" (iframe got tool response via postMessage). Left: system message shows "Cart action: adding [product_id]…" then Gemini responds with full checkout confirmation — item, price, total, asks for name/email/payment method. Bottom bar: "→ get_product(product_id=…)"</div>
+          <div class="tip">💡 Leadership talking point: "The user never left the chat. The product grid is the MCP Apps standard — the same HTML the Claude MCP server serves. Gemini, Claude, any future agent host can render it."</div>
+        </div>
+      </div>
+      <div class="demo-step">
+        <div class="step-circle" style="background:#f0fdf4;color:#15803d">⑤</div>
+        <div class="step-body">
+          <h4>Complete the checkout (optional)</h4>
+          <p>In the chat input, reply to Gemini's confirmation prompt:</p>
+          <div class="cmd">Yes, please proceed. My email is alex@company.com, pay by purchase order.</div>
+          <div class="expected">✓ Gemini calls create_checkout_session via UCP, returns checkout_session_id with full line items and total. No payment charged.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Key messages box -->
+  <div style="background:var(--navy);color:#fff;border-radius:var(--r);padding:24px 28px;margin-top:8px">
+    <div style="font-size:14px;font-weight:700;margin-bottom:14px">Leadership talking points — one sentence each</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div style="background:rgba(255,255,255,.07);border-radius:8px;padding:12px 14px">
+        <div style="font-size:11px;font-weight:600;opacity:.6;margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em">UCP</div>
+        <div style="font-size:13px;line-height:1.5">"Any AI agent — Gemini, GPT, custom bots — can discover and buy from our Salesforce storefront today with zero custom integration code."</div>
+      </div>
+      <div style="background:rgba(255,255,255,.07);border-radius:8px;padding:12px 14px">
+        <div style="font-size:11px;font-weight:600;opacity:.6;margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em">MCP Apps UI</div>
+        <div style="font-size:13px;line-height:1.5">"When buyers use Claude, they get an interactive product grid inside the chat — images, prices, one-click add-to-cart — without ever switching to a portal."</div>
+      </div>
+      <div style="background:rgba(255,255,255,.07);border-radius:8px;padding:12px 14px">
+        <div style="font-size:11px;font-weight:600;opacity:.6;margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em">Quote → Checkout</div>
+        <div style="font-size:13px;line-height:1.5">"Quote approved at 9:00am, buyer has a UCP checkout session by 9:00:05 — the Gemini agent does the entire quote-to-order conversion automatically."</div>
+      </div>
+      <div style="background:rgba(255,255,255,.07);border-radius:8px;padding:12px 14px">
+        <div style="font-size:11px;font-weight:600;opacity:.6;margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em">Multi-vendor</div>
+        <div style="font-size:13px;line-height:1.5">"A procurement bot can compare prices across five UCP-compliant suppliers in parallel, pick the best, and create the checkout — in under 10 seconds."</div>
+      </div>
+    </div>
+  </div>
+</div>
+</div><!-- .content -->
+
+<script>
+function show(id, tab) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  tab.classList.add('active');
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+</script>
+</body>
+</html>

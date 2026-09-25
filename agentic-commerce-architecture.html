@@ -1,0 +1,834 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agentic Commerce — Reference Architecture</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#080c14;color:#e2e8f0;overflow-x:hidden;min-height:100vh}
+
+/* ── Layout ── */
+.app{display:flex;flex-direction:column;height:100vh;min-height:600px}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:10px 18px;background:#0d1220;border-bottom:1px solid #1e293b;flex-shrink:0}
+.brand{font-size:13px;font-weight:700;color:#f8fafc;letter-spacing:-.02em}
+.brand span{color:#3b82f6}
+.mode-btns{display:flex;gap:3px;background:#111827;border-radius:8px;padding:3px}
+.mbtn{padding:5px 12px;font-size:11px;font-weight:600;border-radius:5px;cursor:pointer;border:none;background:transparent;color:#64748b;transition:all .15s}
+.mbtn.on{background:#1e293b;color:#f1f5f9}
+
+.main{display:flex;flex:1;overflow:hidden}
+.canvas-wrap{flex:1;overflow:hidden;position:relative}
+svg.diagram{width:100%;height:100%;display:block}
+
+.side{width:280px;background:#0d1220;border-left:1px solid #1e293b;overflow-y:auto;flex-shrink:0;padding:14px}
+.side h3{font-size:12px;font-weight:700;color:#f1f5f9;margin-bottom:10px;letter-spacing:-.01em}
+.side-empty{color:#374151;font-size:11px;margin-top:40px;text-align:center;line-height:1.6}
+
+/* Detail panel */
+.detail-section{margin-bottom:12px}
+.ds-title{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px}
+.ds-title.purple{color:#a78bfa}
+.ds-title.blue{color:#60a5fa}
+.ds-title.amber{color:#fbbf24}
+.ds-title.green{color:#4ade80}
+.ds-title.red{color:#f87171}
+.pill-row{display:flex;flex-wrap:wrap;gap:3px}
+.dpill{display:inline-block;font-size:9.5px;padding:2px 7px;border-radius:4px}
+.dpill.read{background:#1e3a5f;color:#93c5fd}
+.dpill.write{background:#3d1a1a;color:#fca5a5}
+.dpill.ui{background:#2d1f00;color:#fbbf24}
+.dpill.event{background:#1a1a30;color:#c084fc;border:1px dashed #4c1d95}
+.dpill.data{background:#0f2611;color:#86efac}
+.dpill.warn{background:#2d1a00;color:#fb923c}
+.ds-text{font-size:10.5px;color:#94a3b8;line-height:1.5}
+.ds-code{background:#111827;border:1px solid #1e293b;border-radius:5px;padding:6px 8px;font-size:9.5px;color:#a5b4fc;font-family:monospace;margin-top:4px;line-height:1.6}
+.ds-note{font-size:9.5px;color:#64748b;margin-top:4px;padding:4px 6px;background:#0f1117;border-radius:4px;border-left:2px solid #374151}
+
+/* Journey bar */
+.journey-bar{background:#0d1220;border-top:1px solid #1e293b;padding:10px 18px;flex-shrink:0;display:none}
+.journey-bar.show{display:block}
+.jb-inner{display:flex;align-items:center;gap:10px;overflow-x:auto}
+.jstep{display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;flex-shrink:0;transition:all .15s}
+.jstep-num{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;border:2px solid #1e293b;transition:all .2s}
+.jstep-label{font-size:9.5px;color:#64748b;white-space:nowrap;font-weight:600;transition:all .2s}
+.jstep.active .jstep-num{border-color:#3b82f6;background:#1e3a5f;color:#60a5fa}
+.jstep.active .jstep-label{color:#93c5fd}
+.jstep.done .jstep-num{border-color:#166534;background:#0f2611;color:#4ade80}
+.jstep.done .jstep-label{color:#4ade80}
+.jconn{width:30px;height:2px;background:#1e293b;flex-shrink:0;margin-bottom:12px}
+.jconn.done{background:#166534}
+.jnav{display:flex;gap:6px;margin-left:auto;flex-shrink:0}
+.jnavbtn{padding:5px 12px;font-size:11px;font-weight:600;border-radius:6px;cursor:pointer;border:none;background:#1e293b;color:#94a3b8;transition:all .15s}
+.jnavbtn:hover{background:#2d3748;color:#f1f5f9}
+.jnavbtn.primary{background:#1e3a5f;color:#60a5fa}
+.jnavbtn.primary:hover{background:#1d4ed8;color:#fff}
+
+/* SVG node styles */
+.node{cursor:pointer;transition:all .15s}
+.node:hover .node-bg{filter:brightness(1.3)}
+.node.selected .node-bg{filter:brightness(1.5)}
+.node-label{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;pointer-events:none}
+.flow-particle{pointer-events:none}
+
+/* Tooltip */
+.tooltip{position:absolute;background:#1e293b;border:1px solid #334155;border-radius:7px;padding:6px 9px;font-size:10.5px;color:#e2e8f0;pointer-events:none;white-space:nowrap;opacity:0;transition:opacity .15s;z-index:100;max-width:200px;white-space:normal;line-height:1.4}
+
+/* Misc */
+.legend{display:flex;flex-wrap:wrap;gap:8px;padding:8px 18px;background:#080c14;border-top:1px solid #111827;flex-shrink:0}
+.leg-item{display:flex;align-items:center;gap:4px;font-size:9.5px;color:#64748b}
+.leg-dot{width:8px;height:8px;border-radius:2px;flex-shrink:0}
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- Top bar -->
+<div class="topbar">
+  <div class="brand">Agentic <span>Commerce</span> — Reference Architecture</div>
+  <div style="display:flex;align-items:center;gap:12px">
+    <div class="mode-btns">
+      <button class="mbtn on" id="btn-arch" onclick="setMode('arch')">Architecture</button>
+      <button class="mbtn" id="btn-journey" onclick="setMode('journey')">Commerce Journey</button>
+    </div>
+    <div style="font-size:10px;color:#374151">Click any node for details · ← → keys in Journey mode</div>
+  </div>
+</div>
+
+<!-- Main -->
+<div class="main">
+
+<!-- Canvas -->
+<div class="canvas-wrap" id="canvas-wrap">
+  <svg class="diagram" id="mainsvg" viewBox="0 0 820 560" preserveAspectRatio="xMidYMid meet">
+    <defs>
+      <linearGradient id="gGemini" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="#1a3a6e"/><stop offset="100%" stop-color="#1a2d5e"/>
+      </linearGradient>
+      <linearGradient id="gClaude" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="#3d2000"/><stop offset="100%" stop-color="#2d1800"/>
+      </linearGradient>
+      <linearGradient id="gOpenAI" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="#0f2a1a"/><stop offset="100%" stop-color="#0a1f14"/>
+      </linearGradient>
+      <linearGradient id="gUCP" x1="0%" y1="0%" x2="100%" y2="0%">
+        <stop offset="0%" stop-color="#1e3a5f"/><stop offset="100%" stop-color="#1a2f50"/>
+      </linearGradient>
+      <linearGradient id="gMCP" x1="0%" y1="0%" x2="100%" y2="0%">
+        <stop offset="0%" stop-color="#2d1a4a"/><stop offset="100%" stop-color="#231540"/>
+      </linearGradient>
+      <linearGradient id="gSF" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="#0f2a1a"/><stop offset="100%" stop-color="#0a1f12"/>
+      </linearGradient>
+      <linearGradient id="gBE" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="#1a1f2e"/><stop offset="100%" stop-color="#111827"/>
+      </linearGradient>
+      <marker id="arr-blue" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+        <path d="M0,0 L0,6 L8,3 z" fill="#3b82f6"/>
+      </marker>
+      <marker id="arr-purple" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+        <path d="M0,0 L0,6 L8,3 z" fill="#8b5cf6"/>
+      </marker>
+      <marker id="arr-green" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+        <path d="M0,0 L0,6 L8,3 z" fill="#10b981"/>
+      </marker>
+      <filter id="glow-blue">
+        <feGaussianBlur stdDeviation="3" result="blur"/>
+        <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+      </filter>
+      <filter id="shadow">
+        <feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="#000" flood-opacity="0.4"/>
+      </filter>
+    </defs>
+
+    <!-- BACKGROUND BANDS -->
+    <rect x="0" y="0" width="820" height="560" fill="#080c14"/>
+    <rect x="8" y="30" width="804" height="100" rx="10" fill="#0a0f1a" stroke="#1e2a3a" stroke-width="1"/>
+    <rect x="8" y="148" width="804" height="56" rx="10" fill="#0a0f1a" stroke="#1e2a3a" stroke-width="1"/>
+    <rect x="8" y="218" width="804" height="116" rx="10" fill="#0a0f1a" stroke="#1e2a3a" stroke-width="1"/>
+    <rect x="8" y="350" width="804" height="68" rx="10" fill="#0a0f1a" stroke="#1e2a3a" stroke-width="1"/>
+    <rect x="8" y="432" width="804" height="118" rx="10" fill="#0a0f1a" stroke="#1e2a3a" stroke-width="1"/>
+
+    <!-- Layer titles -->
+    <text x="20" y="46" font-size="9" font-weight="700" fill="#374151" letter-spacing="1" font-family="sans-serif">AI MODEL LAYER</text>
+    <text x="20" y="164" font-size="9" font-weight="700" fill="#374151" letter-spacing="1" font-family="sans-serif">PROTOCOL BRIDGES</text>
+    <text x="20" y="234" font-size="9" font-weight="700" fill="#374151" letter-spacing="1" font-family="sans-serif">MCP TOOLS + UI RESOURCES</text>
+    <text x="20" y="366" font-size="9" font-weight="700" fill="#374151" letter-spacing="1" font-family="sans-serif">BACKEND INTERFACE (StorefrontBackend)</text>
+    <text x="20" y="448" font-size="9" font-weight="700" fill="#374151" letter-spacing="1" font-family="sans-serif">COMMERCE PLATFORMS</text>
+
+    <!-- CONNECTIONS -->
+    <line x1="155" y1="125" x2="220" y2="155" stroke="#3b82f6" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr-blue)" opacity=".7"/>
+    <line x1="410" y1="125" x2="300" y2="155" stroke="#3b82f6" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr-blue)" opacity=".7"/>
+    <line x1="410" y1="125" x2="520" y2="155" stroke="#8b5cf6" stroke-width="2" marker-end="url(#arr-purple)" opacity=".8"/>
+    <line x1="665" y1="125" x2="300" y2="155" stroke="#3b82f6" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr-blue)" opacity=".5"/>
+    <line x1="260" y1="193" x2="410" y2="355" stroke="#3b82f6" stroke-width="1.5" opacity=".5" stroke-dasharray="4,3" marker-end="url(#arr-blue)"/>
+    <line x1="560" y1="330" x2="460" y2="355" stroke="#8b5cf6" stroke-width="1.5" opacity=".5" stroke-dasharray="4,3" marker-end="url(#arr-purple)"/>
+    <line x1="300" y1="413" x2="160" y2="437" stroke="#10b981" stroke-width="1.5" opacity=".6" marker-end="url(#arr-green)"/>
+    <line x1="380" y1="413" x2="360" y2="437" stroke="#10b981" stroke-width="1.5" opacity=".6" marker-end="url(#arr-green)"/>
+    <line x1="440" y1="413" x2="560" y2="437" stroke="#10b981" stroke-width="1.5" opacity=".6" marker-end="url(#arr-green)"/>
+    <line x1="510" y1="413" x2="690" y2="437" stroke="#10b981" stroke-width="1.5" opacity=".6" marker-end="url(#arr-green)"/>
+    <line x1="680" y1="260" x2="750" y2="260" stroke="#f59e0b" stroke-width="1" stroke-dasharray="3,3" opacity=".6"/>
+    <text x="755" y="264" font-size="8.5" fill="#f59e0b" font-family="sans-serif">→ Browser UI</text>
+
+    <!-- Animated particles -->
+    <g id="particles"></g>
+
+    <!-- LAYER 1: AI MODELS -->
+    <g class="node" id="n-gemini" onclick="selectNode('gemini')">
+      <rect class="node-bg" x="60" y="55" width="190" height="65" rx="10" fill="url(#gGemini)" stroke="#3b82f6" stroke-width="1.5"/>
+      <circle cx="82" cy="75" r="10" fill="#4285f4" opacity=".9"/>
+      <text x="82" y="79" font-size="10" font-weight="700" fill="#fff" text-anchor="middle" font-family="sans-serif">G</text>
+      <text x="102" y="74" font-size="11" font-weight="700" fill="#93c5fd" font-family="sans-serif">Gemini (Google)</text>
+      <text x="102" y="87" font-size="9.5" fill="#64748b" font-family="sans-serif">gemini-2.0-flash · UCP REST</text>
+      <text x="68" y="105" font-size="9" fill="#475569" font-family="sans-serif">Auto-builds tools from /.well-known/ucp manifest</text>
+    </g>
+
+    <g class="node" id="n-claude" onclick="selectNode('claude')">
+      <rect class="node-bg" x="310" y="55" width="200" height="65" rx="10" fill="url(#gClaude)" stroke="#d97706" stroke-width="2"/>
+      <circle cx="332" cy="75" r="10" fill="#d97706" opacity=".9"/>
+      <text x="332" y="79" font-size="10" font-weight="700" fill="#fff" text-anchor="middle" font-family="sans-serif">A</text>
+      <text x="352" y="74" font-size="11" font-weight="700" fill="#fbbf24" font-family="sans-serif">Claude (Anthropic)</text>
+      <text x="352" y="87" font-size="9.5" fill="#64748b" font-family="sans-serif">claude-sonnet-5 · MCP + Messages API</text>
+      <text x="318" y="105" font-size="9" fill="#475569" font-family="sans-serif">Full MCP tools + UI resources · env SHOPPING_MODEL</text>
+    </g>
+
+    <g class="node" id="n-openai" onclick="selectNode('openai')">
+      <rect class="node-bg" x="565" y="55" width="200" height="65" rx="10" fill="url(#gOpenAI)" stroke="#10b981" stroke-width="1.5"/>
+      <circle cx="587" cy="75" r="10" fill="#10b981" opacity=".9"/>
+      <text x="587" y="79" font-size="10" font-weight="700" fill="#fff" text-anchor="middle" font-family="sans-serif">&#x26A1;</text>
+      <text x="605" y="74" font-size="11" font-weight="700" fill="#4ade80" font-family="sans-serif">OpenAI / Any LLM</text>
+      <text x="605" y="87" font-size="9.5" fill="#64748b" font-family="sans-serif">GPT-4o · Mistral · Llama · custom</text>
+      <text x="573" y="105" font-size="9" fill="#475569" font-family="sans-serif">Same UCP endpoints · no backend changes needed</text>
+    </g>
+
+    <!-- LAYER 2: PROTOCOL BRIDGES -->
+    <g class="node" id="n-ucp" onclick="selectNode('ucp')">
+      <rect class="node-bg" x="60" y="152" width="370" height="42" rx="9" fill="url(#gUCP)" stroke="#3b82f6" stroke-width="1.5"/>
+      <text x="80" y="170" font-size="11" font-weight="700" fill="#60a5fa" font-family="sans-serif">&#x1F310;  UCP &#x2014; Universal Commerce Protocol</text>
+      <text x="80" y="184" font-size="9.5" fill="#64748b" font-family="sans-serif">RFC-8615 discovery · model-agnostic REST bridge · GET /.well-known/ucp  |  GET /ucp/products  |  POST /ucp/orders</text>
+    </g>
+
+    <g class="node" id="n-mcp" onclick="selectNode('mcp')">
+      <rect class="node-bg" x="445" y="152" width="370" height="42" rx="9" fill="url(#gMCP)" stroke="#8b5cf6" stroke-width="1.5"/>
+      <text x="465" y="170" font-size="11" font-weight="700" fill="#a78bfa" font-family="sans-serif">&#x1F50C;  MCP Server &#x2014; Streamable HTTP  (port 8200/mcp)</text>
+      <text x="465" y="184" font-size="9.5" fill="#64748b" font-family="sans-serif">12 tools: search, cart, orders, policies, memory  |  UI resources: product-grid, checkout, confirmation</text>
+    </g>
+
+    <!-- LAYER 3: MCP TOOLS + UI -->
+    <g class="node" id="n-readtools" onclick="selectNode('readtools')">
+      <rect class="node-bg" x="28" y="228" width="320" height="96" rx="8" fill="#111827" stroke="#1e3a5f" stroke-width="1.2"/>
+      <text x="40" y="245" font-size="9" font-weight="700" fill="#3b82f6" letter-spacing=".06em" font-family="sans-serif">READ TOOLS (no approval needed)</text>
+      <rect x="40" y="250" width="90" height="16" rx="3" fill="#1e3a5f"/>
+      <text x="44" y="261" font-size="8.5" fill="#93c5fd" font-family="sans-serif">&#x1F50D; search_products</text>
+      <rect x="138" y="250" width="90" height="16" rx="3" fill="#1e3a5f"/>
+      <text x="142" y="261" font-size="8.5" fill="#93c5fd" font-family="sans-serif">&#x1F4D6; get_product_detail</text>
+      <rect x="236" y="250" width="70" height="16" rx="3" fill="#1e3a5f"/>
+      <text x="240" y="261" font-size="8.5" fill="#93c5fd" font-family="sans-serif">&#x1F6D2; get_cart</text>
+      <rect x="40" y="272" width="80" height="16" rx="3" fill="#1e3a5f"/>
+      <text x="44" y="283" font-size="8.5" fill="#93c5fd" font-family="sans-serif">&#x1F4E6; get_orders</text>
+      <rect x="128" y="272" width="100" height="16" rx="3" fill="#1e3a5f"/>
+      <text x="132" y="283" font-size="8.5" fill="#93c5fd" font-family="sans-serif">&#x1F50D; get_order_status</text>
+      <rect x="236" y="272" width="100" height="16" rx="3" fill="#1e3a5f"/>
+      <text x="240" y="283" font-size="8.5" fill="#93c5fd" font-family="sans-serif">&#x1F4CB; search_policies</text>
+      <rect x="40" y="294" width="100" height="16" rx="3" fill="#1e3a5f"/>
+      <text x="44" y="305" font-size="8.5" fill="#93c5fd" font-family="sans-serif">&#x1F9E0; recall_memories</text>
+      <rect x="148" y="294" width="100" height="16" rx="3" fill="#1e3a5f"/>
+      <text x="152" y="305" font-size="8.5" fill="#93c5fd" font-family="sans-serif">&#x2699;&#xFE0F; get_preferences</text>
+      <rect x="256" y="294" width="80" height="16" rx="3" fill="#1e3a5f"/>
+      <text x="260" y="305" font-size="8.5" fill="#93c5fd" font-family="sans-serif">&#x1F4CD; fulfillment</text>
+      <text x="40" y="320" font-size="8.5" fill="#475569" font-family="sans-serif">search_products_ui &#x2192; attaches product-grid MCP App resource automatically</text>
+    </g>
+
+    <g class="node" id="n-writetools" onclick="selectNode('writetools')">
+      <rect class="node-bg" x="358" y="228" width="200" height="96" rx="8" fill="#111827" stroke="#7f1d1d" stroke-width="1.2"/>
+      <text x="370" y="245" font-size="9" font-weight="700" fill="#f87171" letter-spacing=".06em" font-family="sans-serif">WRITE TOOLS (always_ask &#x26A0;&#xFE0F;)</text>
+      <rect x="370" y="250" width="88" height="16" rx="3" fill="#3d1a1a"/>
+      <text x="374" y="261" font-size="8.5" fill="#fca5a5" font-family="sans-serif">&#x270F;&#xFE0F; add_to_cart</text>
+      <rect x="464" y="250" width="88" height="16" rx="3" fill="#3d1a1a"/>
+      <text x="468" y="261" font-size="8.5" fill="#fca5a5" font-family="sans-serif">&#x270F;&#xFE0F; update_cart_item</text>
+      <rect x="370" y="272" width="88" height="16" rx="3" fill="#3d1a1a"/>
+      <text x="374" y="283" font-size="8.5" fill="#fca5a5" font-family="sans-serif">&#x270F;&#xFE0F; remove_from_cart</text>
+      <rect x="464" y="272" width="88" height="16" rx="3" fill="#3d1a1a"/>
+      <text x="468" y="283" font-size="8.5" fill="#fca5a5" font-family="sans-serif">&#x270F;&#xFE0F; save_memory</text>
+      <rect x="370" y="294" width="180" height="16" rx="3" fill="#3d1a1a"/>
+      <text x="374" y="305" font-size="8.5" fill="#fca5a5" font-family="sans-serif">&#x270F;&#xFE0F; place_order  (POST /sobjects/Order)</text>
+      <text x="370" y="320" font-size="8.5" fill="#7f1d1d" font-family="sans-serif">Buyer confirms every mutation in the UI</text>
+    </g>
+
+    <g class="node" id="n-uiresources" onclick="selectNode('uiresources')">
+      <rect class="node-bg" x="570" y="228" width="240" height="96" rx="8" fill="#111827" stroke="#92400e" stroke-width="1.2"/>
+      <text x="582" y="245" font-size="9" font-weight="700" fill="#fbbf24" letter-spacing=".06em" font-family="sans-serif">MCP UI RESOURCES (SEP-1865)</text>
+      <rect x="582" y="250" width="215" height="16" rx="3" fill="#2d1f00"/>
+      <text x="586" y="261" font-size="8.5" fill="#fbbf24" font-family="sans-serif">&#x1F4E6; ui://storefront/product-grid  &#x2192; HTML card in chat</text>
+      <rect x="582" y="272" width="215" height="16" rx="3" fill="#2d1f00"/>
+      <text x="586" y="283" font-size="8.5" fill="#fbbf24" font-family="sans-serif">&#x1F4CB; checkout summary card  (ui SSE event)</text>
+      <rect x="582" y="294" width="215" height="16" rx="3" fill="#2d1f00"/>
+      <text x="586" y="305" font-size="8.5" fill="#fbbf24" font-family="sans-serif">&#x2705; order confirmation card  (streamed inline)</text>
+      <text x="582" y="320" font-size="8.5" fill="#78350f" font-family="sans-serif">cart_update SSE &#x2192; sidebar live refresh &#xB7; checkoutStaged state</text>
+    </g>
+
+    <!-- LAYER 4: BACKEND INTERFACE -->
+    <g class="node" id="n-backend" onclick="selectNode('backend')">
+      <rect class="node-bg" x="60" y="358" width="700" height="48" rx="9" fill="#131a28" stroke="#1e3a5f" stroke-width="1.5"/>
+      <text x="400" y="378" font-size="12" font-weight="700" fill="#60a5fa" text-anchor="middle" font-family="sans-serif">StorefrontBackend Interface</text>
+      <text x="400" y="393" font-size="9" fill="#374151" text-anchor="middle" font-family="sans-serif">search_products · get_product · add_to_cart · update_cart · remove_from_cart · get_cart · place_order · get_orders · get_order_status · search_policies · get_preferences · get_fulfillment_options</text>
+    </g>
+
+    <!-- LAYER 5: PLATFORMS -->
+    <g class="node" id="n-sf" onclick="selectNode('sf')">
+      <rect class="node-bg" x="28" y="440" width="185" height="98" rx="9" fill="url(#gSF)" stroke="#166534" stroke-width="2"/>
+      <text x="50" y="460" font-size="10" font-weight="700" fill="#4ade80" font-family="sans-serif">&#x2601;&#xFE0F; Salesforce B2B</text>
+      <rect x="38" y="465" width="36" height="12" rx="2" fill="#166534"/>
+      <text x="42" y="474" font-size="8" fill="#86efac" font-family="sans-serif">LIVE &#x2713;</text>
+      <text x="40" y="490" font-size="8.5" fill="#475569" font-family="sans-serif">REST v62 · client_credentials</text>
+      <text x="40" y="503" font-size="8.5" fill="#475569" font-family="sans-serif">WebCart + Order SObjects</text>
+      <text x="40" y="516" font-size="8.5" fill="#475569" font-family="sans-serif">effectiveAccountId pattern</text>
+      <text x="40" y="529" font-size="8.5" fill="#166534" font-family="sans-serif">&#x2192; Railway deployed</text>
+    </g>
+
+    <g class="node" id="n-magento" onclick="selectNode('magento')">
+      <rect class="node-bg" x="228" y="440" width="172" height="98" rx="9" fill="url(#gBE)" stroke="#374151" stroke-width="1.2"/>
+      <text x="248" y="460" font-size="10" font-weight="700" fill="#e2e8f0" font-family="sans-serif">&#x1F6CD;&#xFE0F; Magento / Adobe</text>
+      <text x="240" y="478" font-size="8.5" fill="#475569" font-family="sans-serif">REST Admin API v1</text>
+      <text x="240" y="491" font-size="8.5" fill="#475569" font-family="sans-serif">POST /V1/orders</text>
+      <text x="240" y="504" font-size="8.5" fill="#475569" font-family="sans-serif">payment_method: purchaseorder</text>
+      <text x="240" y="517" font-size="8.5" fill="#475569" font-family="sans-serif">JWT auth · GraphQL Storefront</text>
+      <rect x="240" y="524" width="60" height="10" rx="2" fill="#1e293b"/>
+      <text x="244" y="532" font-size="7.5" fill="#94a3b8" font-family="sans-serif">~2 days effort</text>
+    </g>
+
+    <g class="node" id="n-sap" onclick="selectNode('sap')">
+      <rect class="node-bg" x="415" y="440" width="172" height="98" rx="9" fill="url(#gBE)" stroke="#374151" stroke-width="1.2"/>
+      <text x="435" y="460" font-size="10" font-weight="700" fill="#e2e8f0" font-family="sans-serif">&#x2699;&#xFE0F; SAP Commerce</text>
+      <text x="427" y="478" font-size="8.5" fill="#475569" font-family="sans-serif">OCC API v2</text>
+      <text x="427" y="491" font-size="8.5" fill="#475569" font-family="sans-serif">POST /occ/v2/.../orders</text>
+      <text x="427" y="504" font-size="8.5" fill="#475569" font-family="sans-serif">paymentType: ACCOUNT (B2B PO)</text>
+      <text x="427" y="517" font-size="8.5" fill="#475569" font-family="sans-serif">OAuth2 · siteId + storeId path</text>
+      <rect x="427" y="524" width="60" height="10" rx="2" fill="#1e293b"/>
+      <text x="431" y="532" font-size="7.5" fill="#94a3b8" font-family="sans-serif">~3 days effort</text>
+    </g>
+
+    <g class="node" id="n-ct" onclick="selectNode('ct')">
+      <rect class="node-bg" x="600" y="440" width="210" height="98" rx="9" fill="url(#gBE)" stroke="#374151" stroke-width="1.2"/>
+      <text x="620" y="460" font-size="10" font-weight="700" fill="#e2e8f0" font-family="sans-serif">&#x1F527; commercetools</text>
+      <text x="612" y="478" font-size="8.5" fill="#475569" font-family="sans-serif">GraphQL API · Composable</text>
+      <text x="612" y="491" font-size="8.5" fill="#475569" font-family="sans-serif">createOrderFromCart mutation</text>
+      <text x="612" y="504" font-size="8.5" fill="#475569" font-family="sans-serif">PO via custom Order fields</text>
+      <text x="612" y="517" font-size="8.5" fill="#475569" font-family="sans-serif">client_credentials · scoped tokens</text>
+      <rect x="612" y="524" width="60" height="10" rx="2" fill="#1e293b"/>
+      <text x="616" y="532" font-size="7.5" fill="#94a3b8" font-family="sans-serif">~2 days effort</text>
+    </g>
+
+    <!-- JOURNEY OVERLAY (hidden by default) -->
+    <g id="journey-overlay" display="none">
+      <rect x="0" y="0" width="820" height="560" fill="#000" opacity=".55"/>
+
+      <g id="jov-1" class="node" onclick="setJourneyStep(1)">
+        <rect x="18" y="170" width="110" height="200" rx="10" fill="#1a2035" stroke="#3b82f6" stroke-width="1.5"/>
+        <circle cx="73" cy="190" r="12" fill="#1e3a5f"/>
+        <text x="73" y="194" font-size="11" font-weight="700" fill="#60a5fa" text-anchor="middle" font-family="sans-serif">1</text>
+        <text x="73" y="215" font-size="10" font-weight="700" fill="#f1f5f9" text-anchor="middle" font-family="sans-serif">Discover</text>
+        <text x="73" y="235" font-size="9" fill="#64748b" text-anchor="middle" font-family="sans-serif">"Show me</text>
+        <text x="73" y="247" font-size="9" fill="#64748b" text-anchor="middle" font-family="sans-serif">laptops"</text>
+        <text x="30" y="270" font-size="8.5" fill="#3b82f6" font-family="sans-serif">TOOLS:</text>
+        <text x="30" y="283" font-size="8" fill="#93c5fd" font-family="sans-serif">search_products</text>
+        <text x="30" y="295" font-size="8" fill="#93c5fd" font-family="sans-serif">get_product_detail</text>
+        <text x="30" y="312" font-size="8.5" fill="#f59e0b" font-family="sans-serif">UI:</text>
+        <text x="30" y="325" font-size="8" fill="#fbbf24" font-family="sans-serif">product-grid card</text>
+        <text x="30" y="337" font-size="8" fill="#fbbf24" font-family="sans-serif">MCP App resource</text>
+        <text x="30" y="354" font-size="8.5" fill="#64748b" font-family="sans-serif">&#x2192; price, stock,</text>
+        <text x="30" y="365" font-size="8.5" fill="#64748b" font-family="sans-serif">image injected</text>
+      </g>
+
+      <text x="134" y="275" font-size="16" fill="#374151" font-family="sans-serif">&#x2192;</text>
+
+      <g id="jov-2" class="node" onclick="setJourneyStep(2)">
+        <rect x="148" y="170" width="118" height="200" rx="10" fill="#1a2035" stroke="#8b5cf6" stroke-width="1.5"/>
+        <circle cx="207" cy="190" r="12" fill="#2d1a4a"/>
+        <text x="207" y="194" font-size="11" font-weight="700" fill="#a78bfa" text-anchor="middle" font-family="sans-serif">2</text>
+        <text x="207" y="215" font-size="10" font-weight="700" fill="#f1f5f9" text-anchor="middle" font-family="sans-serif">Add to Cart</text>
+        <text x="207" y="235" font-size="9" fill="#64748b" text-anchor="middle" font-family="sans-serif">"Add 2 ProBook</text>
+        <text x="207" y="247" font-size="9" fill="#64748b" text-anchor="middle" font-family="sans-serif">to my cart"</text>
+        <text x="160" y="270" font-size="8.5" fill="#f87171" font-family="sans-serif">WRITE &#x26A0;&#xFE0F;:</text>
+        <text x="160" y="283" font-size="8" fill="#fca5a5" font-family="sans-serif">add_to_cart</text>
+        <text x="160" y="295" font-size="8" fill="#fca5a5" font-family="sans-serif">always_ask</text>
+        <text x="160" y="312" font-size="8.5" fill="#f59e0b" font-family="sans-serif">UI EVENT:</text>
+        <text x="160" y="325" font-size="8" fill="#c084fc" font-family="sans-serif">cart_update SSE</text>
+        <text x="160" y="337" font-size="8" fill="#fbbf24" font-family="sans-serif">sidebar live update</text>
+        <text x="160" y="354" font-size="8.5" fill="#64748b" font-family="sans-serif">&#x2192; count badge,</text>
+        <text x="160" y="365" font-size="8.5" fill="#64748b" font-family="sans-serif">subtotal refresh</text>
+      </g>
+
+      <text x="270" y="275" font-size="16" fill="#374151" font-family="sans-serif">&#x2192;</text>
+
+      <g id="jov-3" class="node" onclick="setJourneyStep(3)">
+        <rect x="285" y="170" width="118" height="200" rx="10" fill="#1a2035" stroke="#10b981" stroke-width="1.5"/>
+        <circle cx="344" cy="190" r="12" fill="#0f2a1a"/>
+        <text x="344" y="194" font-size="11" font-weight="700" fill="#4ade80" text-anchor="middle" font-family="sans-serif">3</text>
+        <text x="344" y="215" font-size="10" font-weight="700" fill="#f1f5f9" text-anchor="middle" font-family="sans-serif">Policy Check</text>
+        <text x="344" y="235" font-size="9" fill="#64748b" text-anchor="middle" font-family="sans-serif">"What's the</text>
+        <text x="344" y="247" font-size="9" fill="#64748b" text-anchor="middle" font-family="sans-serif">return policy?"</text>
+        <text x="297" y="270" font-size="8.5" fill="#3b82f6" font-family="sans-serif">READ:</text>
+        <text x="297" y="283" font-size="8" fill="#93c5fd" font-family="sans-serif">search_policies</text>
+        <text x="297" y="295" font-size="8" fill="#93c5fd" font-family="sans-serif">recall_memories</text>
+        <text x="297" y="307" font-size="8" fill="#93c5fd" font-family="sans-serif">get_fulfillment_opts</text>
+        <text x="297" y="325" font-size="8.5" fill="#f59e0b" font-family="sans-serif">UI:</text>
+        <text x="297" y="338" font-size="8" fill="#fbbf24" font-family="sans-serif">inline chat answer</text>
+        <text x="297" y="354" font-size="8.5" fill="#64748b" font-family="sans-serif">&#x2192; policy + buyer</text>
+        <text x="297" y="365" font-size="8.5" fill="#64748b" font-family="sans-serif">history merged</text>
+      </g>
+
+      <text x="406" y="275" font-size="16" fill="#374151" font-family="sans-serif">&#x2192;</text>
+
+      <g id="jov-4" class="node" onclick="setJourneyStep(4)">
+        <rect x="421" y="170" width="118" height="200" rx="10" fill="#1a2035" stroke="#f59e0b" stroke-width="1.5"/>
+        <circle cx="480" cy="190" r="12" fill="#2d2000"/>
+        <text x="480" y="194" font-size="11" font-weight="700" fill="#fbbf24" text-anchor="middle" font-family="sans-serif">4</text>
+        <text x="480" y="215" font-size="10" font-weight="700" fill="#f1f5f9" text-anchor="middle" font-family="sans-serif">Checkout</text>
+        <text x="480" y="235" font-size="9" fill="#64748b" text-anchor="middle" font-family="sans-serif">"Checkout (PO)"</text>
+        <text x="480" y="247" font-size="9" fill="#64748b" text-anchor="middle" font-family="sans-serif">button clicked</text>
+        <text x="433" y="270" font-size="8.5" fill="#3b82f6" font-family="sans-serif">READ:</text>
+        <text x="433" y="283" font-size="8" fill="#93c5fd" font-family="sans-serif">get_cart</text>
+        <text x="433" y="295" font-size="8" fill="#93c5fd" font-family="sans-serif">get_fulfillment_opts</text>
+        <text x="433" y="312" font-size="8.5" fill="#f59e0b" font-family="sans-serif">UI EVENT:</text>
+        <text x="433" y="325" font-size="8" fill="#c084fc" font-family="sans-serif">ui/checkout SSE</text>
+        <text x="433" y="337" font-size="8" fill="#fbbf24" font-family="sans-serif">checkout summary card</text>
+        <text x="433" y="352" font-size="8" fill="#a78bfa" font-family="sans-serif">&#x2192; checkoutStaged=true</text>
+        <text x="433" y="364" font-size="8" fill="#a78bfa" font-family="sans-serif">button: Place Order PO</text>
+      </g>
+
+      <text x="542" y="275" font-size="16" fill="#374151" font-family="sans-serif">&#x2192;</text>
+
+      <g id="jov-5" class="node" onclick="setJourneyStep(5)">
+        <rect x="558" y="170" width="118" height="200" rx="10" fill="#1a2035" stroke="#f87171" stroke-width="1.5"/>
+        <circle cx="617" cy="190" r="12" fill="#3d1a1a"/>
+        <text x="617" y="194" font-size="11" font-weight="700" fill="#fca5a5" text-anchor="middle" font-family="sans-serif">5</text>
+        <text x="617" y="215" font-size="10" font-weight="700" fill="#f1f5f9" text-anchor="middle" font-family="sans-serif">Place Order</text>
+        <text x="617" y="235" font-size="9" fill="#64748b" text-anchor="middle" font-family="sans-serif">"Place Order (PO)"</text>
+        <text x="617" y="247" font-size="9" fill="#64748b" text-anchor="middle" font-family="sans-serif">button clicked</text>
+        <text x="570" y="270" font-size="8.5" fill="#f87171" font-family="sans-serif">WRITE &#x26A0;&#xFE0F;:</text>
+        <text x="570" y="283" font-size="8" fill="#fca5a5" font-family="sans-serif">POST /sobjects/Order</text>
+        <text x="570" y="295" font-size="8" fill="#fca5a5" font-family="sans-serif">POST /sobjects/OrderItem</text>
+        <text x="570" y="307" font-size="8" fill="#fca5a5" font-family="sans-serif">PATCH &#x2192; Activated</text>
+        <text x="570" y="324" font-size="8.5" fill="#f59e0b" font-family="sans-serif">UI:</text>
+        <text x="570" y="337" font-size="8" fill="#fbbf24" font-family="sans-serif">order confirmation card</text>
+        <text x="570" y="352" font-size="8" fill="#4ade80" font-family="sans-serif">&#x2705; Real SF Order created</text>
+        <text x="570" y="364" font-size="8" fill="#4ade80" font-family="sans-serif">OrderNumber: 000001xx</text>
+      </g>
+
+      <text x="678" y="275" font-size="16" fill="#374151" font-family="sans-serif">&#x2192;</text>
+
+      <g id="jov-6" class="node" onclick="setJourneyStep(6)">
+        <rect x="694" y="170" width="118" height="200" rx="10" fill="#1a2035" stroke="#94a3b8" stroke-width="1.5"/>
+        <circle cx="753" cy="190" r="12" fill="#1e293b"/>
+        <text x="753" y="194" font-size="11" font-weight="700" fill="#94a3b8" text-anchor="middle" font-family="sans-serif">6</text>
+        <text x="753" y="215" font-size="10" font-weight="700" fill="#f1f5f9" text-anchor="middle" font-family="sans-serif">Post-Order</text>
+        <text x="753" y="235" font-size="9" fill="#64748b" text-anchor="middle" font-family="sans-serif">"Where's my</text>
+        <text x="753" y="247" font-size="9" fill="#64748b" text-anchor="middle" font-family="sans-serif">order?"</text>
+        <text x="706" y="270" font-size="8.5" fill="#3b82f6" font-family="sans-serif">READ:</text>
+        <text x="706" y="283" font-size="8" fill="#93c5fd" font-family="sans-serif">get_orders</text>
+        <text x="706" y="295" font-size="8" fill="#93c5fd" font-family="sans-serif">get_order_status</text>
+        <text x="706" y="312" font-size="8.5" fill="#f87171" font-family="sans-serif">WRITE:</text>
+        <text x="706" y="325" font-size="8" fill="#fca5a5" font-family="sans-serif">save_memory (prefs)</text>
+        <text x="706" y="342" font-size="8.5" fill="#f59e0b" font-family="sans-serif">UI:</text>
+        <text x="706" y="355" font-size="8" fill="#fbbf24" font-family="sans-serif">order history view</text>
+        <text x="706" y="367" font-size="8" fill="#fbbf24" font-family="sans-serif">arriving panel</text>
+      </g>
+    </g>
+  </svg>
+  <div class="tooltip" id="tooltip"></div>
+</div>
+
+<!-- Side panel -->
+<div class="side" id="side-panel">
+  <h3 id="side-title">Architecture</h3>
+  <div id="side-content">
+    <div class="side-empty">
+      Click any node to see details, tools, and code patterns.
+      <br><br>
+      Switch to <strong>Commerce Journey</strong> to walk through the 6-step buyer flow.
+    </div>
+  </div>
+</div>
+
+</div><!-- /main -->
+
+<!-- Journey bar -->
+<div class="journey-bar" id="jbar">
+  <div class="jb-inner">
+    <div class="jstep" id="js1" onclick="setJourneyStep(1)">
+      <div class="jstep-num">1</div>
+      <div class="jstep-label">Discover</div>
+    </div>
+    <div class="jconn" id="jc1"></div>
+    <div class="jstep" id="js2" onclick="setJourneyStep(2)">
+      <div class="jstep-num">2</div>
+      <div class="jstep-label">Add to Cart</div>
+    </div>
+    <div class="jconn" id="jc2"></div>
+    <div class="jstep" id="js3" onclick="setJourneyStep(3)">
+      <div class="jstep-num">3</div>
+      <div class="jstep-label">Policy Check</div>
+    </div>
+    <div class="jconn" id="jc3"></div>
+    <div class="jstep" id="js4" onclick="setJourneyStep(4)">
+      <div class="jstep-num">4</div>
+      <div class="jstep-label">Checkout</div>
+    </div>
+    <div class="jconn" id="jc4"></div>
+    <div class="jstep" id="js5" onclick="setJourneyStep(5)">
+      <div class="jstep-num">5</div>
+      <div class="jstep-label">Place Order</div>
+    </div>
+    <div class="jconn" id="jc5"></div>
+    <div class="jstep" id="js6" onclick="setJourneyStep(6)">
+      <div class="jstep-num">6</div>
+      <div class="jstep-label">Post-Order</div>
+    </div>
+    <div class="jnav">
+      <button class="jnavbtn" onclick="prevStep()">&#x2190; Prev</button>
+      <button class="jnavbtn primary" id="jnext-btn" onclick="nextStep()">Next &#x2192;</button>
+    </div>
+  </div>
+</div>
+
+<!-- Legend -->
+<div class="legend">
+  <div class="leg-item"><div class="leg-dot" style="background:#3b82f6"></div>UCP REST (model-agnostic)</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#8b5cf6"></div>MCP Streamable HTTP</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#1e3a5f;border:1px solid #3b82f6"></div>Read tool (no approval)</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#3d1a1a;border:1px solid #7f1d1d"></div>Write tool (always_ask)</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#2d1f00;border:1px solid #92400e"></div>MCP UI Resource / SSE event</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#166534"></div>Live deployment (Salesforce + Railway)</div>
+</div>
+
+</div><!-- /app -->
+
+<script>
+var mode = 'arch';
+var selectedNode = null;
+var journeyStep = 1;
+
+var nodes = {
+  gemini: {
+    title: 'Gemini (Google AI)',
+    sections: [
+      { title: 'Model', cls: 'blue', items: ['gemini-2.0-flash (default)', 'env: GEMINI_MODEL'] },
+      { title: 'How it connects', cls: 'purple', type:'text', text: 'GeminiUCPAgent fetches /.well-known/ucp manifest on startup, then auto-generates FunctionDeclarations from the capabilities block — no manual tool registration needed.' },
+      { title: 'Environment config', cls: 'amber', type:'code', text: 'GEMINI_API_KEY=...\nGEMINI_MODEL=gemini-2.0-flash\nUCP_BASE=https://your-api.railway.app' },
+      { title: 'Note', cls: 'green', type:'note', text: 'Gemini uses UCP REST only. For MCP tools and UI resources (product-grid card, checkout summary), use Claude instead.' },
+    ]
+  },
+  claude: {
+    title: 'Claude (Anthropic)',
+    sections: [
+      { title: 'Models', cls: 'amber', items: ['claude-sonnet-5 (default)', 'claude-opus-4 / haiku-4-5', 'Vertex AI, Bedrock, Foundry supported'] },
+      { title: 'Two runtime paths', cls: 'blue', type:'text', text: 'Messages API (direct SSE at /api/chat) and Managed Agent via MCP. Both use the same ShoppingToolExecutor and StorefrontBackend.' },
+      { title: 'Config', cls: 'purple', type:'code', text: 'SHOPPING_MODEL=claude-sonnet-5\nMEMORY_MODEL=claude-haiku-4-5-20251001\nANTHROPIC_API_KEY=...' },
+      { title: 'Unique advantage', cls: 'green', type:'note', text: 'Claude is the only model with access to full MCP tools, UI resources (product-grid card, checkout card), and the write-gated always_ask permission flow.' },
+    ]
+  },
+  openai: {
+    title: 'OpenAI / Any LLM',
+    sections: [
+      { title: 'Models', cls: 'green', items: ['GPT-4o, o3', 'Mistral, Llama 3', 'Any function-calling LLM'] },
+      { title: 'Integration pattern', cls: 'blue', type:'text', text: 'Any model can consume UCP: fetch /.well-known/ucp to get capabilities, then call GET /ucp/products and POST /ucp/orders as tool calls. No backend changes needed.' },
+      { title: 'Example', cls: 'purple', type:'code', text: 'tools = fetch("/.well-known/ucp")\n       .capabilities // auto FunctionDef\n\n# then call:\nPOST /ucp/orders {line_items, po_number}' },
+    ]
+  },
+  ucp: {
+    title: 'UCP — Universal Commerce Protocol',
+    sections: [
+      { title: 'Endpoints', cls: 'blue', items: ['GET /.well-known/ucp (discovery manifest)', 'GET /ucp/products?q=&category=', 'GET /ucp/products/{id}', 'POST /ucp/checkout-sessions', 'GET /ucp/cart', 'POST /ucp/orders'] },
+      { title: 'Order flow (POST /ucp/orders)', cls: 'purple', type:'text', text: '1. Close old carts → 2. Create WebCart → 3. Add items (type: Product) → 4. Set PoNumber → 5. Resolve WebStorePricebook → 6. POST /sobjects/Order → 7. POST /sobjects/OrderItem × n → 8. PATCH Activated → 9. Close cart' },
+      { title: 'Mount in FastAPI', cls: 'amber', type:'code', text: 'app.include_router(\n  build_ucp_router(your_backend)\n)\n# Serves alongside Claude SSE at /api/chat' },
+      { title: 'Key design', cls: 'green', type:'note', text: 'The UCP manifest is the model-agnostic discovery layer. Any LLM that can fetch JSON and call HTTP endpoints can become a shopping agent with no code changes.' },
+    ]
+  },
+  mcp: {
+    title: 'MCP Server — Streamable HTTP',
+    sections: [
+      { title: 'Transport', cls: 'purple', items: ['Protocol: MCP Streamable HTTP', 'Endpoint: 127.0.0.1:8200/mcp', 'FastMCP (from mcp.server.fastmcp)', 'Config: STOREFRONT_MCP_HOST/PORT'] },
+      { title: '12 Tools exposed', cls: 'blue', type:'text', text: 'Read (no approval): search_products, search_products_ui, get_product_details, get_cart, get_orders, get_order_status, search_policies, get_preferences, get_fulfillment_options, recall_memories\n\nWrite (always_ask): add_to_cart, update_cart_item, remove_from_cart, save_memory, place_order' },
+      { title: 'MCP App (SEP-1865)', cls: 'amber', type:'code', text: 'search_products_ui returns:\n  meta.ui.resourceUri =\n  "ui://storefront/product-grid"\n→ Claude renders HTML card inline' },
+      { title: 'Start server', cls: 'green', type:'code', text: 'python storefront_mcp_server.py\n  --backend SalesforceOMSBackend\n  --port 8200' },
+    ]
+  },
+  readtools: {
+    title: 'Read Tools (no buyer approval)',
+    sections: [
+      { title: 'Catalog tools', cls: 'blue', items: ['search_products(q, category, max_price)', 'search_products_ui → attaches product-grid HTML card', 'get_product_details(product_id)'] },
+      { title: 'Cart & order tools', cls: 'blue', items: ['get_cart() → items, subtotal, currency', 'get_orders() → order list with status', 'get_order_status(order_id) → ETA, tracking'] },
+      { title: 'Context tools', cls: 'blue', items: ['search_policies(topic) → return/shipping policy text', 'get_preferences() → buyer profile + memory facts', 'recall_memories(topic) → past purchase history', 'get_fulfillment_options() → shipping estimates'] },
+      { title: 'Design rule', cls: 'green', type:'note', text: 'Read tools never require confirmation. They can be called freely in any turn to gather context before a write.' },
+    ]
+  },
+  writetools: {
+    title: 'Write Tools (always_ask warning)',
+    sections: [
+      { title: 'Cart writes', cls: 'red', items: ['add_to_cart(product_id, quantity)', 'update_cart_item(product_id, quantity)', 'remove_from_cart(product_id)'] },
+      { title: 'Order placement', cls: 'red', items: ['place_order(line_items, po_number, buyer)', '→ creates real Salesforce Order SObject', '→ OrderNumber returned (e.g. 00000116)'] },
+      { title: 'Memory', cls: 'red', items: ['save_memory(key, value) → persisted buyer prefs'] },
+      { title: 'Permission model', cls: 'amber', type:'code', text: '# agent.yaml\ntools:\n  add_to_cart:\n    permission_policy:\n      type: always_ask  # buyer confirms' },
+      { title: 'Safety', cls: 'green', type:'note', text: 'Provenance gates ensure the agent can only write items it has searched and that the buyer has seen. Quantity is capped. checkout charges nothing — the Salesforce Order is the single write gate.' },
+    ]
+  },
+  uiresources: {
+    title: 'MCP UI Resources (SEP-1865)',
+    sections: [
+      { title: 'Product grid card', cls: 'amber', items: ['Resource URI: ui://storefront/product-grid', 'Returned by search_products_ui tool', 'Renders interactive HTML in chat', 'Product images, price, Add to cart buttons'] },
+      { title: 'SSE events', cls: 'purple', items: ['cart_update → sidebar count + subtotal refresh', 'ui/checkout → checkoutStaged=true in React state', 'ui/order_confirmation → order card inline'] },
+      { title: 'Checkout card', cls: 'amber', type:'text', text: 'Streamed as a ui/checkout SSE event. Shows cart items, total, PO number field, shipping estimate. Triggers button label change from "Checkout (PO)" to "Place Order (PO)" in the sidebar.' },
+      { title: 'Order card', cls: 'green', type:'text', text: 'Shows real Salesforce OrderNumber (e.g. 00000116), line items, PO reference, status: Activated. Cart is closed after order creation.' },
+    ]
+  },
+  backend: {
+    title: 'StorefrontBackend Interface',
+    sections: [
+      { title: 'Core methods', cls: 'blue', items: ['search_products(query, filters) → List[Listing]', 'get_product(product_id) → Listing', 'add_to_cart(cart_id, product_id, qty) → CartItem', 'update_cart_item / remove_from_cart', 'get_cart(buyer_id) → CartPayload', 'place_order(items, po_number, buyer) → Order'] },
+      { title: 'Order & history', cls: 'blue', items: ['get_orders(buyer_id) → List[Order]', 'get_order_status(order_id) → OrderStatus', 'search_policies(topic) → str', 'get_fulfillment_options() → List[FulfillmentOption]'] },
+      { title: 'One implementation per platform', cls: 'amber', type:'code', text: 'class MagentoBackend(StorefrontBackend):\n  async def place_order(self, ...):\n    return await self._client.post(\n      "/V1/orders",\n      json={payment_method: "purchaseorder"})\n\napp.include_router(\n  build_ucp_router(MagentoBackend()))' },
+      { title: 'Design', cls: 'green', type:'note', text: 'Implement this interface once. All three model planes (Gemini/UCP, Claude/MCP, any LLM) automatically inherit the implementation.' },
+    ]
+  },
+  sf: {
+    title: 'Salesforce B2B Commerce (Live)',
+    sections: [
+      { title: 'Auth', cls: 'blue', items: ['client_credentials OAuth2', 'Admin token + effectiveAccountId param', 'Buyer lookup via SOQL WHERE Username=email'] },
+      { title: 'Order creation (9 steps)', cls: 'purple', type:'code', text: '1. SOQL: find/create WebCart\n2. POST /carts/{id}/cart-items\n   (type: "Product" required)\n3. PATCH WebCart PoNumber\n4. SOQL: WebStorePricebook\n5. POST /sobjects/Order (Draft)\n6. POST /sobjects/OrderItem x N\n7. PATCH /sobjects/Order Activated\n8. GET OrderNumber\n9. PATCH WebCart Closed' },
+      { title: 'Deployment', cls: 'green', items: ['Railway service: diligent-flow', 'SF_INSTANCE_URL=atci-b2b-lex...', 'Webstore: 0ZEDS0000008b5M4AQ', 'Orders 00000114-00000116 verified'] },
+    ]
+  },
+  magento: {
+    title: 'Magento / Adobe Commerce',
+    sections: [
+      { title: 'Auth', cls: 'blue', items: ['POST /V1/integration/admin/token', 'Or customer JWT for buyer context'] },
+      { title: 'Key API calls', cls: 'purple', type:'code', text: '# Search\nGET /V1/products?searchCriteria\n  [filter][field]=name\n  [filter][value]=%laptop%\n\n# Cart\nPOST /V1/guest-carts  -> quote_id\nPOST /V1/carts/{id}/items\n  {sku, qty, quote_id}\n\n# Order\nPOST /V1/orders\n  {payment: {method: "purchaseorder",\n    po_number: "PO-001"}}' },
+      { title: 'Effort', cls: 'amber', type:'note', text: '~2 days. REST API is well-documented. No async checkout flow — order is synchronous. GraphQL Storefront API available for catalog.' },
+    ]
+  },
+  sap: {
+    title: 'SAP Commerce Cloud',
+    sections: [
+      { title: 'Auth', cls: 'blue', items: ['OAuth2 password grant (B2B user)', 'siteId + storeId in every path', '/authorizationserver/oauth/token'] },
+      { title: 'Key API calls', cls: 'purple', type:'code', text: '# Search\nGET /occ/v2/{site}/products/search\n  ?query=laptop\n\n# Cart\nPOST /occ/v2/{site}/users/{uid}/carts\nPOST /carts/{id}/entries\n  {product:{code:SKU}, quantity:1}\n\n# Order (B2B PO)\nPOST /occ/v2/{site}/users/{uid}/orders\n  {paymentType: {code: "ACCOUNT"},\n   purchaseOrderNumber: "PO-001"}' },
+      { title: 'Effort', cls: 'amber', type:'note', text: '~3 days. Session management and consent flows add complexity. The B2B Account payment type maps cleanly to PO orders.' },
+    ]
+  },
+  ct: {
+    title: 'commercetools',
+    sections: [
+      { title: 'Auth', cls: 'blue', items: ['client_credentials → scoped token', 'Scope: manage_orders:projectKey', 'auth.europe-west1.gcp.commercetools.com'] },
+      { title: 'Key API calls (GraphQL)', cls: 'purple', type:'code', text: '# Search\nproductProjectionSearch(\n  text: {en: "laptop"})\n\n# Cart\ncreateDraft(currency:"USD")\naddLineItem(productId, variantId, qty)\n\n# Order\ncreateOrderFromCart(id: cartId)\n  paymentInfo: {payments: [{\n    paymentMethodInfo: {\n      method: "purchase-order"}}]}\n  fields: {poNumber: "PO-001"}' },
+      { title: 'Effort', cls: 'amber', type:'note', text: '~2 days. Clean GraphQL schema, excellent docs. PO number stored as a custom field on Order (requires type definition setup).' },
+    ]
+  },
+};
+
+var journeyData = [
+  null,
+  { title: '① Discover Products', color: '#3b82f6',
+    read: ['search_products(q, category, price_range)', 'get_product_details(product_id)'],
+    write: [],
+    ui: ['product-grid card (MCP App ui://storefront/product-grid)', 'Interactive HTML injected inline in chat', 'Product image, price, stock, Add button'],
+    events: [],
+    data: 'ProductId, title, price, stock, image_url, brand, category → buyer' },
+  { title: '② Add to Cart', color: '#8b5cf6',
+    read: ['get_cart() — check current state first'],
+    write: ['add_to_cart(product_id, quantity) — always_ask', 'update_cart_item(product_id, qty)'],
+    ui: ['Cart sidebar live update', 'Item count badge in header'],
+    events: ['cart_update SSE → React setCart() → sidebar re-renders instantly'],
+    data: 'WebCart.Id, CartItem, quantity, subtotal, currency → sidebar state' },
+  { title: '③ Policy & Preferences Check', color: '#10b981',
+    read: ['search_policies("return policy")', 'recall_memories("buyer history")', 'get_fulfillment_options()'],
+    write: [],
+    ui: ['Inline answer in chat (no separate card)', 'Policy text with citations merged with buyer history'],
+    events: [],
+    data: 'Policy chunks + buyer preferences + prior orders → model context' },
+  { title: '④ Initiate Checkout', color: '#f59e0b',
+    read: ['get_cart() — final state', 'get_fulfillment_options() — shipping estimate'],
+    write: [],
+    ui: ['Checkout summary card (streamed inline)', 'Items, total, PO number field, shipping estimate, addresses'],
+    events: ['ui/checkout SSE event → checkoutStaged=true in React', 'Sidebar button: "Checkout (PO)" → "Place Order (PO)"'],
+    data: 'cart items, subtotal, po_number, effectiveAccountId, addresses' },
+  { title: '⑤ Place Order (PO)', color: '#f87171',
+    read: ['WebStorePricebook SOQL → PricebookEntryId per product'],
+    write: ['POST /sobjects/Order (AccountId, Draft, EffectiveDate, Pricebook2Id)', 'POST /sobjects/OrderItem × n (PricebookEntryId, Qty, UnitPrice)', 'PATCH /sobjects/Order → Status: Activated', 'PATCH WebCart → Status: Closed'],
+    ui: ['Order confirmation card (real Salesforce OrderNumber)', 'e.g. Order 00000116 — Activated — ProBook Ultra 13 × 1'],
+    events: ['cart_update SSE → cart cleared from sidebar'],
+    data: 'Order.Id, OrderNumber, Status: Activated, PO reference → buyer confirmation' },
+  { title: '⑥ Post-Order Tracking', color: '#94a3b8',
+    read: ['get_orders(buyer_id) — full history', 'get_order_status(order_id) — live status + ETA'],
+    write: ['save_memory("preferred_brand", "ProBook")'],
+    ui: ['Orders view with timeline', 'Arriving panel on home page', 'Late-order alerts (attention badge in nav)'],
+    events: [],
+    data: 'Order list, status, estimated delivery, buyer prefs saved for next session' },
+];
+
+function renderNode(key) {
+  var n = nodes[key];
+  if (!n) return;
+  document.getElementById('side-title').textContent = n.title;
+  var html = '';
+  for (var i = 0; i < n.sections.length; i++) {
+    var s = n.sections[i];
+    html += '<div class="detail-section">';
+    html += '<div class="ds-title ' + s.cls + '">' + s.title + '</div>';
+    if (s.type === 'text') {
+      html += '<div class="ds-text">' + s.text.replace(/\n/g,'<br>') + '</div>';
+    } else if (s.type === 'code') {
+      html += '<div class="ds-code">' + escHtml(s.text) + '</div>';
+    } else if (s.type === 'note') {
+      html += '<div class="ds-note">' + s.text + '</div>';
+    } else if (s.items) {
+      html += '<div class="pill-row">';
+      for (var j = 0; j < s.items.length; j++) {
+        var cls = s.cls === 'red' ? 'write' : s.cls === 'amber' ? 'ui' : 'read';
+        html += '<span class="dpill ' + cls + '">' + escHtml(s.items[j]) + '</span>';
+      }
+      html += '</div>';
+    }
+    html += '</div>';
+  }
+  document.getElementById('side-content').innerHTML = html;
+}
+
+function renderJourneyDetail(step) {
+  var d = journeyData[step];
+  if (!d) return;
+  document.getElementById('side-title').textContent = d.title;
+  var html = '';
+  if (d.read.length) {
+    html += '<div class="detail-section"><div class="ds-title blue">READ TOOLS</div><div class="pill-row">';
+    for (var i = 0; i < d.read.length; i++) html += '<span class="dpill read">' + escHtml(d.read[i]) + '</span>';
+    html += '</div></div>';
+  }
+  if (d.write.length) {
+    html += '<div class="detail-section"><div class="ds-title red">WRITE TOOLS (always_ask ⚠️)</div><div class="pill-row">';
+    for (var i = 0; i < d.write.length; i++) html += '<span class="dpill write">' + escHtml(d.write[i]) + '</span>';
+    html += '</div></div>';
+  }
+  if (d.events.length) {
+    html += '<div class="detail-section"><div class="ds-title purple">SSE EVENTS</div><div class="pill-row">';
+    for (var i = 0; i < d.events.length; i++) html += '<span class="dpill event">' + escHtml(d.events[i]) + '</span>';
+    html += '</div></div>';
+  }
+  if (d.ui.length) {
+    html += '<div class="detail-section"><div class="ds-title amber">UI RENDERED</div><div class="pill-row">';
+    for (var i = 0; i < d.ui.length; i++) html += '<span class="dpill ui">' + escHtml(d.ui[i]) + '</span>';
+    html += '</div></div>';
+  }
+  if (d.data) {
+    html += '<div class="detail-section"><div class="ds-title green">DATA PAYLOAD</div><div class="ds-note">' + escHtml(d.data) + '</div></div>';
+  }
+  document.getElementById('side-content').innerHTML = html;
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function setMode(m) {
+  mode = m;
+  document.getElementById('btn-arch').classList.toggle('on', m==='arch');
+  document.getElementById('btn-journey').classList.toggle('on', m==='journey');
+  var overlay = document.getElementById('journey-overlay');
+  var jbar = document.getElementById('jbar');
+  if (m === 'journey') {
+    overlay.setAttribute('display','');
+    jbar.classList.add('show');
+    setJourneyStep(1);
+  } else {
+    overlay.setAttribute('display','none');
+    jbar.classList.remove('show');
+    document.getElementById('side-title').textContent = 'Architecture';
+    document.getElementById('side-content').innerHTML = '<div class="side-empty">Click any node to see details, tools, and code patterns.</div>';
+  }
+}
+
+function selectNode(key) {
+  if (mode === 'journey') return;
+  selectedNode = key;
+  renderNode(key);
+}
+
+function setJourneyStep(s) {
+  journeyStep = s;
+  for (var i = 1; i <= 6; i++) {
+    var el = document.getElementById('js'+i);
+    el.classList.remove('active','done');
+    if (i < s) el.classList.add('done');
+    else if (i === s) el.classList.add('active');
+    if (i < 6) {
+      var conn = document.getElementById('jc'+i);
+      conn.classList.toggle('done', i < s);
+    }
+  }
+  document.getElementById('jnext-btn').textContent = s >= 6 ? 'Restart' : 'Next →';
+  renderJourneyDetail(s);
+  for (var i = 1; i <= 6; i++) {
+    var el = document.getElementById('jov-'+i);
+    if (!el) continue;
+    var rect = el.querySelector('rect');
+    if (i === s) {
+      rect.setAttribute('filter','url(#glow-blue)');
+      rect.setAttribute('stroke-width','2.5');
+    } else {
+      rect.removeAttribute('filter');
+      rect.setAttribute('stroke-width','1.5');
+    }
+  }
+}
+
+function nextStep() { setJourneyStep(journeyStep >= 6 ? 1 : journeyStep + 1); }
+function prevStep() { setJourneyStep(Math.max(1, journeyStep - 1)); }
+
+function spawnParticle(x1,y1,x2,y2,color) {
+  var g = document.getElementById('particles');
+  var dur = 1.2 + Math.random() * 0.8;
+  var id = 'p_' + Date.now() + '_' + Math.random().toString(36).substr(2,5);
+  var circle = document.createElementNS('http://www.w3.org/2000/svg','circle');
+  circle.setAttribute('r','3');
+  circle.setAttribute('fill',color);
+  circle.setAttribute('opacity','0.85');
+  var path = document.createElementNS('http://www.w3.org/2000/svg','path');
+  path.setAttribute('id','path_'+id);
+  path.setAttribute('d','M'+x1+','+y1+' L'+x2+','+y2);
+  path.setAttribute('fill','none');
+  path.setAttribute('stroke','none');
+  circle.innerHTML = '<animateMotion dur="'+dur+'s" repeatCount="1" fill="freeze"><mpath href="#path_'+id+'"/></animateMotion><animate attributeName="opacity" values="0;0.9;0.9;0" dur="'+dur+'s" repeatCount="1" fill="freeze"/>';
+  g.appendChild(path);
+  g.appendChild(circle);
+  setTimeout(function(){ try{ g.removeChild(circle); g.removeChild(path); } catch(e){} }, (dur+0.2)*1000);
+}
+
+var flows = [
+  [155,88,220,168,'#3b82f6'],
+  [410,88,280,168,'#3b82f6'],
+  [410,88,500,168,'#8b5cf6'],
+  [665,88,350,168,'#3b82f6'],
+  [260,193,400,358,'#3b82f6'],
+  [500,330,440,358,'#8b5cf6'],
+  [340,413,160,440,'#10b981'],
+  [390,413,360,440,'#10b981'],
+  [430,413,520,440,'#10b981'],
+  [490,413,660,440,'#10b981'],
+];
+var flowIdx = 0;
+function animateFlows() {
+  if (mode !== 'arch') { setTimeout(animateFlows, 500); return; }
+  var f = flows[flowIdx % flows.length];
+  spawnParticle(f[0],f[1],f[2],f[3],f[4]);
+  flowIdx++;
+  setTimeout(animateFlows, 300);
+}
+animateFlows();
+
+document.addEventListener('keydown', function(e) {
+  if (mode !== 'journey') return;
+  if (e.key === 'ArrowRight') nextStep();
+  if (e.key === 'ArrowLeft') prevStep();
+});
+</script>
+</body>
+</html>

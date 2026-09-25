@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gemini Assistant — Hosting & AWS Migration</title>
+<style>
+  :root {
+    --bg: #07090f;
+    --s1: #0f1623;
+    --s2: #161e2e;
+    --border: #1e2d45;
+    --green: #059669; --green2: #34d399;
+    --blue:  #3b82f6; --blue2:  #60a5fa;
+    --purple:#8b5cf6; --purple2:#a78bfa;
+    --orange:#f97316; --orange2:#fb923c;
+    --yellow:#f59e0b; --yellow2:#fbbf24;
+    --red:   #ef4444; --red2:   #fca5a5;
+    --text: #e2e8f0; --muted: #64748b;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:14px;line-height:1.6}
+
+  /* hero */
+  .hero{background:linear-gradient(135deg,#0a1628,#0d1a38 50%,#0a1a10);border-bottom:1px solid var(--border);padding:44px 40px 36px;text-align:center}
+  .badge{display:inline-flex;align-items:center;gap:7px;background:rgba(59,130,246,.15);border:1px solid rgba(59,130,246,.3);color:var(--blue2);border-radius:999px;padding:5px 14px;font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;margin-bottom:16px}
+  .hero h1{font-size:36px;font-weight:800;line-height:1.2;background:linear-gradient(135deg,#60a5fa,#a78bfa);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:10px}
+  .hero p{font-size:15px;color:#94a3b8;max-width:640px;margin:0 auto}
+
+  .main{max-width:1120px;margin:0 auto;padding:40px 24px 72px}
+
+  /* section */
+  .sec{margin-top:52px;margin-bottom:20px;display:flex;align-items:center;gap:10px}
+  .sec:first-child{margin-top:0}
+  .sec-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+  .sec h2{font-size:18px;font-weight:700}
+  .sec .sub{font-size:12px;color:var(--muted);margin-left:4px;margin-top:1px}
+
+  /* ── CURRENT HOSTING DIAGRAM ─────────────────────────────────── */
+  .hosting-grid{display:grid;grid-template-columns:1fr 40px 1fr 40px 1fr 40px 1fr;align-items:center;gap:0;margin-bottom:20px}
+  .h-box{background:var(--s1);border:1px solid var(--border);border-radius:12px;overflow:hidden}
+  .h-header{padding:10px 14px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:6px}
+  .h-header.blue  {background:rgba(59,130,246,.1);color:#93c5fd}
+  .h-header.purple{background:rgba(139,92,246,.1);color:#c4b5fd}
+  .h-header.green {background:rgba(5,150,105,.1);color:#6ee7b7}
+  .h-header.orange{background:rgba(249,115,22,.1);color:#fdba74}
+  .h-row{padding:8px 14px;border-bottom:1px solid rgba(30,45,69,.4);font-size:12px}
+  .h-row:last-child{border-bottom:none}
+  .h-row .lbl{font-weight:600;color:var(--text)}
+  .h-row .val{color:var(--muted);font-size:11px;margin-top:1px}
+  .h-arrow{display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:18px}
+
+  /* ── RESPONSIBILITY TABLE ─────────────────────────────────────── */
+  .resp-table{width:100%;border-collapse:collapse;margin-bottom:16px;font-size:13px}
+  .resp-table th{background:var(--s2);padding:9px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);border-bottom:1px solid var(--border)}
+  .resp-table td{padding:9px 14px;border-bottom:1px solid rgba(30,45,69,.4);vertical-align:top}
+  .resp-table tr:last-child td{border-bottom:none}
+  .who{display:inline-flex;align-items:center;gap:5px;padding:2px 9px;border-radius:5px;font-size:11px;font-weight:700;white-space:nowrap}
+  .who.repo  {background:rgba(5,150,105,.15);color:#34d399}
+  .who.client{background:rgba(249,115,22,.15);color:#fb923c}
+  .who.shared{background:rgba(139,92,246,.15);color:#a78bfa}
+  code{font-family:'SF Mono',monospace;font-size:11px;background:rgba(30,45,69,.8);padding:1px 5px;border-radius:3px;color:#a5b4fc}
+
+  /* ── AWS MIGRATION DIAGRAM ───────────────────────────────────── */
+  .compare{display:grid;grid-template-columns:1fr 32px 1fr;gap:0;margin-bottom:20px}
+  .compare-col{background:var(--s1);border:1px solid var(--border);border-radius:12px;overflow:hidden}
+  .compare-header{padding:11px 16px;font-size:12px;font-weight:700;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px}
+  .compare-header.railway{background:rgba(139,92,246,.1);color:#c4b5fd}
+  .compare-header.aws    {background:rgba(249,115,22,.1);color:#fdba74}
+  .compare-item{padding:9px 14px;border-bottom:1px solid rgba(30,45,69,.4);font-size:12px;display:flex;gap:8px;align-items:flex-start}
+  .compare-item:last-child{border-bottom:none}
+  .compare-item .ico{font-size:14px;flex-shrink:0;margin-top:1px}
+  .compare-item .txt .lbl{font-weight:600;color:var(--text)}
+  .compare-item .txt .sub{color:var(--muted);font-size:11px;margin-top:1px}
+  .compare-arrow{display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:20px}
+
+  /* ── READINESS GRID ──────────────────────────────────────────── */
+  .ready-grid{display:grid;grid-template-columns:1fr 1fr;gap:0;background:var(--s1);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:16px}
+  .ready-col-head{padding:10px 16px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:6px}
+  .ready-col-head.yes{background:rgba(5,150,105,.1);color:#6ee7b7;border-right:1px solid var(--border)}
+  .ready-col-head.no {background:rgba(249,115,22,.1);color:#fdba74}
+  .ready-item{padding:9px 14px;border-bottom:1px solid rgba(30,45,69,.4);font-size:12px;display:flex;gap:7px;align-items:flex-start}
+  .ready-item.left{border-right:1px solid var(--border)}
+  .ready-item:last-child{border-bottom:none}
+  .ready-item .icon{flex-shrink:0;font-size:13px;margin-top:1px}
+  .ready-item .body .lbl{font-weight:600;color:var(--text)}
+  .ready-item .body .note{color:var(--muted);font-size:11px;margin-top:2px}
+
+  /* ── WHAT CLIENT MUST SUPPLY ─────────────────────────────────── */
+  .supply-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:16px}
+  .supply-card{background:var(--s1);border:1px solid var(--border);border-radius:11px;overflow:hidden}
+  .supply-card-head{padding:9px 14px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid var(--border)}
+  .supply-card-head.aws   {background:rgba(249,115,22,.08);color:#fdba74}
+  .supply-card-head.sf    {background:rgba(59,130,246,.08);color:#93c5fd}
+  .supply-card-head.secret{background:rgba(139,92,246,.08);color:#c4b5fd}
+  .supply-item{padding:7px 14px;border-bottom:1px solid rgba(30,45,69,.4);font-size:12px}
+  .supply-item:last-child{border-bottom:none}
+  .supply-item .lbl{color:var(--text);font-weight:500}
+  .supply-item .note{color:var(--muted);font-size:11px}
+
+  /* ── STEP CHECKLIST ──────────────────────────────────────────── */
+  .steps{list-style:none;margin-bottom:16px}
+  .step{display:flex;gap:14px;padding:11px 0;border-bottom:1px solid rgba(30,45,69,.4);align-items:flex-start}
+  .step:last-child{border-bottom:none}
+  .step-n{width:26px;height:26px;border-radius:50%;background:var(--s2);color:var(--muted);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;margin-top:1px}
+  .step-n.done  {background:rgba(5,150,105,.2);color:#34d399}
+  .step-n.client{background:rgba(249,115,22,.2);color:#fb923c}
+  .step-n.both  {background:rgba(139,92,246,.2);color:#a78bfa}
+  .step-body .lbl{font-size:13px;font-weight:600;color:var(--text)}
+  .step-body .detail{font-size:12px;color:var(--muted);margin-top:2px}
+  .step-body .tag{display:inline-block;padding:1px 7px;border-radius:4px;font-size:10px;font-weight:700;margin-left:6px;vertical-align:middle}
+  .tag-done  {background:rgba(5,150,105,.15);color:#34d399}
+  .tag-client{background:rgba(249,115,22,.15);color:#fb923c}
+
+  /* ── INFO BOX ────────────────────────────────────────────────── */
+  .info{border-radius:9px;padding:12px 16px;margin-bottom:14px;display:flex;gap:10px;font-size:13px}
+  .info.green {background:rgba(5,150,105,.07);border:1px solid rgba(5,150,105,.25)}
+  .info.orange{background:rgba(249,115,22,.07);border:1px solid rgba(249,115,22,.25)}
+  .info.blue  {background:rgba(59,130,246,.07);border:1px solid rgba(59,130,246,.25)}
+  .info .ico{flex-shrink:0;margin-top:1px}
+  .info p{color:#94a3b8}
+  .info p strong{color:var(--text)}
+
+  hr{border:none;border-top:1px solid var(--border);margin:40px 0}
+
+  footer{text-align:center;color:var(--muted);font-size:12px;padding:24px;border-top:1px solid var(--border)}
+
+  @media(max-width:860px){
+    .hosting-grid{grid-template-columns:1fr;gap:8px}
+    .h-arrow{transform:rotate(90deg)}
+    .compare,.ready-grid{grid-template-columns:1fr}
+    .compare-arrow{transform:rotate(90deg)}
+    .ready-item.left{border-right:none}
+    .supply-grid{grid-template-columns:1fr}
+    .hero h1{font-size:26px}
+    .main{padding:28px 14px 60px}
+  }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="badge">🏗 Hosting &amp; Migration</div>
+  <h1>Gemini Assistant — Where It Lives<br>&amp; Moving to AWS</h1>
+  <p>Current Railway setup, client vs. repo responsibilities, and exactly what is already in the codebase vs. what you must supply to run on AWS.</p>
+</div>
+
+<div class="main">
+
+  <!-- ═══════════════════════════════════════════════
+       SECTION 1 — CURRENT HOSTING (RAILWAY)
+  ═══════════════════════════════════════════════ -->
+  <div class="sec"><div class="sec-dot" style="background:#a78bfa"></div><h2>Current Hosting — Single Railway Container</h2></div>
+
+  <div class="hosting-grid">
+    <!-- Browser -->
+    <div class="h-box">
+      <div class="h-header blue">🌐 Browser (client)</div>
+      <div class="h-row"><div class="lbl">React SPA</div><div class="val">Built into static files at Docker build time; served by Python</div></div>
+      <div class="h-row"><div class="lbl">Cart sidebar</div><div class="val">Local state synced from API responses</div></div>
+      <div class="h-row"><div class="lbl">Login screen</div><div class="val">Sends Salesforce credentials to /api/login</div></div>
+      <div class="h-row"><div class="lbl">Chat panel</div><div class="val">POST /api/chat → displays reply + product cards</div></div>
+    </div>
+    <div class="h-arrow">→</div>
+
+    <!-- Railway -->
+    <div class="h-box">
+      <div class="h-header purple">🚂 Railway (single container)</div>
+      <div class="h-row"><div class="lbl">FastAPI + Uvicorn</div><div class="val">Port $PORT · serves static dist/ AND /api/*</div></div>
+      <div class="h-row"><div class="lbl">TrackedAgent</div><div class="val">Persistent in-memory cart, quotes, chat history</div></div>
+      <div class="h-row"><div class="lbl">UCP router</div><div class="val">/.well-known/ucp · /ucp/products · checkout sessions</div></div>
+      <div class="h-row"><div class="lbl">Salesforce auth</div><div class="val">SOAP login + OAuth token exchange per session</div></div>
+    </div>
+    <div class="h-arrow">→</div>
+
+    <!-- Gemini API -->
+    <div class="h-box">
+      <div class="h-header green">🧠 Google Gemini API</div>
+      <div class="h-row"><div class="lbl">gemini-3.6-flash</div><div class="val">Railway calls outbound HTTPS on each chat turn</div></div>
+      <div class="h-row"><div class="lbl">Function calling</div><div class="val">Returns tool calls → Railway executes as HTTP</div></div>
+      <div class="h-row"><div class="lbl">Stateful history</div><div class="val">Full conversation contents[] sent each request</div></div>
+    </div>
+    <div class="h-arrow">→</div>
+
+    <!-- Salesforce -->
+    <div class="h-box">
+      <div class="h-header orange">☁️ Salesforce B2B</div>
+      <div class="h-row"><div class="lbl">Experience Cloud OAuth</div><div class="val">Connected App token exchange</div></div>
+      <div class="h-row"><div class="lbl">B2B Commerce REST v62</div><div class="val">WebCart · CartItems · Checkout</div></div>
+      <div class="h-row"><div class="lbl">SObject API</div><div class="val">Order + OrderItem creation, activation</div></div>
+      <div class="h-row"><div class="lbl">Product catalog</div><div class="val">Via UCP service (separate Railway instance)</div></div>
+    </div>
+  </div>
+
+  <div class="info blue">
+    <div class="ico">💡</div>
+    <p><strong>Why one container?</strong> FastAPI mounts <code>examples/gemini-storefront/dist/</code> as a static route. The React app and all <code>/api/*</code> endpoints share port 8090, so no CORS or reverse proxy is needed. This is intentional for simplicity — Railway is billed per service, not per container.</p>
+  </div>
+
+
+  <!-- ═══════════════════════════════════════════════
+       SECTION 2 — CLIENT VS. REPO RESPONSIBILITY
+  ═══════════════════════════════════════════════ -->
+  <div class="sec"><div class="sec-dot" style="background:#34d399"></div><h2>Who Is Responsible for What (on Railway today)</h2></div>
+
+  <table class="resp-table">
+    <thead>
+      <tr><th>Area</th><th>Owner</th><th>What it means</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Application code</strong><br><small>FastAPI server, React app, agent logic, UCP router</small></td>
+        <td><span class="who repo">✓ Repo</span></td>
+        <td>100 % in the codebase — <code>scripts/gemini_web_server.py</code>, <code>examples/gemini-storefront/</code>, <code>examples/demo_common/</code></td>
+      </tr>
+      <tr>
+        <td><strong>Docker image</strong><br><small>2-stage build: Vite → Python runtime</small></td>
+        <td><span class="who repo">✓ Repo</span></td>
+        <td><code>Dockerfile.gemini</code> — builds correctly on any platform. No changes needed.</td>
+      </tr>
+      <tr>
+        <td><strong>Gemini API key</strong></td>
+        <td><span class="who client">⚑ Client</span></td>
+        <td>Google AI Studio key injected as <code>GEMINI_API_KEY</code> env var. Not in the repo.</td>
+      </tr>
+      <tr>
+        <td><strong>Salesforce credentials</strong><br><small>SF_INSTANCE_URL, SF_CLIENT_ID, SF_CLIENT_SECRET, SF_COMMUNITY_URL</small></td>
+        <td><span class="who client">⚑ Client</span></td>
+        <td>Connected App credentials from your Salesforce org. Set as Railway env vars.</td>
+      </tr>
+      <tr>
+        <td><strong>Salesforce org itself</strong><br><small>Products, accounts, buyer users, pricebooks</small></td>
+        <td><span class="who client">⚑ Client</span></td>
+        <td>The data store and B2B Commerce configuration live in your Salesforce sandbox/production.</td>
+      </tr>
+      <tr>
+        <td><strong>Salesforce Trusted IP Range</strong></td>
+        <td><span class="who client">⚑ Client</span></td>
+        <td>Railway's egress IPs must be allowlisted in Salesforce → Connected App settings, or OAuth is blocked.</td>
+      </tr>
+      <tr>
+        <td><strong>Runtime infrastructure</strong><br><small>Container hosting, TLS, domain, scaling</small></td>
+        <td><span class="who client">⚑ Client</span></td>
+        <td>Currently Railway. Client pays for the Railway service and configures the domain if custom one is needed.</td>
+      </tr>
+      <tr>
+        <td><strong>CI/CD pipeline</strong></td>
+        <td><span class="who shared">⚡ Both</span></td>
+        <td>GitHub Actions workflows are in the repo. Client must connect the GitHub repo to Railway (or add AWS credentials for the AWS path).</td>
+      </tr>
+      <tr>
+        <td><strong>UCP backend service</strong><br><small>Product catalog source</small></td>
+        <td><span class="who client">⚑ Client</span></td>
+        <td>Currently pointing at <code>diligent-flow-*.railway.app</code>. Client owns this Railway service or replaces it with their own UCP endpoint.</td>
+      </tr>
+    </tbody>
+  </table>
+
+
+  <!-- ═══════════════════════════════════════════════
+       SECTION 3 — RAILWAY → AWS COMPARISON
+  ═══════════════════════════════════════════════ -->
+  <div class="sec"><div class="sec-dot" style="background:#fb923c"></div><h2>Railway → AWS: What Changes</h2></div>
+
+  <div class="compare">
+    <div class="compare-col">
+      <div class="compare-header railway">🚂 Railway (today)</div>
+      <div class="compare-item"><div class="ico">📦</div><div class="txt"><div class="lbl">One container, one service</div><div class="sub">React static + FastAPI API on same port</div></div></div>
+      <div class="compare-item"><div class="ico">🔑</div><div class="txt"><div class="lbl">Env vars in Railway dashboard</div><div class="sub">GEMINI_API_KEY, SF_* set manually in UI</div></div></div>
+      <div class="compare-item"><div class="ico">🚀</div><div class="txt"><div class="lbl">Deploy on git push</div><div class="sub">Railway detects Dockerfile.gemini automatically</div></div></div>
+      <div class="compare-item"><div class="ico">🌐</div><div class="txt"><div class="lbl">Auto-provisioned HTTPS domain</div><div class="sub">*.up.railway.app — no config needed</div></div></div>
+      <div class="compare-item"><div class="ico">💾</div><div class="txt"><div class="lbl">State: in-memory only</div><div class="sub">Cart/session lost on redeploy</div></div></div>
+      <div class="compare-item"><div class="ico">📈</div><div class="txt"><div class="lbl">No autoscale</div><div class="sub">Fixed single instance</div></div></div>
+    </div>
+    <div class="compare-arrow">→</div>
+    <div class="compare-col">
+      <div class="compare-header aws">🟠 AWS (target)</div>
+      <div class="compare-item"><div class="ico">📦</div><div class="txt"><div class="lbl">ECS Fargate task (same Docker image)</div><div class="sub">Same Dockerfile.gemini — zero code changes</div></div></div>
+      <div class="compare-item"><div class="ico">🔑</div><div class="txt"><div class="lbl">Secrets Manager → task env vars</div><div class="sub">ECS task definition pulls from Secrets Manager</div></div></div>
+      <div class="compare-item"><div class="ico">🚀</div><div class="txt"><div class="lbl">GitHub Actions → ECR → ECS deploy</div><div class="sub">_deploy-backend-aws.yml workflow (in repo)</div></div></div>
+      <div class="compare-item"><div class="ico">🌐</div><div class="txt"><div class="lbl">ALB (HTTPS) + optional CloudFront</div><div class="sub">Client sets up ALB; update SF_CALLBACK_URL</div></div></div>
+      <div class="compare-item"><div class="ico">💾</div><div class="txt"><div class="lbl">State: still in-memory</div><div class="sub">Same limitation unless ElastiCache/RDS added</div></div></div>
+      <div class="compare-item"><div class="ico">📈</div><div class="txt"><div class="lbl">ECS service autoscaling</div><div class="sub">Client configures desired count + scaling policies</div></div></div>
+    </div>
+  </div>
+
+  <div class="info green">
+    <div class="ico">✅</div>
+    <p><strong>Zero code changes for the Gemini assistant on AWS.</strong> <code>Dockerfile.gemini</code> builds the same image. The FastAPI server reads <code>PORT</code>, <code>GEMINI_API_KEY</code>, and <code>SF_*</code> from env vars — ECS injects those from Secrets Manager using the task definition template already in the repo.</p>
+  </div>
+
+
+  <!-- ═══════════════════════════════════════════════
+       SECTION 4 — WHAT IS ALREADY IN THE REPO
+  ═══════════════════════════════════════════════ -->
+  <div class="sec"><div class="sec-dot" style="background:#34d399"></div><h2>Is the Repo 100% Ready for AWS?</h2><span class="sec sub">— honest gap analysis</span></div>
+
+  <div class="ready-grid">
+    <div>
+      <div class="ready-col-head yes">✅ Already in repo</div>
+      <div class="ready-item left"><div class="icon">🐳</div><div class="body"><div class="lbl">Dockerfile.gemini</div><div class="note">Builds the exact image ECS Fargate will run. No changes needed.</div></div></div>
+      <div class="ready-item left"><div class="icon">⚙️</div><div class="body"><div class="lbl">_deploy-backend-aws.yml</div><div class="note">Full GitHub Actions workflow: ECR push → ECS task update → health check → rollback on failure.</div></div></div>
+      <div class="ready-item left"><div class="icon">📄</div><div class="body"><div class="lbl">ecs-task-definition.json template</div><div class="note">Fargate task: container port, Secrets Manager references, CloudWatch logs, health check. Fill in <code>&lt;ACCOUNT_ID&gt;</code> and <code>&lt;REGION&gt;</code>.</div></div></div>
+      <div class="ready-item left"><div class="icon">🔐</div><div class="body"><div class="lbl">iam-oidc-policy.json</div><div class="note">GitHub Actions OIDC trust policy — no long-lived AWS access keys needed.</div></div></div>
+      <div class="ready-item left"><div class="icon">📦</div><div class="body"><div class="lbl">S3 + CloudFront deploy in same workflow</div><div class="note">Uploads static exports to S3, invalidates CloudFront — wired for Claude apps, same pattern for Gemini React build.</div></div></div>
+      <div class="ready-item left"><div class="icon">🌐</div><div class="body"><div class="lbl">UCP router + Gemini agent code</div><div class="note">All application code — no AWS-specific changes required.</div></div></div>
+    </div>
+    <div>
+      <div class="ready-col-head no">⚑ Not in repo — client must supply</div>
+      <div class="ready-item"><div class="icon">🆔</div><div class="body"><div class="lbl">GEMINI_API_KEY in Secrets Manager</div><div class="note">The existing ECS task definition uses <code>ANTHROPIC_API_KEY</code>. Add <code>GEMINI_API_KEY</code> secret and update the task definition reference.</div></div></div>
+      <div class="ready-item"><div class="icon">🏗</div><div class="body"><div class="lbl">ECS cluster + service creation</div><div class="note">One-time AWS setup: <code>aws ecs create-cluster</code>, <code>create-service</code>. Documented in the workflow file's comment block.</div></div></div>
+      <div class="ready-item"><div class="icon">📦</div><div class="body"><div class="lbl">ECR repository</div><div class="note"><code>aws ecr create-repository --repository-name commerce-agent-api</code> (or a Gemini-specific name).</div></div></div>
+      <div class="ready-item"><div class="icon">🔒</div><div class="body"><div class="lbl">Salesforce secrets in Secrets Manager</div><div class="note"><code>SF_CLIENT_ID</code>, <code>SF_CLIENT_SECRET</code>, <code>SF_INSTANCE_URL</code>, <code>SF_COMMUNITY_URL</code> — your org's values.</div></div></div>
+      <div class="ready-item"><div class="icon">🌐</div><div class="body"><div class="lbl">ALB + target group + listener</div><div class="note">Routes HTTPS traffic to ECS tasks. Update <code>SF_CALLBACK_URL</code> to the ALB domain in Salesforce Connected App settings.</div></div></div>
+      <div class="ready-item"><div class="icon">📋</div><div class="body"><div class="lbl">GitHub repo variables</div><div class="note"><code>ECR_REGISTRY</code>, <code>AWS_REGION</code>, <code>ECS_CLUSTER</code>, <code>SANDBOX_ECS_SERVICE</code>, <code>AWS_ROLE_ARN</code> — set in GitHub → Settings → Variables.</div></div></div>
+      <div class="ready-item"><div class="icon">🌍</div><div class="body"><div class="lbl">Salesforce Trusted IP Ranges update</div><div class="note">Replace Railway egress IPs with ECS Fargate NAT Gateway IP in Salesforce → Setup → Trusted IP Ranges.</div></div></div>
+    </div>
+  </div>
+
+
+  <!-- ═══════════════════════════════════════════════
+       SECTION 5 — WHAT CLIENT MUST SUPPLY
+  ═══════════════════════════════════════════════ -->
+  <div class="sec"><div class="sec-dot" style="background:#fb923c"></div><h2>Everything the Client Must Provide</h2></div>
+
+  <div class="supply-grid">
+    <div class="supply-card">
+      <div class="supply-card-head aws">🟠 AWS Infrastructure</div>
+      <div class="supply-item"><div class="lbl">AWS Account ID</div><div class="note">Needed in task definition ARNs and ECR registry URL</div></div>
+      <div class="supply-item"><div class="lbl">ECR Registry URL</div><div class="note"><code>&lt;account&gt;.dkr.ecr.&lt;region&gt;.amazonaws.com</code></div></div>
+      <div class="supply-item"><div class="lbl">ECS Cluster name</div><div class="note">Default: <code>commerce-agents</code></div></div>
+      <div class="supply-item"><div class="lbl">ECS Service name</div><div class="note">One per environment (sandbox / prod)</div></div>
+      <div class="supply-item"><div class="lbl">IAM Role ARN</div><div class="note">GitHub Actions OIDC role — created from <code>iam-oidc-policy.json</code></div></div>
+      <div class="supply-item"><div class="lbl">ALB DNS name</div><div class="note">Becomes the public URL; also used in SF_CALLBACK_URL</div></div>
+      <div class="supply-item"><div class="lbl">VPC + subnets + SG</div><div class="note">ECS tasks run inside a VPC; must allow outbound 443</div></div>
+    </div>
+    <div class="supply-card">
+      <div class="supply-card-head sf">🔵 Salesforce Configuration</div>
+      <div class="supply-item"><div class="lbl">SF_INSTANCE_URL</div><div class="note">Your org's base URL, e.g. <code>https://atci-b2b-lex--b2bpoc.sandbox.my.salesforce.com</code></div></div>
+      <div class="supply-item"><div class="lbl">SF_COMMUNITY_URL</div><div class="note">Experience Cloud site URL for OAuth token endpoint</div></div>
+      <div class="supply-item"><div class="lbl">SF_CLIENT_ID</div><div class="note">Connected App consumer key</div></div>
+      <div class="supply-item"><div class="lbl">SF_CLIENT_SECRET</div><div class="note">Connected App consumer secret</div></div>
+      <div class="supply-item"><div class="lbl">Connected App callback URL update</div><div class="note">Change from Railway URL → new ALB/CloudFront URL</div></div>
+      <div class="supply-item"><div class="lbl">Trusted IP Ranges update</div><div class="note">Add ECS Fargate NAT Gateway static IP</div></div>
+      <div class="supply-item"><div class="lbl">SF_BUYER_USER_ID (optional)</div><div class="note">Pre-configured buyer for B2B WebCart lookup</div></div>
+    </div>
+    <div class="supply-card">
+      <div class="supply-card-head secret">🔑 API Keys &amp; GitHub Settings</div>
+      <div class="supply-item"><div class="lbl">GEMINI_API_KEY</div><div class="note">Google AI Studio key — stored in AWS Secrets Manager</div></div>
+      <div class="supply-item"><div class="lbl">GitHub repo variable: ECR_REGISTRY</div><div class="note">Set in GitHub → Settings → Variables → Actions</div></div>
+      <div class="supply-item"><div class="lbl">GitHub repo variable: AWS_REGION</div><div class="note">e.g. <code>us-east-1</code></div></div>
+      <div class="supply-item"><div class="lbl">GitHub secret: AWS_ROLE_ARN</div><div class="note">The IAM role ARN for GitHub Actions OIDC auth</div></div>
+      <div class="supply-item"><div class="lbl">GitHub variable: ECS_CLUSTER</div><div class="note">ECS cluster name</div></div>
+      <div class="supply-item"><div class="lbl">GitHub variable: SANDBOX_ECS_SERVICE</div><div class="note">ECS service name for sandbox environment</div></div>
+      <div class="supply-item"><div class="lbl">UCP_BASE (env var)</div><div class="note">URL of the UCP product catalog backend — your instance</div></div>
+    </div>
+  </div>
+
+
+  <!-- ═══════════════════════════════════════════════
+       SECTION 6 — MIGRATION STEPS
+  ═══════════════════════════════════════════════ -->
+  <div class="sec"><div class="sec-dot" style="background:#a78bfa"></div><h2>Migration Steps — Railway → AWS</h2></div>
+
+  <ul class="steps">
+    <li class="step">
+      <div class="step-n done">1</div>
+      <div class="step-body">
+        <div class="lbl">Create ECR repository <span class="tag tag-done">Repo has CI</span></div>
+        <div class="detail"><code>aws ecr create-repository --repository-name commerce-agent-gemini --region us-east-1</code> — one-time setup. The GitHub Actions workflow handles all future pushes.</div>
+      </div>
+    </li>
+    <li class="step">
+      <div class="step-n done">2</div>
+      <div class="step-body">
+        <div class="lbl">Create ECS cluster + Fargate service <span class="tag tag-done">Template in repo</span></div>
+        <div class="detail">Use <code>salesforce/infrastructure/aws/ecs-task-definition.json</code> — fill in <code>&lt;ACCOUNT_ID&gt;</code>, <code>&lt;REGION&gt;</code>, add <code>GEMINI_API_KEY</code> to the secrets block. Register with <code>aws ecs register-task-definition</code>.</div>
+      </div>
+    </li>
+    <li class="step">
+      <div class="step-n client">3</div>
+      <div class="step-body">
+        <div class="lbl">Store secrets in AWS Secrets Manager <span class="tag tag-client">Client action</span></div>
+        <div class="detail">Create one secret: <code>commerce-agents/gemini</code> with keys <code>GEMINI_API_KEY</code>, <code>SF_CLIENT_ID</code>, <code>SF_CLIENT_SECRET</code>, <code>SF_INSTANCE_URL</code>, <code>SF_COMMUNITY_URL</code>. Update the task definition ARN references.</div>
+      </div>
+    </li>
+    <li class="step">
+      <div class="step-n done">4</div>
+      <div class="step-body">
+        <div class="lbl">Set GitHub Actions variables + secrets <span class="tag tag-done">Workflow in repo</span></div>
+        <div class="detail">GitHub → Settings → Variables: <code>ECR_REGISTRY</code>, <code>AWS_REGION</code>, <code>ECS_CLUSTER</code>, <code>SANDBOX_ECS_SERVICE</code>, <code>SANDBOX_TASK_DEF_FAMILY</code>. GitHub → Secrets: <code>AWS_ROLE_ARN</code>. The <code>_deploy-backend-aws.yml</code> workflow then runs on every push to main.</div>
+      </div>
+    </li>
+    <li class="step">
+      <div class="step-n client">5</div>
+      <div class="step-body">
+        <div class="lbl">Set up ALB + HTTPS listener <span class="tag tag-client">Client action</span></div>
+        <div class="detail">Create an Application Load Balancer, target group pointing at ECS service (port 8090), and HTTPS listener (ACM certificate). Note the ALB DNS name — this becomes your new app URL.</div>
+      </div>
+    </li>
+    <li class="step">
+      <div class="step-n client">6</div>
+      <div class="step-body">
+        <div class="lbl">Update Salesforce Connected App callback URL <span class="tag tag-client">Client action</span></div>
+        <div class="detail">In Salesforce Setup → Connected Apps, change the OAuth Callback URL from <code>https://perfect-achievement-production-83ee.up.railway.app/api/oauth/callback</code> to <code>https://your-alb-domain.example.com/api/oauth/callback</code>. Also update <code>SF_CALLBACK_URL</code> env var in Secrets Manager.</div>
+      </div>
+    </li>
+    <li class="step">
+      <div class="step-n client">7</div>
+      <div class="step-body">
+        <div class="lbl">Update Salesforce Trusted IP Ranges <span class="tag tag-client">Client action</span></div>
+        <div class="detail">ECS Fargate tasks egress through a NAT Gateway — add its static Elastic IP to Salesforce → Setup → Trusted IP Ranges for the Connected App. Without this, OAuth token exchange is blocked.</div>
+      </div>
+    </li>
+    <li class="step">
+      <div class="step-n done">8</div>
+      <div class="step-body">
+        <div class="lbl">Push to main — CI deploys automatically <span class="tag tag-done">Fully automated</span></div>
+        <div class="detail">GitHub Actions builds the Docker image from <code>Dockerfile.gemini</code>, pushes to ECR, updates the ECS task definition, deploys to Fargate, runs the health check (<code>GET /api/health</code>), and auto-rolls back on failure. Zero manual steps after setup.</div>
+      </div>
+    </li>
+  </ul>
+
+  <div class="info orange">
+    <div class="ico">⚠️</div>
+    <p><strong>Gemini-specific gap:</strong> The existing AWS workflow and ECS task definition were written for the Claude/Salesforce backend (port 8000, <code>ANTHROPIC_API_KEY</code>). To use them for the Gemini assistant you need to (a) add <code>GEMINI_API_KEY</code> to the task definition secrets block, (b) change the container port from 8000 → 8090 (or override with PORT env var), and (c) update the GitHub repo variables to point at a Gemini-specific ECS service. These are configuration changes — no code changes to the Python or React app.</p>
+  </div>
+
+  <div class="info green">
+    <div class="ico">✅</div>
+    <p><strong>Bottom line:</strong> The repo gives you the Dockerfile, the CI/CD GitHub Actions workflow, the ECS task definition template, and the IAM policy. What you must supply: an AWS account with ECR + ECS + ALB created, your Salesforce org credentials in Secrets Manager, your Gemini API key in Secrets Manager, and five GitHub repo variables. Estimated one-time setup time: 2–3 hours.</p>
+  </div>
+
+</div>
+
+<footer>
+  Source: <code>Dockerfile.gemini</code> · <code>.github/workflows/_deploy-backend-aws.yml</code> · <code>salesforce/infrastructure/aws/ecs-task-definition.json</code> · <code>salesforce/infrastructure/aws/iam-oidc-policy.json</code>
+</footer>
+
+</body>
+</html>

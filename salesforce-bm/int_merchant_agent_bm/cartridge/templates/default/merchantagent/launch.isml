@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>Merchant AI Agent — ${pdict.siteName}</title>
+    <style>
+        *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+        html,body{height:100%;overflow:hidden;font-family:Arial,Helvetica,sans-serif}
+        .bm-bar{
+            height:42px;
+            background:#003466;
+            display:flex;
+            align-items:center;
+            padding:0 16px;
+            gap:10px;
+            flex-shrink:0;
+        }
+        .bm-bar-title{color:#fff;font-size:14px;font-weight:bold}
+        .bm-bar-site{color:#a8c8f0;font-size:11px}
+        .bm-bar-spacer{flex:1}
+        .bm-bar-link{
+            color:#a8c8f0;
+            font-size:11px;
+            text-decoration:none;
+            border:1px solid #335577;
+            padding:3px 8px;
+            border-radius:3px;
+        }
+        .bm-bar-link:hover{color:#fff;border-color:#6699bb}
+        .agent-frame{
+            display:block;
+            width:100%;
+            height:calc(100vh - 42px);
+            border:none;
+        }
+        .error-state{
+            display:flex;
+            flex-direction:column;
+            align-items:center;
+            justify-content:center;
+            height:calc(100vh - 42px);
+            color:#555;
+            font-size:13px;
+            gap:10px;
+        }
+        .error-state a{color:#0057a8}
+    </style>
+</head>
+<body>
+
+<div class="bm-bar">
+    <span style="font-size:18px" aria-hidden="true">🤖</span>
+    <span class="bm-bar-title">Merchant AI Agent</span>
+    <span class="bm-bar-site">${pdict.siteName}</span>
+    <div class="bm-bar-spacer"></div>
+    <a class="bm-bar-link" href="${pdict.merchantWebUrl}" target="_blank" rel="noopener">
+        Open in new tab ↗
+    </a>
+</div>
+
+<isif condition="${pdict.merchantWebUrl != null && pdict.merchantWebUrl.length() > 0}">
+    <iframe
+        src="${pdict.merchantWebUrl}"
+        class="agent-frame"
+        title="Merchant AI Agent"
+        allow="clipboard-write; clipboard-read"
+        loading="eager">
+    </iframe>
+<iselse/>
+    <div class="error-state">
+        <strong>Merchant portal URL not configured.</strong>
+        <p>
+            Set the <code>merchantAgentWebUrl</code> Custom Preference in<br/>
+            <em>Administration &gt; Global Preferences &gt; Custom Preferences</em><br/>
+            to the deployed merchant-web Railway URL, then reload this page.
+        </p>
+    </div>
+</isif>
+
+</body>
+</html>

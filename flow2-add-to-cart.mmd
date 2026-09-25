@@ -1,0 +1,59 @@
+sequenceDiagram
+    autonumber
+    actor User
+    participant React as React Frontend<br/>(Railway)
+    participant FastAPI as FastAPI Server<br/>(Railway)
+    participant Agent as TrackedAgent<br/>(Railway)
+    participant Gemini as Gemini API<br/>(Google Cloud)
+    participant UCP as UCP Endpoints<br/>(Railway)
+    participant SF as Salesforce B2B<br/>(External)
+
+    Note over React,SF: Flow 2 — Add to Cart: "Add 2 ProBook to my cart"
+
+    alt User types message
+        User->>React: Types "Add 2 ProBook to my cart"
+        React->>FastAPI: POST /api/chat<br/>{ "message": "Add 2 ProBook to my cart" }
+    else User clicks Add to Cart button
+        User->>React: Clicks Add to Cart on ProBook card
+        React->>FastAPI: POST /api/cart<br/>{ product_id: "P-001", quantity: 1,<br/>  product_name: "HP ProBook 440 G11" }
+    end
+
+    FastAPI->>Agent: Reset per-turn state<br/>cart_additions=[], last_tool_calls=[]
+
+    FastAPI->>Gemini: generate_content(<br/>  tools=[search_products, add_to_cart, …],<br/>  history (includes prior search context),<br/>  user message<br/>)
+
+    Note over Gemini: Model resolves "ProBook" from conversation<br/>history — no re-search needed.<br/>Decides to call add_to_cart.
+
+    Gemini-->>FastAPI: FunctionCall<br/>{ name: "add_to_cart",<br/>  args: { product_id: "P-001", quantity: 2 } }
+
+    FastAPI->>Agent: _call_ucp("add_to_cart", args)<br/>Records in last_tool_calls[]
+
+    Agent->>Agent: Optimistic update:<br/>self.cart.append({ product, quantity: 2 })<br/>self.cart_additions.append({ product, quantity: 2 })
+
+    Agent->>UCP: POST /ucp/checkout-sessions<br/>{ items: [{ product_id:"P-001", quantity:2 }] }
+
+    UCP->>SF: POST /services/data/vXX/sobjects/WebCart<br/>{ AccountId, EffectiveAccountId }
+
+    SF-->>UCP: { id: "0a8xx…", status: "Active" }
+
+    UCP->>SF: POST /services/data/vXX/sobjects/CartItem<br/>{ CartId:"0a8xx…", Product2Id:"P-001",<br/>  Quantity:2, Type:"Product" }
+
+    SF-->>UCP: { id: "0a9xx…", CartId, Quantity: 2,<br/>  TotalPrice: 2198.00 }
+
+    UCP-->>Agent: { session_id: "0a8xx…",<br/>  status: "active",<br/>  items: [{ product_id, qty:2, total:2198 }] }
+
+    Agent-->>FastAPI: { session_id, status, items }
+
+    FastAPI->>Gemini: FunctionResponse<br/>{ role: "user",<br/>  parts: [{ function_response:<br/>    { name: "add_to_cart",<br/>      response: { session_id, status:"active" } } }] }
+
+    Note over Gemini: Agentic loop ends — generates confirmation
+
+    Gemini-->>FastAPI: "I've added 2 HP ProBook 440 G11 laptops<br/>to your cart. Total: $2,198.00."
+
+    FastAPI-->>React: HTTP 200<br/>{ reply: "I've added 2 HP ProBook…",<br/>  tool_calls: [{ tool:"add_to_cart", args:{…} }],<br/>  cart_additions: [{ product:{…}, quantity:2 }],<br/>  checkout_session: { status:"active", session_id } }
+
+    React->>React: Detects cart_additions in response<br/>Updates cartItems state<br/>Adds product_id to addedIds set
+
+    React-->>User: Cart sidebar updates — ProBook × 2 visible<br/>Assistant reply shown in chat
+
+    Note over React: useEffect watchdog also monitors<br/>checkout_session.status — clears cart<br/>if status becomes "placed" (order confirmed)

@@ -1,0 +1,980 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Claude MCP vs Gemini UCP — Agentic Commerce</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:        #07090f;
+    --bg2:       #0d1117;
+    --bg3:       #111827;
+    --border:    #1f2937;
+    --claude:    #7c3aed;
+    --claude-lt: #a78bfa;
+    --claude-bg: rgba(124,58,237,.08);
+    --gemini:    #059669;
+    --gemini-lt: #34d399;
+    --gemini-bg: rgba(5,150,105,.08);
+    --shared:    #d97706;
+    --shared-lt: #fbbf24;
+    --shared-bg: rgba(217,119,6,.08);
+    --ink:       #f1f5f9;
+    --ink-2:     #94a3b8;
+    --ink-3:     #475569;
+    --radius:    12px;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    font-size: 14px;
+    line-height: 1.6;
+  }
+
+  /* ── Utility ── */
+  .tag {
+    display: inline-block;
+    padding: 2px 9px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+  }
+  .tag-claude  { background: var(--claude-bg); color: var(--claude-lt); border: 1px solid var(--claude); }
+  .tag-gemini  { background: var(--gemini-bg); color: var(--gemini-lt); border: 1px solid var(--gemini); }
+  .tag-shared  { background: var(--shared-bg); color: var(--shared-lt); border: 1px solid var(--shared); }
+
+  /* ── Header ── */
+  header {
+    background: linear-gradient(135deg, #0a0f1e 0%, #111827 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 48px 40px 40px;
+    text-align: center;
+  }
+  header .eyebrow {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    margin-bottom: 14px;
+  }
+  header h1 {
+    font-size: clamp(24px, 4vw, 42px);
+    font-weight: 800;
+    letter-spacing: -.02em;
+    line-height: 1.15;
+    margin-bottom: 16px;
+  }
+  header h1 .hl-claude { color: var(--claude-lt); }
+  header h1 .hl-gemini { color: var(--gemini-lt); }
+  header p {
+    color: var(--ink-2);
+    font-size: 16px;
+    max-width: 560px;
+    margin: 0 auto 24px;
+  }
+  .header-badges { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+
+  /* ── Main grid ── */
+  .page { max-width: 1300px; margin: 0 auto; padding: 40px 24px 80px; }
+
+  /* ── Protocol overview cards ── */
+  .proto-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    margin-bottom: 48px;
+  }
+  @media (max-width: 860px) { .proto-grid { grid-template-columns: 1fr; } }
+
+  .proto-card {
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    padding: 28px;
+    background: var(--bg2);
+    position: relative;
+    overflow: hidden;
+  }
+  .proto-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+  }
+  .proto-card.claude::before { background: linear-gradient(90deg, var(--claude), var(--claude-lt)); }
+  .proto-card.gemini::before { background: linear-gradient(90deg, var(--gemini), var(--gemini-lt)); }
+
+  .proto-card-header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+  .proto-icon {
+    width: 44px; height: 44px; border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px;
+  }
+  .proto-icon.claude { background: var(--claude-bg); border: 1px solid var(--claude); }
+  .proto-icon.gemini { background: var(--gemini-bg); border: 1px solid var(--gemini); }
+
+  .proto-card h2 { font-size: 18px; font-weight: 700; }
+  .proto-card .proto-subtitle { color: var(--ink-2); font-size: 12px; }
+
+  .proto-attrs { display: flex; flex-direction: column; gap: 10px; }
+  .proto-attr { display: flex; align-items: flex-start; gap: 10px; }
+  .proto-attr-key {
+    min-width: 110px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color: var(--ink-3);
+    padding-top: 1px;
+  }
+  .proto-attr-val { color: var(--ink-2); font-size: 13px; }
+  .proto-attr-val strong { color: var(--ink); }
+
+  /* ── Section title ── */
+  .section-title {
+    font-size: 20px;
+    font-weight: 700;
+    margin-bottom: 6px;
+  }
+  .section-sub {
+    color: var(--ink-2);
+    font-size: 13px;
+    margin-bottom: 28px;
+  }
+
+  /* ── Flow diagram ── */
+  .flow-wrap {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    margin-bottom: 48px;
+    overflow: hidden;
+  }
+  .flow-tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+  }
+  .flow-tab {
+    flex: 1;
+    padding: 14px 20px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ink-3);
+    cursor: pointer;
+    text-align: center;
+    border: none;
+    background: none;
+    transition: color .15s, background .15s;
+  }
+  .flow-tab.active-claude { color: var(--claude-lt); border-bottom: 2px solid var(--claude); background: var(--claude-bg); }
+  .flow-tab.active-gemini { color: var(--gemini-lt); border-bottom: 2px solid var(--gemini); background: var(--gemini-bg); }
+  .flow-tab:hover:not(.active-claude):not(.active-gemini) { background: var(--bg3); color: var(--ink-2); }
+
+  .flow-panel { display: none; padding: 32px; }
+  .flow-panel.active { display: block; }
+
+  .flow-lane-header {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 20px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .flow-layer-label {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: var(--ink-3);
+    text-align: center;
+  }
+
+  /* Steps */
+  .flow-steps { display: flex; flex-direction: column; gap: 0; }
+
+  .flow-step {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0;
+    position: relative;
+  }
+  .flow-step + .flow-step .flow-cell { border-top: 1px solid var(--border); }
+
+  .flow-cell {
+    padding: 16px 14px;
+    border-right: 1px solid var(--border);
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .flow-cell:last-child { border-right: none; }
+
+  .flow-cell.active-cell-claude { background: rgba(124,58,237,.05); }
+  .flow-cell.active-cell-gemini { background: rgba(5,150,105,.05); }
+  .flow-cell.dim { opacity: .4; }
+
+  .flow-cell-label {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color: var(--ink-3);
+  }
+  .flow-cell-main {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ink);
+    line-height: 1.35;
+  }
+  .flow-cell-detail {
+    font-size: 11.5px;
+    color: var(--ink-2);
+    line-height: 1.4;
+  }
+  .flow-cell-code {
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 11px;
+    color: var(--ink-3);
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 3px 7px;
+    margin-top: 4px;
+    word-break: break-all;
+  }
+  .flow-cell-code.hl-claude { color: var(--claude-lt); border-color: var(--claude); background: var(--claude-bg); }
+  .flow-cell-code.hl-gemini { color: var(--gemini-lt); border-color: var(--gemini); background: var(--gemini-bg); }
+  .flow-cell-code.hl-shared { color: var(--shared-lt); border-color: var(--shared); background: var(--shared-bg); }
+
+  .step-num {
+    position: absolute;
+    left: -36px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 24px; height: 24px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700;
+  }
+  .step-num.claude { background: var(--claude); color: #fff; }
+  .step-num.gemini { background: var(--gemini); color: #fff; }
+
+  .flow-steps-outer { padding-left: 48px; position: relative; }
+
+  /* ── Side-by-side comparison flow ── */
+  .compare-flow {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    margin-bottom: 48px;
+  }
+  @media (max-width: 860px) { .compare-flow { grid-template-columns: 1fr; } }
+
+  .compare-col {
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    background: var(--bg2);
+    overflow: hidden;
+  }
+  .compare-col-head {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .compare-col-head.claude { background: var(--claude-bg); border-bottom-color: var(--claude); }
+  .compare-col-head.gemini { background: var(--gemini-bg); border-bottom-color: var(--gemini); }
+  .compare-col-head h3 { font-size: 15px; font-weight: 700; }
+
+  .compare-steps { padding: 4px 0; }
+  .compare-step {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+    transition: background .15s;
+  }
+  .compare-step:last-child { border-bottom: none; }
+  .compare-step:hover { background: var(--bg3); }
+
+  .cs-num {
+    min-width: 22px; height: 22px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700;
+    margin-top: 1px;
+    flex-shrink: 0;
+  }
+  .cs-num.claude { background: var(--claude); color: #fff; }
+  .cs-num.gemini { background: var(--gemini); color: #fff; }
+
+  .cs-body { flex: 1; }
+  .cs-action { font-size: 13px; font-weight: 600; color: var(--ink); margin-bottom: 3px; }
+  .cs-detail { font-size: 12px; color: var(--ink-2); line-height: 1.45; }
+  .cs-code {
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 11px;
+    border-radius: 4px;
+    padding: 2px 6px;
+    display: inline-block;
+    margin-top: 4px;
+  }
+  .cs-code.claude { color: var(--claude-lt); background: var(--claude-bg); border: 1px solid var(--claude); }
+  .cs-code.gemini { color: var(--gemini-lt); background: var(--gemini-bg); border: 1px solid var(--gemini); }
+  .cs-code.shared { color: var(--shared-lt); background: var(--shared-bg); border: 1px solid var(--shared); }
+
+  /* ── Comparison table ── */
+  .cmp-table-wrap {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    margin-bottom: 48px;
+  }
+  .cmp-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .cmp-table thead th {
+    padding: 14px 20px;
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    text-align: left;
+    background: var(--bg3);
+    border-bottom: 1px solid var(--border);
+  }
+  .cmp-table thead th:nth-child(2) { color: var(--claude-lt); }
+  .cmp-table thead th:nth-child(3) { color: var(--gemini-lt); }
+
+  .cmp-table tbody tr { border-bottom: 1px solid var(--border); transition: background .12s; }
+  .cmp-table tbody tr:last-child { border-bottom: none; }
+  .cmp-table tbody tr:hover { background: var(--bg3); }
+  .cmp-table tbody td { padding: 14px 20px; vertical-align: top; font-size: 13px; }
+  .cmp-table tbody td:first-child {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color: var(--ink-3);
+    white-space: nowrap;
+    width: 160px;
+  }
+  .cmp-table tbody td:nth-child(2) { border-left: 1px solid var(--border); border-right: 1px solid var(--border); }
+  .cmp-winner { font-size: 10px; margin-left: 6px; vertical-align: middle; }
+
+  /* ── Convergence zone ── */
+  .convergence {
+    background: var(--shared-bg);
+    border: 1px solid var(--shared);
+    border-radius: var(--radius);
+    padding: 32px;
+    margin-bottom: 48px;
+    position: relative;
+    overflow: hidden;
+  }
+  .convergence::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--claude), var(--shared), var(--gemini));
+  }
+  .convergence h2 {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--shared-lt);
+    margin-bottom: 6px;
+  }
+  .convergence p { color: var(--ink-2); margin-bottom: 24px; font-size: 13px; }
+
+  .conv-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 14px;
+  }
+  .conv-item {
+    background: rgba(0,0,0,.3);
+    border: 1px solid rgba(217,119,6,.25);
+    border-radius: 8px;
+    padding: 14px 16px;
+  }
+  .conv-item-label {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: var(--shared-lt);
+    margin-bottom: 6px;
+  }
+  .conv-item-val { font-size: 13px; color: var(--ink-2); }
+
+  /* ── UCP manifest callout ── */
+  .manifest-callout {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 28px;
+    margin-bottom: 48px;
+  }
+  .manifest-callout h3 { font-size: 16px; font-weight: 700; margin-bottom: 6px; }
+  .manifest-callout p { color: var(--ink-2); font-size: 13px; margin-bottom: 20px; }
+  .manifest-body {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 18px 20px;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 12px;
+    line-height: 1.7;
+    overflow-x: auto;
+    white-space: pre;
+    color: var(--ink-2);
+  }
+  .mj-key { color: #7dd3fc; }
+  .mj-str { color: #86efac; }
+  .mj-claude { color: var(--claude-lt); }
+  .mj-gemini { color: var(--gemini-lt); }
+  .mj-comment { color: var(--ink-3); font-style: italic; }
+
+  /* ── Decision guide ── */
+  .decision {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    margin-bottom: 48px;
+  }
+  @media (max-width: 860px) { .decision { grid-template-columns: 1fr; } }
+
+  .decision-card {
+    border-radius: var(--radius);
+    padding: 24px;
+    border: 1px solid var(--border);
+  }
+  .decision-card.claude { background: var(--claude-bg); border-color: var(--claude); }
+  .decision-card.gemini { background: var(--gemini-bg); border-color: var(--gemini); }
+  .decision-card h3 { font-size: 15px; font-weight: 700; margin-bottom: 14px; }
+  .decision-card h3.claude { color: var(--claude-lt); }
+  .decision-card h3.gemini { color: var(--gemini-lt); }
+  .decision-list { list-style: none; display: flex; flex-direction: column; gap: 8px; }
+  .decision-list li {
+    display: flex; align-items: flex-start; gap: 8px;
+    font-size: 13px; color: var(--ink-2);
+  }
+  .decision-list li::before { content: '✓'; font-weight: 700; margin-top: 1px; flex-shrink: 0; }
+  .decision-list li::before.claude { color: var(--claude-lt); }
+  .decision-card.claude .decision-list li::before { color: var(--claude-lt); }
+  .decision-card.gemini .decision-list li::before { color: var(--gemini-lt); }
+
+  /* ── Footer ── */
+  footer {
+    text-align: center;
+    padding: 24px;
+    border-top: 1px solid var(--border);
+    color: var(--ink-3);
+    font-size: 12px;
+  }
+</style>
+</head>
+<body>
+
+<!-- ══ HEADER ══════════════════════════════════════════════════════════════ -->
+<header>
+  <div class="eyebrow">Agentic Commerce Architecture</div>
+  <h1>
+    <span class="hl-claude">Claude (MCP)</span> vs
+    <span class="hl-gemini">Gemini (UCP)</span>
+  </h1>
+  <p>Same Salesforce B2B backend. Two AI protocols. Different capabilities, trade-offs, and integration depths.</p>
+  <div class="header-badges">
+    <span class="tag tag-claude">Anthropic · MCP Streamable HTTP</span>
+    <span class="tag tag-gemini">Google · UCP REST RFC-8615</span>
+    <span class="tag tag-shared">Shared · StorefrontBackend · Salesforce B2B</span>
+  </div>
+</header>
+
+<div class="page">
+
+  <!-- ══ PROTOCOL OVERVIEW CARDS ═════════════════════════════════════════ -->
+  <div class="proto-grid">
+
+    <!-- Claude card -->
+    <div class="proto-card claude">
+      <div class="proto-card-header">
+        <div class="proto-icon claude">🤖</div>
+        <div>
+          <h2>Claude via MCP</h2>
+          <div class="proto-subtitle">Model Context Protocol · Streamable HTTP · Anthropic SDK</div>
+        </div>
+      </div>
+      <div class="proto-attrs">
+        <div class="proto-attr">
+          <div class="proto-attr-key">SDK</div>
+          <div class="proto-attr-val"><strong>AsyncAnthropic</strong> · messages.stream()</div>
+        </div>
+        <div class="proto-attr">
+          <div class="proto-attr-key">Protocol</div>
+          <div class="proto-attr-val"><strong>MCP Streamable HTTP</strong> — binary framing, SSE events, tool results in-band</div>
+        </div>
+        <div class="proto-attr">
+          <div class="proto-attr-key">Tool Definition</div>
+          <div class="proto-attr-val"><strong>@tool decorator</strong> on Python functions — static, registered at server start</div>
+        </div>
+        <div class="proto-attr">
+          <div class="proto-attr-key">Discovery</div>
+          <div class="proto-attr-val">Static config in <strong>ClaudeAgentOptions</strong> — tools known at deploy time</div>
+        </div>
+        <div class="proto-attr">
+          <div class="proto-attr-key">Tool count</div>
+          <div class="proto-attr-val"><strong>15 tools</strong> (10 read, 5 write with always_ask gate)</div>
+        </div>
+        <div class="proto-attr">
+          <div class="proto-attr-key">UI Updates</div>
+          <div class="proto-attr-val"><strong>SSE events</strong> streamed in real-time: product grid, checkout card, order confirmation</div>
+        </div>
+        <div class="proto-attr">
+          <div class="proto-attr-key">Safety</div>
+          <div class="proto-attr-val"><strong>always_ask permission gate</strong> — add_to_cart, place_order require explicit buyer confirm</div>
+        </div>
+        <div class="proto-attr">
+          <div class="proto-attr-key">Memory</div>
+          <div class="proto-attr-val"><strong>claude-haiku-4-5</strong> extracts preferences after each turn; persisted across sessions</div>
+        </div>
+        <div class="proto-attr">
+          <div class="proto-attr-key">Skill routing</div>
+          <div class="proto-attr-val"><strong>5 skills</strong>: Browse · Add to Cart · Checkout · Place Order · Order Status</div>
+        </div>
+        <div class="proto-attr">
+          <div class="proto-attr-key">Backend call</div>
+          <div class="proto-attr-val"><strong>Direct Python method</strong> — StorefrontBackend.add_to_cart() — no extra HTTP hop</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Gemini card -->
+    <div class="proto-card gemini">
+      <div class="proto-card-header">
+        <div class="proto-icon gemini">✨</div>
+        <div>
+          <h2>Gemini via UCP</h2>
+          <div class="proto-subtitle">Universal Commerce Protocol · REST RFC-8615 · google-genai SDK</div>
+        </div>
+      </div>
+      <div class="proto-attrs">
+        <div class="proto-attr">
+          <div class="proto-attr-key">SDK</div>
+          <div class="proto-attr-val"><strong>google-genai</strong> · client.models.generate_content()</div>
+        </div>
+        <div class="proto-attr">
+          <div class="proto-attr-key">Protocol</div>
+          <div class="proto-attr-val"><strong>UCP REST</strong> — standard JSON/HTTP, interoperable with any AI model</div>
+        </div>
+        <div class="proto-attr">
+          <div class="proto-attr-key">Tool Definition</div>
+          <div class="proto-attr-val"><strong>FunctionDeclaration</strong> objects built dynamically from the UCP manifest at startup</div>
+        </div>
+        <div class="proto-attr">
+          <div class="proto-attr-key">Discovery</div>
+          <div class="proto-attr-val"><strong>GET /.well-known/ucp</strong> — RFC-8615 manifest fetched at agent init; zero store-specific code</div>
+        </div>
+        <div class="proto-attr">
+          <div class="proto-attr-key">Tool count</div>
+          <div class="proto-attr-val"><strong>6 tools</strong> (search, get product, add to cart, save quote, place order, list quotes)</div>
+        </div>
+        <div class="proto-attr">
+          <div class="proto-attr-key">UI Updates</div>
+          <div class="proto-attr-val"><strong>JSON response fields</strong> — cart_additions + tool_calls returned per turn; no streaming</div>
+        </div>
+        <div class="proto-attr">
+          <div class="proto-attr-key">Safety</div>
+          <div class="proto-attr-val"><strong>System prompt instruction</strong> — "confirm items before calling place_b2b_order"</div>
+        </div>
+        <div class="proto-attr">
+          <div class="proto-attr-key">Memory</div>
+          <div class="proto-attr-val"><strong>In-process _contents list</strong> — conversation history within session only, not persisted</div>
+        </div>
+        <div class="proto-attr">
+          <div class="proto-attr-key">Skill routing</div>
+          <div class="proto-attr-val"><strong>Single agentic loop</strong> — no skill routing; Gemini decides tool order itself</div>
+        </div>
+        <div class="proto-attr">
+          <div class="proto-attr-key">Backend call</div>
+          <div class="proto-attr-val"><strong>HTTP to UCP endpoints</strong> — /ucp/products, /ucp/cart/items, /ucp/orders</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ SIDE-BY-SIDE FLOW: "PLACE AN ORDER" ════════════════════════════ -->
+  <div class="section-title">Request lifecycle: "Add a laptop and place a PO"</div>
+  <div class="section-sub">Trace the same buyer request through each integration path from first token to Salesforce order record.</div>
+
+  <div class="compare-flow">
+
+    <!-- Claude flow -->
+    <div class="compare-col">
+      <div class="compare-col-head claude">
+        <span style="font-size:18px">🤖</span>
+        <h3 style="color:var(--claude-lt)">Claude · MCP path</h3>
+      </div>
+      <div class="compare-steps">
+
+        <div class="compare-step">
+          <div class="cs-num claude">1</div>
+          <div class="cs-body">
+            <div class="cs-action">Buyer message arrives at storefront</div>
+            <div class="cs-detail">Next.js storefront opens an SSE stream to the Claude shopping agent's MCP server endpoint.</div>
+            <div class="cs-code claude">POST /mcp (streamable HTTP)</div>
+          </div>
+        </div>
+
+        <div class="compare-step">
+          <div class="cs-num claude">2</div>
+          <div class="cs-body">
+            <div class="cs-action">Skill router classifies intent</div>
+            <div class="cs-detail">The prompt + skills[] are sent to claude-sonnet-5. It selects the <em>Browse</em> skill, then <em>Add to Cart</em> skill — two model calls with focused system prompts.</div>
+            <div class="cs-code claude">messages.stream(model="claude-sonnet-5")</div>
+          </div>
+        </div>
+
+        <div class="compare-step">
+          <div class="cs-num claude">3</div>
+          <div class="cs-body">
+            <div class="cs-action">Claude calls search_products tool</div>
+            <div class="cs-detail">Tool result flows back in-band over the same MCP stream. Claude calls the Python function directly — no HTTP request to a separate service.</div>
+            <div class="cs-code claude">StorefrontBackend.search_products()</div>
+          </div>
+        </div>
+
+        <div class="compare-step">
+          <div class="cs-num claude">4</div>
+          <div class="cs-body">
+            <div class="cs-action">MCP UI Resource: product grid</div>
+            <div class="cs-detail">Server emits a <code>ui</code> SSE event containing a <code>ui://storefront/product-grid</code> resource. The storefront renders it instantly — no round-trip.</div>
+            <div class="cs-code claude">event: ui · type: product_grid</div>
+          </div>
+        </div>
+
+        <div class="compare-step">
+          <div class="cs-num claude">5</div>
+          <div class="cs-body">
+            <div class="cs-action">always_ask gate fires on add_to_cart</div>
+            <div class="cs-detail">The write-tool permission gate pauses execution and emits a confirmation prompt SSE event. The buyer must approve before the cart is mutated.</div>
+            <div class="cs-code claude">permission: always_ask → buyer confirms</div>
+          </div>
+        </div>
+
+        <div class="compare-step">
+          <div class="cs-num claude">6</div>
+          <div class="cs-body">
+            <div class="cs-action">Claude calls place_order tool</div>
+            <div class="cs-detail">After a second always_ask gate, the Python method calls Salesforce B2B Commerce REST directly — create cart → add items → activate Order SObject.</div>
+            <div class="cs-code shared">SF B2B Commerce API · /sobjects/Order</div>
+          </div>
+        </div>
+
+        <div class="compare-step">
+          <div class="cs-num claude">7</div>
+          <div class="cs-body">
+            <div class="cs-action">Order confirmation UI streamed</div>
+            <div class="cs-detail">Server emits a <code>ui://storefront/order-confirmation</code> MCP UI Resource. Storefront renders the card live while Claude is still writing the confirmation text.</div>
+            <div class="cs-code claude">event: ui · type: order_confirmation</div>
+          </div>
+        </div>
+
+        <div class="compare-step">
+          <div class="cs-num claude">8</div>
+          <div class="cs-body">
+            <div class="cs-action">Haiku extracts memory</div>
+            <div class="cs-detail">Post-turn, claude-haiku-4-5 reads the conversation and updates the buyer's preference store — e.g. "prefers ruggedized laptops, PO payments".</div>
+            <div class="cs-code claude">memory model: claude-haiku-4-5</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Gemini flow -->
+    <div class="compare-col">
+      <div class="compare-col-head gemini">
+        <span style="font-size:18px">✨</span>
+        <h3 style="color:var(--gemini-lt)">Gemini · UCP path</h3>
+      </div>
+      <div class="compare-steps">
+
+        <div class="compare-step">
+          <div class="cs-num gemini">1</div>
+          <div class="cs-body">
+            <div class="cs-action">Buyer message arrives at storefront</div>
+            <div class="cs-detail">React storefront sends a POST to the FastAPI bridge (<code>gemini_web_server.py</code>) running on Railway. Response is a single JSON object.</div>
+            <div class="cs-code gemini">POST /api/chat → JSON response</div>
+          </div>
+        </div>
+
+        <div class="compare-step">
+          <div class="cs-num gemini">2</div>
+          <div class="cs-body">
+            <div class="cs-action">GeminiUCPAgent fetches manifest (once)</div>
+            <div class="cs-detail">On first startup the agent calls <code>GET /.well-known/ucp</code>, reads the capability manifest, and auto-builds FunctionDeclarations. No store-specific code needed.</div>
+            <div class="cs-code gemini">GET /.well-known/ucp · RFC-8615</div>
+          </div>
+        </div>
+
+        <div class="compare-step">
+          <div class="cs-num gemini">3</div>
+          <div class="cs-body">
+            <div class="cs-action">Gemini calls search_products function</div>
+            <div class="cs-detail">Gemini returns a FunctionCall part. The Python agent executes an HTTP GET to the UCP REST endpoint and feeds the JSON result back as a FunctionResponse.</div>
+            <div class="cs-code gemini">GET /ucp/products?q=laptop</div>
+          </div>
+        </div>
+
+        <div class="compare-step">
+          <div class="cs-num gemini">4</div>
+          <div class="cs-body">
+            <div class="cs-action">Products returned in JSON response</div>
+            <div class="cs-detail">No SSE events. When the final JSON arrives, the frontend reads <code>data.products</code> and renders product cards from that payload.</div>
+            <div class="cs-code gemini">response.products[] · per-turn sync</div>
+          </div>
+        </div>
+
+        <div class="compare-step">
+          <div class="cs-num gemini">5</div>
+          <div class="cs-body">
+            <div class="cs-action">System prompt governs confirmation</div>
+            <div class="cs-detail">No protocol-level gate. The system prompt instructs: "always confirm items and total with the user before calling place_b2b_order." Gemini decides when to proceed.</div>
+            <div class="cs-code gemini">system_instruction: confirm before order</div>
+          </div>
+        </div>
+
+        <div class="compare-step">
+          <div class="cs-num gemini">6</div>
+          <div class="cs-body">
+            <div class="cs-action">Gemini calls place_b2b_order function</div>
+            <div class="cs-detail">Agent POSTs to <code>/ucp/orders</code>, which runs the full 9-step Salesforce flow: create cart → add items → set PO number → create Order SObject → activate → close cart.</div>
+            <div class="cs-code shared">POST /ucp/orders → SF B2B Commerce API</div>
+          </div>
+        </div>
+
+        <div class="compare-step">
+          <div class="cs-num gemini">7</div>
+          <div class="cs-body">
+            <div class="cs-action">Order confirmed in JSON response</div>
+            <div class="cs-detail">When the full response arrives, the frontend reads <code>data.tool_calls</code> — finds <code>place_b2b_order</code> — clears <code>cartItems</code> state and hides action buttons.</div>
+            <div class="cs-code gemini">data.tool_calls[].tool === "place_b2b_order"</div>
+          </div>
+        </div>
+
+        <div class="compare-step">
+          <div class="cs-num gemini">8</div>
+          <div class="cs-body">
+            <div class="cs-action">No memory extraction</div>
+            <div class="cs-detail">Conversation history is kept in <code>_contents[]</code> in memory for the session. On reset or redeploy, all context is lost — no cross-session preference store.</div>
+            <div class="cs-code gemini">session: _contents[] · in-process only</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ HEAD-TO-HEAD TABLE ══════════════════════════════════════════════ -->
+  <div class="section-title">Head-to-head comparison</div>
+  <div class="section-sub">Every key dimension, side by side.</div>
+
+  <div class="cmp-table-wrap">
+    <table class="cmp-table">
+      <thead>
+        <tr>
+          <th>Dimension</th>
+          <th>🤖 Claude · MCP</th>
+          <th>✨ Gemini · UCP</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>AI SDK</td>
+          <td><strong>anthropic</strong> · AsyncAnthropic · messages.stream()</td>
+          <td><strong>google-genai</strong> · genai.Client · generate_content()</td>
+        </tr>
+        <tr>
+          <td>Protocol</td>
+          <td>MCP Streamable HTTP (binary framing, persistent connection)</td>
+          <td>UCP REST — plain JSON/HTTP, stateless, works with any client</td>
+        </tr>
+        <tr>
+          <td>Store Discovery</td>
+          <td>Static — tool list compiled into agent at deploy time</td>
+          <td><strong>Dynamic</strong> — reads <code>GET /.well-known/ucp</code> at startup; zero store-specific code</td>
+        </tr>
+        <tr>
+          <td>Tool Definition</td>
+          <td><code>@tool</code> Python decorator — rich docstrings become descriptions</td>
+          <td>FunctionDeclaration objects auto-built from manifest capabilities block</td>
+        </tr>
+        <tr>
+          <td>UI Rendering</td>
+          <td><strong>SSE streaming</strong> — product grids, checkout cards, order confirmation rendered live as Claude writes</td>
+          <td>JSON fields per response (<code>products</code>, <code>cart_additions</code>, <code>tool_calls</code>) — rendered after full response</td>
+        </tr>
+        <tr>
+          <td>Safety Gates</td>
+          <td><strong>Protocol-enforced</strong> — <code>always_ask</code> permission on add_to_cart and place_order; buyer must explicitly approve</td>
+          <td>System-prompt only — "confirm before ordering"; Gemini decides when to proceed</td>
+        </tr>
+        <tr>
+          <td>Memory</td>
+          <td><strong>Persistent</strong> — claude-haiku-4-5 extracts preferences post-turn; survives sessions and redeployments</td>
+          <td>Session-scoped — <code>_contents[]</code> list in Python process; reset on server restart</td>
+        </tr>
+        <tr>
+          <td>Skill Routing</td>
+          <td><strong>5 skills</strong> — Browse, Add to Cart, Checkout, Place Order, Order Status; each has focused system prompt</td>
+          <td>Single agentic loop — Gemini decides tool sequence; no sub-skills</td>
+        </tr>
+        <tr>
+          <td>Tool Count</td>
+          <td>15 tools (10 read + 5 write)</td>
+          <td>6 tools (search, get, add to cart, save quote, place order, list quotes)</td>
+        </tr>
+        <tr>
+          <td>Enrichment</td>
+          <td><strong>Delivery promise</strong>, policy search, fulfillment options per product</td>
+          <td>Not available — UCP endpoints return catalog data only</td>
+        </tr>
+        <tr>
+          <td>Backend hop</td>
+          <td><strong>Direct Python call</strong> — MCP tool → StorefrontBackend method in same process</td>
+          <td>Two hops — Gemini → /ucp/orders → StorefrontBackend._b2b_request() → Salesforce</td>
+        </tr>
+        <tr>
+          <td>Multi-model</td>
+          <td>Anthropic, Bedrock, Vertex AI, Azure AI Foundry (swap client, keep same tools)</td>
+          <td><strong>Any model</strong> — UCP is model-agnostic; Gemini, Claude, GPT-4o all work via REST</td>
+        </tr>
+        <tr>
+          <td>Streaming</td>
+          <td><strong>Yes</strong> — tokens, tool calls, and UI events all stream to browser in real-time</td>
+          <td>No — full response waits for Gemini to finish all tool calls before JSON is returned</td>
+        </tr>
+        <tr>
+          <td>Convergence</td>
+          <td colspan="2" style="text-align:center; color: var(--shared-lt); font-weight:600;">Both paths hit the same StorefrontBackend Python interface → Salesforce B2B Commerce REST API v62.0</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ══ UCP MANIFEST CALLOUT ════════════════════════════════════════════ -->
+  <div class="manifest-callout">
+    <h3>The UCP manifest bridges both worlds</h3>
+    <p>The <code>GET /.well-known/ucp</code> response is what Gemini reads at startup to auto-build its tools. Notice it also advertises the MCP transport — so a Claude agent can discover the richer path from the same manifest.</p>
+    <div class="manifest-body"><span class="mj-comment">// GET /.well-known/ucp  →  served by ucp.py (FastAPI router)</span>
+{
+  <span class="mj-key">"schema_version"</span>: <span class="mj-str">"1.0"</span>,
+  <span class="mj-key">"business"</span>: { <span class="mj-key">"name"</span>: <span class="mj-str">"ACME Commerce"</span> },
+  <span class="mj-key">"capabilities"</span>: {
+    <span class="mj-key">"product_discovery"</span>: {
+      <span class="mj-key">"supported"</span>: true,
+      <span class="mj-key">"endpoints"</span>: {
+        <span class="mj-key">"search"</span>:  <span class="mj-gemini">"/ucp/products"</span>,      <span class="mj-comment">← Gemini calls this</span>
+        <span class="mj-key">"detail"</span>:  <span class="mj-gemini">"/ucp/products/{product_id}"</span>
+      }
+    },
+    <span class="mj-key">"cart_management"</span>: { <span class="mj-key">"supported"</span>: true, <span class="mj-key">"endpoints"</span>: { <span class="mj-key">"add_item"</span>: <span class="mj-gemini">"/ucp/cart/items"</span> } },
+    <span class="mj-key">"checkout"</span>:         { <span class="mj-key">"supported"</span>: true, <span class="mj-key">"endpoints"</span>: { <span class="mj-key">"create_session"</span>: <span class="mj-gemini">"/ucp/checkout-sessions"</span> } }
+  },
+  <span class="mj-key">"transport"</span>: {
+    <span class="mj-key">"rest"</span>: {
+      <span class="mj-key">"base_url"</span>: <span class="mj-gemini">"https://…railway.app"</span>,    <span class="mj-comment">← Gemini uses this</span>
+      <span class="mj-key">"auth"</span>: <span class="mj-str">"UCP-Agent"</span>
+    },
+    <span class="mj-key">"mcp"</span>: {
+      <span class="mj-key">"protocol"</span>: <span class="mj-claude">"streamable-http"</span>,         <span class="mj-comment">← Claude uses this</span>
+      <span class="mj-key">"description"</span>: <span class="mj-claude">"Richer Claude agent with memory, skills, and SSE UI"</span>
+    }
+  },
+  <span class="mj-key">"agent_hints"</span>: <span class="mj-str">"Prefer MCP for complex journeys. Use REST for single-turn lookups."</span>
+}</div>
+  </div>
+
+  <!-- ══ SHARED FOUNDATION ════════════════════════════════════════════════ -->
+  <div class="convergence">
+    <h2>Where both paths converge</h2>
+    <p>Regardless of protocol, both Claude and Gemini eventually call the same Python interface and the same Salesforce APIs. The shared layer is what makes the platform model-agnostic.</p>
+    <div class="conv-grid">
+      <div class="conv-item">
+        <div class="conv-item-label">StorefrontBackend</div>
+        <div class="conv-item-val">12-method Python interface: search_products, get_cart, add_to_cart, place_order, get_order, and 7 more</div>
+      </div>
+      <div class="conv-item">
+        <div class="conv-item-label">Salesforce OAuth2</div>
+        <div class="conv-item-val">Client-credentials token at <code>/services/oauth2/token</code>. Same credentials, same scopes.</div>
+      </div>
+      <div class="conv-item">
+        <div class="conv-item-label">B2B Commerce REST</div>
+        <div class="conv-item-val"><code>/commerce/webstores/{id}/carts</code> · cart-items · products. API v62.0.</div>
+      </div>
+      <div class="conv-item">
+        <div class="conv-item-label">SObject CRUD</div>
+        <div class="conv-item-val">Order, OrderItem, WebCart, Quote — same 9-step activation flow for both paths.</div>
+      </div>
+      <div class="conv-item">
+        <div class="conv-item-label">Product Catalog</div>
+        <div class="conv-item-val">Same SOQL queries, same Product2 objects, same pricing and entitlement checks.</div>
+      </div>
+      <div class="conv-item">
+        <div class="conv-item-label">Railway Deployment</div>
+        <div class="conv-item-val">Single Railway service runs both the UCP REST endpoints (for Gemini) and the MCP server (for Claude).</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ WHEN TO USE WHICH ════════════════════════════════════════════════ -->
+  <div class="section-title">When to choose each path</div>
+  <div class="section-sub">Both are production-ready. Choose based on what matters for your integration.</div>
+
+  <div class="decision">
+    <div class="decision-card claude">
+      <h3 class="claude">Choose Claude (MCP) when…</h3>
+      <ul class="decision-list">
+        <li>You need real-time streaming UI — tokens and product grids appear as Claude thinks</li>
+        <li>Buyer safety is critical — always_ask gates enforce confirmation at the protocol level</li>
+        <li>You want persistent memory — buyer preferences survive across sessions and redeploys</li>
+        <li>Complex multi-step journeys — 5 focused skills each with tuned system prompts</li>
+        <li>Rich tool set matters — enrichment, delivery promises, policy lookups, fulfillment options</li>
+        <li>You're already on Anthropic (direct API, Bedrock, Vertex, Azure AI Foundry)</li>
+      </ul>
+    </div>
+    <div class="decision-card gemini">
+      <h3 class="gemini">Choose Gemini (UCP) when…</h3>
+      <ul class="decision-list">
+        <li>You want model-agnostic REST — any AI model can call your store without custom integration</li>
+        <li>Speed of integration matters — zero store-specific code; manifest auto-builds the tools</li>
+        <li>You're building for Google ecosystem — Gemini, Vertex AI, AI Studio</li>
+        <li>Simple commerce journeys — add to cart, place PO, save quote</li>
+        <li>Portability — UCP endpoints work with Gemini today, GPT-4o tomorrow</li>
+        <li>You want discoverable storefronts — publish /.well-known/ucp and any compliant agent connects</li>
+      </ul>
+    </div>
+  </div>
+
+</div><!-- /page -->
+
+<footer>
+  Agentic Commerce Platform · Claude (MCP) vs Gemini (UCP) · Salesforce B2B Commerce · Railway
+</footer>
+
+</body>
+</html>

@@ -1,0 +1,42 @@
+{
+  "name": "commerce-agent-salesforce",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Salesforce DX project for commerce agent LWC components and Apex",
+  "scripts": {
+    "test:unit": "lwc-jest",
+    "test:unit:watch": "lwc-jest --watch",
+    "test:unit:coverage": "lwc-jest --coverage"
+  },
+  "devDependencies": {
+    "@lwc/jest-preset": "^5.0.0",
+    "@salesforce/eslint-config-lwc": "^3.6.0",
+    "@salesforce/eslint-plugin-lightning": "^1.0.0",
+    "eslint": "^8.57.0",
+    "jest": "^29.7.0",
+    "jest-environment-jsdom": "^29.7.0"
+  },
+  "jest": {
+    "preset": "@lwc/jest-preset",
+    "moduleNameMapper": {
+      "^@salesforce/apex$": "<rootDir>/jest-mocks/apex.js",
+      "^@salesforce/apex/(.+)$": "<rootDir>/jest-mocks/apex.js",
+      "^@salesforce/schema/(.+)$": "<rootDir>/jest-mocks/schema.js",
+      "^@salesforce/user/(.+)$": "<rootDir>/jest-mocks/user.js",
+      "^lightning/navigation$": "<rootDir>/jest-mocks/lightning/navigation.js",
+      "^lightning/platformShowToastEvent$": "<rootDir>/jest-mocks/lightning/platformShowToastEvent.js"
+    },
+    "coverageThreshold": {
+      "global": {
+        "branches": 80,
+        "functions": 80,
+        "lines": 80,
+        "statements": 80
+      }
+    },
+    "collectCoverageFrom": [
+      "force-app/main/default/lwc/**/*.js",
+      "!force-app/main/default/lwc/**/__tests__/**"
+    ]
+  }
+}

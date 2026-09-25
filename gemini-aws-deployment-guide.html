@@ -1,0 +1,881 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gemini Assistant — AWS Deployment Guide</title>
+<style>
+  :root {
+    --bg:#07090f; --s1:#0f1623; --s2:#161e2e; --border:#1e2d45;
+    --green:#059669; --green2:#34d399;
+    --blue:#3b82f6;  --blue2:#60a5fa;
+    --purple:#8b5cf6;--purple2:#a78bfa;
+    --orange:#f97316;--orange2:#fb923c;
+    --yellow:#f59e0b;--yellow2:#fbbf24;
+    --red:#ef4444;
+    --text:#e2e8f0;  --muted:#64748b;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:14px;line-height:1.65}
+
+  /* ── hero ── */
+  .hero{background:linear-gradient(135deg,#0a1628,#0c1c38 55%,#0b1a10);border-bottom:1px solid var(--border);padding:44px 40px 32px;text-align:center}
+  .badge{display:inline-flex;align-items:center;gap:7px;background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);color:var(--orange2);border-radius:999px;padding:5px 14px;font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;margin-bottom:14px}
+  .hero h1{font-size:34px;font-weight:800;background:linear-gradient(135deg,#fb923c,#a78bfa);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:8px}
+  .hero p{font-size:14px;color:#94a3b8;max-width:680px;margin:0 auto 18px}
+  .pills{display:flex;justify-content:center;flex-wrap:wrap;gap:8px}
+  .pill{background:var(--s1);border:1px solid var(--border);border-radius:7px;padding:4px 12px;font-size:11px;color:#94a3b8}
+  .pill strong{color:var(--text)}
+
+  /* ── layout ── */
+  .main{max-width:1060px;margin:0 auto;padding:36px 24px 72px}
+
+  /* ── TOC sidebar ── */
+  .layout{display:grid;grid-template-columns:200px 1fr;gap:32px;align-items:start}
+  .toc{position:sticky;top:24px;background:var(--s1);border:1px solid var(--border);border-radius:10px;padding:14px;font-size:12px}
+  .toc-title{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:10px}
+  .toc a{display:block;color:#94a3b8;text-decoration:none;padding:4px 0;border-left:2px solid transparent;padding-left:8px;margin-left:-2px;transition:.1s}
+  .toc a:hover{color:var(--text);border-color:var(--orange2)}
+  .toc a.phase{color:var(--muted);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-top:8px;padding-left:0;border-left:none;cursor:default}
+  .content{min-width:0}
+
+  /* ── phase header ── */
+  .phase{margin-top:48px;margin-bottom:20px;padding-bottom:10px;border-bottom:1px solid var(--border)}
+  .phase:first-child{margin-top:0}
+  .phase-num{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:4px}
+  .phase h2{font-size:20px;font-weight:700;display:flex;align-items:center;gap:10px}
+  .phase .sub{font-size:12px;color:var(--muted);margin-top:4px}
+
+  /* ── step ── */
+  .step{margin-bottom:24px}
+  .step-header{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+  .step-n{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0}
+  .step-n.green {background:rgba(5,150,105,.2);color:var(--green2)}
+  .step-n.orange{background:rgba(249,115,22,.2);color:var(--orange2)}
+  .step-n.blue  {background:rgba(59,130,246,.2);color:var(--blue2)}
+  .step-n.purple{background:rgba(139,92,246,.2);color:var(--purple2)}
+  .step h3{font-size:14px;font-weight:700}
+  .step p{font-size:13px;color:#94a3b8;margin-bottom:10px;line-height:1.7}
+
+  /* ── code ── */
+  .cb{background:#060d1a;border:1px solid #1a2d4a;border-radius:9px;overflow:hidden;margin-bottom:12px;font-size:12px}
+  .cb-head{background:#0b1832;border-bottom:1px solid #1a2d4a;padding:7px 14px;display:flex;justify-content:space-between;align-items:center}
+  .cb-head .lang{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#4a6080}
+  .cb-head .fn{font-size:11px;font-family:monospace;color:#64748b}
+  pre{padding:16px 16px;overflow-x:auto;line-height:1.75}
+  .kw{color:#c084fc}.fn2{color:#60a5fa}.str{color:#4ade80}.cm{color:#374d6a;font-style:italic}.num{color:#fb923c}.hl{background:rgba(249,115,22,.12);border-left:2px solid var(--orange2);margin:0 -16px;padding:0 14px 0 14px;display:block}
+
+  /* ── callout ── */
+  .callout{border-radius:9px;padding:11px 16px;margin-bottom:14px;display:flex;gap:10px;font-size:13px}
+  .callout.green {background:rgba(5,150,105,.07);border:1px solid rgba(5,150,105,.25)}
+  .callout.orange{background:rgba(249,115,22,.07);border:1px solid rgba(249,115,22,.25)}
+  .callout.blue  {background:rgba(59,130,246,.07);border:1px solid rgba(59,130,246,.25)}
+  .callout.red   {background:rgba(239,68,68,.07); border:1px solid rgba(239,68,68,.25)}
+  .callout .ico{flex-shrink:0;margin-top:1px}
+  .callout p{color:#94a3b8;line-height:1.65}
+  .callout p strong{color:var(--text)}
+
+  /* ── var table ── */
+  table{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:14px}
+  th{background:var(--s2);padding:8px 12px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);border-bottom:1px solid var(--border)}
+  td{padding:8px 12px;border-bottom:1px solid rgba(30,45,69,.4);vertical-align:top}
+  tr:last-child td{border-bottom:none}
+  code{font-family:'SF Mono',monospace;font-size:11px;background:rgba(30,45,69,.7);padding:1px 5px;border-radius:3px;color:#a5b4fc}
+  .tag{display:inline-block;padding:1px 7px;border-radius:4px;font-size:10px;font-weight:700}
+  .tag-req  {background:rgba(239,68,68,.15);color:#fca5a5}
+  .tag-opt  {background:rgba(100,116,139,.15);color:#94a3b8}
+  .tag-auto {background:rgba(5,150,105,.15);color:#6ee7b7}
+  .tag-new  {background:rgba(249,115,22,.15);color:#fdba74}
+
+  /* ── checklist ── */
+  .checklist{list-style:none;margin-bottom:14px}
+  .checklist li{display:flex;gap:10px;padding:7px 0;border-bottom:1px solid rgba(30,45,69,.35);font-size:12px;align-items:flex-start}
+  .checklist li:last-child{border-bottom:none}
+  .checklist .ck{flex-shrink:0;margin-top:1px}
+
+  /* ── grid ── */
+  .g2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
+  .card{background:var(--s1);border:1px solid var(--border);border-radius:10px;padding:16px}
+  .card h4{font-size:13px;font-weight:700;margin-bottom:7px}
+  .card p{font-size:12px;color:#94a3b8;line-height:1.6}
+  .card.orange{border-color:rgba(249,115,22,.3);background:rgba(249,115,22,.04)}
+  .card.green {border-color:rgba(5,150,105,.3); background:rgba(5,150,105,.04)}
+
+  hr{border:none;border-top:1px solid var(--border);margin:36px 0}
+
+  footer{text-align:center;color:var(--muted);font-size:11px;padding:22px;border-top:1px solid var(--border)}
+
+  @media(max-width:800px){
+    .layout{grid-template-columns:1fr}
+    .toc{display:none}
+    .g2{grid-template-columns:1fr}
+    .hero h1{font-size:24px}
+    .main{padding:24px 14px 60px}
+  }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="badge">🟠 AWS Deployment Guide</div>
+  <h1>Gemini Assistant on AWS ECS Fargate</h1>
+  <p>Step-by-step deployment guide using the infrastructure and CI/CD code already in the repository. Covers every AWS resource you create once, every secret to store, and every GitHub variable to set.</p>
+  <div class="pills">
+    <div class="pill"><strong>Dockerfile.gemini</strong> → ECR → ECS Fargate</div>
+    <div class="pill"><strong>GitHub Actions</strong> OIDC deploy</div>
+    <div class="pill"><strong>Secrets Manager</strong> for keys</div>
+    <div class="pill"><strong>ALB</strong> for HTTPS</div>
+    <div class="pill"><strong>CloudWatch</strong> for logs</div>
+  </div>
+</div>
+
+<div class="main">
+<div class="layout">
+
+<!-- ═══════════════ SIDEBAR TOC ═══════════════ -->
+<nav class="toc">
+  <div class="toc-title">Contents</div>
+  <a class="phase" href="#">Phase 1 — AWS Setup</a>
+  <a href="#s1">1. IAM role (OIDC)</a>
+  <a href="#s2">2. ECR repository</a>
+  <a href="#s3">3. Secrets Manager</a>
+  <a href="#s4">4. CloudWatch logs</a>
+  <a href="#s5">5. ECS cluster</a>
+  <a href="#s6">6. Task definition</a>
+  <a href="#s7">7. ECS service + ALB</a>
+
+  <a class="phase" href="#">Phase 2 — GitHub</a>
+  <a href="#s8">8. Repo variables</a>
+  <a href="#s9">9. Workflow trigger</a>
+
+  <a class="phase" href="#">Phase 3 — Salesforce</a>
+  <a href="#s10">10. Callback URL</a>
+  <a href="#s11">11. Trusted IPs</a>
+
+  <a class="phase" href="#">Phase 4 — Verify</a>
+  <a href="#s12">12. Health check</a>
+  <a href="#s13">13. Full smoke test</a>
+</nav>
+
+<!-- ═══════════════ MAIN CONTENT ═══════════════ -->
+<div class="content">
+
+  <div class="callout orange">
+    <div class="ico">⚠️</div>
+    <p><strong>Gemini vs. the existing template.</strong> The repo's ECS task definition and CI workflow were written for the Claude/Salesforce backend (port 8000, <code>ANTHROPIC_API_KEY</code>). This guide adapts them for the Gemini assistant (port 8090, <code>GEMINI_API_KEY</code>). Application code is unchanged — only infrastructure config differs.</p>
+  </div>
+
+  <div class="callout blue">
+    <div class="ico">🔧</div>
+    <p><strong>Prerequisites.</strong> AWS CLI v2 installed and configured with admin credentials (<code>aws configure</code>). Docker installed locally. GitHub repo access. Roughly <strong>2–3 hours</strong> for first-time setup.</p>
+  </div>
+
+  <!-- ═══ PHASE 1 ═══ -->
+  <div class="phase" id="phase1">
+    <div class="phase-num">Phase 1 of 4</div>
+    <h2>🟠 AWS One-Time Setup</h2>
+    <div class="sub">Run these once. After this, every deploy is fully automated via GitHub Actions.</div>
+  </div>
+
+  <!-- STEP 1 -->
+  <div class="step" id="s1">
+    <div class="step-header"><div class="step-n orange">1</div><h3>Create the IAM Role for GitHub Actions (OIDC)</h3></div>
+    <p>No long-lived AWS access keys. GitHub Actions authenticates via OIDC — a short-lived token is issued per workflow run. The trust policy is already in the repo at <code>salesforce/infrastructure/aws/iam-oidc-policy.json</code>.</p>
+
+    <div class="callout blue">
+      <div class="ico">📋</div>
+      <p>First, enable the GitHub OIDC provider in your AWS account if not already done:</p>
+    </div>
+
+    <div class="cb">
+      <div class="cb-head"><span class="lang">Shell</span><span class="fn">one-time, per AWS account</span></div>
+      <pre><span class="cm"># Enable GitHub OIDC provider (one-time per AWS account)</span>
+aws iam create-open-id-connect-provider \
+  --url https://token.actions.githubusercontent.com \
+  --client-id-list sts.amazonaws.com \
+  --thumbprint-list 6938fd4d98bab03faadb97b34396831e3780aea1</pre>
+    </div>
+
+    <div class="cb">
+      <div class="cb-head"><span class="lang">Shell</span><span class="fn">salesforce/infrastructure/aws/iam-oidc-policy.json → adapted</span></div>
+      <pre><span class="cm"># 1. Edit the trust policy — fill in your values</span>
+<span class="kw">cat</span> <span class="str">&gt;</span> /tmp/trust-policy.json <span class="str">&lt;&lt;'EOF'</span>
+{
+  <span class="str">"Version"</span>: <span class="str">"2012-10-17"</span>,
+  <span class="str">"Statement"</span>: [{
+    <span class="str">"Effect"</span>: <span class="str">"Allow"</span>,
+    <span class="str">"Principal"</span>: {
+      <span class="str">"Federated"</span>: <span class="str">"arn:aws:iam::YOUR_ACCOUNT_ID:oidc-provider/token.actions.githubusercontent.com"</span>
+    },
+    <span class="str">"Action"</span>: <span class="str">"sts:AssumeRoleWithWebIdentity"</span>,
+    <span class="str">"Condition"</span>: {
+      <span class="str">"StringEquals"</span>: { <span class="str">"token.actions.githubusercontent.com:aud"</span>: <span class="str">"sts.amazonaws.com"</span> },
+      <span class="str">"StringLike"</span>:  { <span class="str">"token.actions.githubusercontent.com:sub"</span>: <span class="str">"repo:YOUR_ORG/YOUR_REPO:*"</span> }
+    }
+  }]
+}
+EOF
+
+<span class="cm"># 2. Create the role</span>
+aws iam create-role \
+  --role-name GitHubActionsCommerceAgents \
+  --assume-role-policy-document file:///tmp/trust-policy.json
+
+<span class="cm"># 3. Attach required permissions</span>
+aws iam attach-role-policy \
+  --role-name GitHubActionsCommerceAgents \
+  --policy-arn arn:aws:iam::aws:policy/AmazonECS_FullAccess
+
+aws iam attach-role-policy \
+  --role-name GitHubActionsCommerceAgents \
+  --policy-arn arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryPowerUser
+
+<span class="cm"># Save the role ARN — you'll need it for GitHub secrets</span>
+aws iam get-role --role-name GitHubActionsCommerceAgents \
+  --query 'Role.Arn' --output text
+<span class="cm"># → arn:aws:iam::123456789012:role/GitHubActionsCommerceAgents</span></pre>
+    </div>
+  </div>
+
+  <!-- STEP 2 -->
+  <div class="step" id="s2">
+    <div class="step-header"><div class="step-n orange">2</div><h3>Create the ECR Repository</h3></div>
+    <p>ECR stores the Docker images built from <code>Dockerfile.gemini</code>. GitHub Actions pushes a new image on every deploy.</p>
+
+    <div class="cb">
+      <div class="cb-head"><span class="lang">Shell</span></div>
+      <pre><span class="cm"># Create the repository</span>
+aws ecr create-repository \
+  --repository-name gemini-commerce \
+  --region us-east-1 \
+  --image-scanning-configuration scanOnPush=true
+
+<span class="cm"># Note the registry URL — format is:</span>
+<span class="cm"># 123456789012.dkr.ecr.us-east-1.amazonaws.com</span>
+aws ecr describe-repositories \
+  --repository-names gemini-commerce \
+  --query 'repositories[0].repositoryUri'</pre>
+    </div>
+  </div>
+
+  <!-- STEP 3 -->
+  <div class="step" id="s3">
+    <div class="step-header"><div class="step-n orange">3</div><h3>Store Secrets in AWS Secrets Manager</h3></div>
+    <p>All sensitive values go into Secrets Manager. The ECS task definition references them by ARN — the container gets them as environment variables at runtime, never in the image or Git.</p>
+
+    <div class="callout orange">
+      <div class="ico">⚑</div>
+      <p><strong>Gemini change:</strong> The repo template stores <code>ANTHROPIC_API_KEY</code>. For the Gemini assistant, store <code>GEMINI_API_KEY</code> instead.</p>
+    </div>
+
+    <div class="cb">
+      <div class="cb-head"><span class="lang">Shell</span><span class="fn">store all secrets (run once, update as needed)</span></div>
+      <pre><span class="cm"># Gemini API key (Google AI Studio)</span>
+aws secretsmanager create-secret \
+  --name commerce-agents/gemini \
+  --secret-string '{"GEMINI_API_KEY":"AIza...your-key..."}'
+
+<span class="cm"># Salesforce credentials (your org's Connected App)</span>
+aws secretsmanager create-secret \
+  --name commerce-agents/salesforce \
+  --secret-string '{
+    "SF_CLIENT_ID":      "3MVG...your-consumer-key...",
+    "SF_CLIENT_SECRET":  "your-consumer-secret",
+    "SF_INSTANCE_URL":   "https://atci-b2b-lex--b2bpoc.sandbox.my.salesforce.com",
+    "SF_COMMUNITY_URL":  "https://your-community-url.force.com/your-site",
+    "SF_CALLBACK_URL":   "https://YOUR_ALB_DOMAIN/api/oauth/callback"
+  }'
+
+<span class="cm"># Get the ARNs — paste these into the task definition</span>
+aws secretsmanager describe-secret \
+  --secret-id commerce-agents/gemini \
+  --query 'ARN' --output text
+
+aws secretsmanager describe-secret \
+  --secret-id commerce-agents/salesforce \
+  --query 'ARN' --output text</pre>
+    </div>
+  </div>
+
+  <!-- STEP 4 -->
+  <div class="step" id="s4">
+    <div class="step-header"><div class="step-n orange">4</div><h3>Create CloudWatch Log Group</h3></div>
+    <p>Container logs go here. The task definition is already configured to write to <code>/ecs/gemini-commerce</code>.</p>
+
+    <div class="cb">
+      <div class="cb-head"><span class="lang">Shell</span></div>
+      <pre>aws logs create-log-group \
+  --log-group-name /ecs/gemini-commerce \
+  --region us-east-1
+
+<span class="cm"># Optional: set retention (saves cost)</span>
+aws logs put-retention-policy \
+  --log-group-name /ecs/gemini-commerce \
+  --retention-in-days 14</pre>
+    </div>
+  </div>
+
+  <!-- STEP 5 -->
+  <div class="step" id="s5">
+    <div class="step-header"><div class="step-n orange">5</div><h3>Create the ECS Cluster</h3></div>
+
+    <div class="cb">
+      <div class="cb-head"><span class="lang">Shell</span></div>
+      <pre>aws ecs create-cluster \
+  --cluster-name commerce-agents \
+  --capacity-providers FARGATE \
+  --default-capacity-provider-strategy \
+    capacityProvider=FARGATE,weight=1</pre>
+    </div>
+  </div>
+
+  <!-- STEP 6 -->
+  <div class="step" id="s6">
+    <div class="step-header"><div class="step-n orange">6</div><h3>Register the Task Definition</h3></div>
+    <p>Based on <code>salesforce/infrastructure/aws/ecs-task-definition.json</code> with four Gemini-specific changes: name, port 8090, <code>GEMINI_API_KEY</code>, and the correct secret ARNs.</p>
+
+    <div class="callout orange">
+      <div class="ico">⚑</div>
+      <p><strong>Four things to change vs. the template:</strong> (1) family name → <code>gemini-commerce</code>, (2) container port → <code>8090</code>, (3) PORT env var → <code>8090</code>, (4) swap <code>ANTHROPIC_API_KEY</code> secret → <code>GEMINI_API_KEY</code>.</p>
+    </div>
+
+    <div class="cb">
+      <div class="cb-head"><span class="lang">JSON</span><span class="fn">save as /tmp/gemini-task-def.json — fill in YOUR_* placeholders</span></div>
+      <pre>{
+  <span class="str">"family"</span>: <span class="str">"gemini-commerce"</span>,
+  <span class="str">"networkMode"</span>: <span class="str">"awsvpc"</span>,
+  <span class="str">"requiresCompatibilities"</span>: [<span class="str">"FARGATE"</span>],
+  <span class="str">"cpu"</span>: <span class="str">"512"</span>,
+  <span class="str">"memory"</span>: <span class="str">"1024"</span>,
+  <span class="str">"executionRoleArn"</span>: <span class="str">"arn:aws:iam::YOUR_ACCOUNT_ID:role/ecsTaskExecutionRole"</span>,
+  <span class="str">"taskRoleArn"</span>:      <span class="str">"arn:aws:iam::YOUR_ACCOUNT_ID:role/ecsTaskRole"</span>,
+  <span class="str">"containerDefinitions"</span>: [{
+    <span class="str">"name"</span>:  <span class="str">"gemini-commerce"</span>,
+    <span class="str">"image"</span>: <span class="str">"YOUR_ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/gemini-commerce:latest"</span>,
+    <span class="str">"portMappings"</span>: [{
+<span class="hl">      <span class="str">"containerPort"</span>: <span class="num">8090</span>,</span>
+      <span class="str">"protocol"</span>: <span class="str">"tcp"</span>
+    }],
+    <span class="str">"essential"</span>: <span class="kw">true</span>,
+    <span class="str">"environment"</span>: [
+<span class="hl">      { <span class="str">"name"</span>: <span class="str">"PORT"</span>, <span class="str">"value"</span>: <span class="str">"8090"</span> },</span>
+      { <span class="str">"name"</span>: <span class="str">"UCP_BASE"</span>, <span class="str">"value"</span>: <span class="str">"https://diligent-flow-production-afd7.up.railway.app"</span> },
+      { <span class="str">"name"</span>: <span class="str">"GEMINI_MODEL"</span>, <span class="str">"value"</span>: <span class="str">"gemini-3.6-flash"</span> }
+    ],
+    <span class="str">"secrets"</span>: [
+<span class="hl">      { <span class="str">"name"</span>: <span class="str">"GEMINI_API_KEY"</span>,
+        <span class="str">"valueFrom"</span>: <span class="str">"arn:aws:secretsmanager:us-east-1:YOUR_ACCOUNT_ID:secret:commerce-agents/gemini:GEMINI_API_KEY::"</span> },</span>
+      { <span class="str">"name"</span>: <span class="str">"SF_CLIENT_ID"</span>,
+        <span class="str">"valueFrom"</span>: <span class="str">"arn:aws:secretsmanager:us-east-1:YOUR_ACCOUNT_ID:secret:commerce-agents/salesforce:SF_CLIENT_ID::"</span> },
+      { <span class="str">"name"</span>: <span class="str">"SF_CLIENT_SECRET"</span>,
+        <span class="str">"valueFrom"</span>: <span class="str">"arn:aws:secretsmanager:us-east-1:YOUR_ACCOUNT_ID:secret:commerce-agents/salesforce:SF_CLIENT_SECRET::"</span> },
+      { <span class="str">"name"</span>: <span class="str">"SF_INSTANCE_URL"</span>,
+        <span class="str">"valueFrom"</span>: <span class="str">"arn:aws:secretsmanager:us-east-1:YOUR_ACCOUNT_ID:secret:commerce-agents/salesforce:SF_INSTANCE_URL::"</span> },
+      { <span class="str">"name"</span>: <span class="str">"SF_COMMUNITY_URL"</span>,
+        <span class="str">"valueFrom"</span>: <span class="str">"arn:aws:secretsmanager:us-east-1:YOUR_ACCOUNT_ID:secret:commerce-agents/salesforce:SF_COMMUNITY_URL::"</span> },
+      { <span class="str">"name"</span>: <span class="str">"SF_CALLBACK_URL"</span>,
+        <span class="str">"valueFrom"</span>: <span class="str">"arn:aws:secretsmanager:us-east-1:YOUR_ACCOUNT_ID:secret:commerce-agents/salesforce:SF_CALLBACK_URL::"</span> }
+    ],
+    <span class="str">"healthCheck"</span>: {
+<span class="hl">      <span class="str">"command"</span>: [<span class="str">"CMD-SHELL"</span>, <span class="str">"curl -f http://localhost:8090/api/health || exit 1"</span>],</span>
+      <span class="str">"interval"</span>: <span class="num">30</span>, <span class="str">"timeout"</span>: <span class="num">5</span>, <span class="str">"retries"</span>: <span class="num">3</span>, <span class="str">"startPeriod"</span>: <span class="num">20</span>
+    },
+    <span class="str">"logConfiguration"</span>: {
+      <span class="str">"logDriver"</span>: <span class="str">"awslogs"</span>,
+      <span class="str">"options"</span>: {
+        <span class="str">"awslogs-group"</span>:         <span class="str">"/ecs/gemini-commerce"</span>,
+        <span class="str">"awslogs-region"</span>:        <span class="str">"us-east-1"</span>,
+        <span class="str">"awslogs-stream-prefix"</span>: <span class="str">"ecs"</span>
+      }
+    }
+  }],
+  <span class="str">"tags"</span>: [
+    { <span class="str">"key"</span>: <span class="str">"Project"</span>,   <span class="str">"value"</span>: <span class="str">"commerce-agents"</span> },
+    { <span class="str">"key"</span>: <span class="str">"Component"</span>, <span class="str">"value"</span>: <span class="str">"gemini-assistant"</span> }
+  ]
+}</pre>
+    </div>
+
+    <div class="cb">
+      <div class="cb-head"><span class="lang">Shell</span><span class="fn">register the task definition</span></div>
+      <pre>aws ecs register-task-definition \
+  --cli-input-json file:///tmp/gemini-task-def.json
+
+<span class="cm"># Verify it was registered</span>
+aws ecs describe-task-definition \
+  --task-definition gemini-commerce \
+  --query 'taskDefinition.taskDefinitionArn'</pre>
+    </div>
+
+    <div class="callout green">
+      <div class="ico">🔑</div>
+      <p><strong>ecsTaskExecutionRole must have Secrets Manager access.</strong> If the role doesn't exist yet or lacks the permission, add it:</p>
+    </div>
+    <div class="cb">
+      <div class="cb-head"><span class="lang">Shell</span><span class="fn">grant ecsTaskExecutionRole access to your secrets</span></div>
+      <pre><span class="cm"># Create the execution role if it doesn't exist</span>
+aws iam create-role \
+  --role-name ecsTaskExecutionRole \
+  --assume-role-policy-document \
+  '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"ecs-tasks.amazonaws.com"},"Action":"sts:AssumeRole"}]}'
+
+aws iam attach-role-policy \
+  --role-name ecsTaskExecutionRole \
+  --policy-arn arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+
+<span class="cm"># Grant access to the specific secrets</span>
+aws iam put-role-policy \
+  --role-name ecsTaskExecutionRole \
+  --policy-name SecretsManagerAccess \
+  --policy-document '{
+    "Version":"2012-10-17",
+    "Statement":[{
+      "Effect":"Allow",
+      "Action":["secretsmanager:GetSecretValue"],
+      "Resource":[
+        "arn:aws:secretsmanager:us-east-1:YOUR_ACCOUNT_ID:secret:commerce-agents/*"
+      ]
+    }]
+  }'</pre>
+    </div>
+  </div>
+
+  <!-- STEP 7 -->
+  <div class="step" id="s7">
+    <div class="step-header"><div class="step-n orange">7</div><h3>Create the ALB + ECS Service</h3></div>
+    <p>The Application Load Balancer provides HTTPS and a stable DNS name. The ECS service keeps the Fargate task running and registers it with the ALB target group.</p>
+
+    <div class="cb">
+      <div class="cb-head"><span class="lang">Shell</span><span class="fn">ALB setup (use your VPC/subnet IDs)</span></div>
+      <pre><span class="cm"># 1. Create a security group for the ALB (allows inbound 443/80)</span>
+ALB_SG=$(aws ec2 create-security-group \
+  --group-name gemini-alb-sg \
+  --description "Gemini Commerce ALB" \
+  --vpc-id YOUR_VPC_ID \
+  --query 'GroupId' --output text)
+
+aws ec2 authorize-security-group-ingress \
+  --group-id $ALB_SG --protocol tcp --port 443 --cidr 0.0.0.0/0
+aws ec2 authorize-security-group-ingress \
+  --group-id $ALB_SG --protocol tcp --port 80  --cidr 0.0.0.0/0
+
+<span class="cm"># 2. Create the ALB</span>
+ALB_ARN=$(aws elbv2 create-load-balancer \
+  --name gemini-commerce-alb \
+  --subnets YOUR_PUBLIC_SUBNET_1 YOUR_PUBLIC_SUBNET_2 \
+  --security-groups $ALB_SG \
+  --scheme internet-facing \
+  --type application \
+  --query 'LoadBalancers[0].LoadBalancerArn' --output text)
+
+<span class="cm"># 3. Create target group pointing at port 8090</span>
+TG_ARN=$(aws elbv2 create-target-group \
+  --name gemini-commerce-tg \
+  --protocol HTTP \
+  --port 8090 \
+  --vpc-id YOUR_VPC_ID \
+  --target-type ip \
+  --health-check-path /api/health \
+  --health-check-interval-seconds 30 \
+  --healthy-threshold-count 2 \
+  --query 'TargetGroups[0].TargetGroupArn' --output text)
+
+<span class="cm"># 4. HTTPS listener (requires ACM certificate)</span>
+CERT_ARN="arn:aws:acm:us-east-1:YOUR_ACCOUNT_ID:certificate/YOUR_CERT_ID"
+aws elbv2 create-listener \
+  --load-balancer-arn $ALB_ARN \
+  --protocol HTTPS --port 443 \
+  --certificates CertificateArn=$CERT_ARN \
+  --default-actions Type=forward,TargetGroupArn=$TG_ARN
+
+<span class="cm"># Get the ALB DNS — this is your app URL</span>
+aws elbv2 describe-load-balancers \
+  --load-balancer-arns $ALB_ARN \
+  --query 'LoadBalancers[0].DNSName' --output text
+<span class="cm"># → gemini-commerce-alb-123456789.us-east-1.elb.amazonaws.com</span></pre>
+    </div>
+
+    <div class="cb">
+      <div class="cb-head"><span class="lang">Shell</span><span class="fn">ECS service (references the task definition registered in step 6)</span></div>
+      <pre><span class="cm"># Security group for ECS tasks (allows ALB inbound on 8090)</span>
+TASK_SG=$(aws ec2 create-security-group \
+  --group-name gemini-tasks-sg \
+  --description "Gemini Commerce ECS tasks" \
+  --vpc-id YOUR_VPC_ID \
+  --query 'GroupId' --output text)
+
+aws ec2 authorize-security-group-ingress \
+  --group-id $TASK_SG \
+  --protocol tcp --port 8090 \
+  --source-group $ALB_SG
+
+<span class="cm"># Outbound: allow tasks to reach Gemini API, Salesforce (port 443)</span>
+aws ec2 authorize-security-group-egress \
+  --group-id $TASK_SG \
+  --protocol tcp --port 443 --cidr 0.0.0.0/0
+
+<span class="cm"># Create the ECS service</span>
+aws ecs create-service \
+  --cluster commerce-agents \
+  --service-name gemini-commerce \
+  --task-definition gemini-commerce \
+  --desired-count 1 \
+  --launch-type FARGATE \
+  --network-configuration "awsvpcConfiguration={
+    subnets=[YOUR_PRIVATE_SUBNET_1,YOUR_PRIVATE_SUBNET_2],
+    securityGroups=[$TASK_SG],
+    assignPublicIp=DISABLED
+  }" \
+  --load-balancers "targetGroupArn=$TG_ARN,containerName=gemini-commerce,containerPort=8090"</pre>
+    </div>
+
+    <div class="callout green">
+      <div class="ico">💡</div>
+      <p><strong>NAT Gateway required.</strong> Tasks in private subnets need a NAT Gateway to reach Gemini API and Salesforce outbound. Attach it to the private route table. Note the NAT Gateway's Elastic IP — you'll add it to Salesforce Trusted IP Ranges in step 11.</p>
+    </div>
+  </div>
+
+  <!-- ═══ PHASE 2 ═══ -->
+  <div class="phase" id="phase2">
+    <div class="phase-num">Phase 2 of 4</div>
+    <h2>🐙 GitHub Configuration</h2>
+    <div class="sub">Connect the repo to AWS so pushes deploy automatically.</div>
+  </div>
+
+  <!-- STEP 8 -->
+  <div class="step" id="s8">
+    <div class="step-header"><div class="step-n blue">8</div><h3>Set GitHub Repository Variables and Secrets</h3></div>
+    <p>Go to your GitHub repo → <strong>Settings → Secrets and variables → Actions</strong>. The CI workflow reads these by name.</p>
+
+    <table>
+      <thead><tr><th>Name</th><th>Where</th><th>Value</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><code>AWS_ROLE_ARN</code></td>
+          <td><span class="tag tag-req">Secret</span></td>
+          <td>IAM role ARN from step 1 — <code>arn:aws:iam::123...::role/GitHubActionsCommerceAgents</code></td>
+        </tr>
+        <tr>
+          <td><code>ECR_REGISTRY</code></td>
+          <td><span class="tag tag-opt">Variable</span></td>
+          <td>ECR registry base URL — <code>123456789012.dkr.ecr.us-east-1.amazonaws.com</code></td>
+        </tr>
+        <tr>
+          <td><code>AWS_REGION</code></td>
+          <td><span class="tag tag-opt">Variable</span></td>
+          <td><code>us-east-1</code> (or your region)</td>
+        </tr>
+        <tr>
+          <td><code>ECS_CLUSTER</code></td>
+          <td><span class="tag tag-opt">Variable</span></td>
+          <td><code>commerce-agents</code></td>
+        </tr>
+        <tr>
+          <td><code>SANDBOX_ECS_SERVICE</code></td>
+          <td><span class="tag tag-opt">Variable</span></td>
+          <td><code>gemini-commerce</code></td>
+        </tr>
+        <tr>
+          <td><code>SANDBOX_TASK_DEF_FAMILY</code></td>
+          <td><span class="tag tag-opt">Variable</span></td>
+          <td><code>gemini-commerce</code></td>
+        </tr>
+        <tr>
+          <td><code>SANDBOX_API_URL</code></td>
+          <td><span class="tag tag-opt">Variable</span></td>
+          <td>Your ALB HTTPS URL — <code>https://gemini-commerce-alb-xxx.us-east-1.elb.amazonaws.com</code></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- STEP 9 -->
+  <div class="step" id="s9">
+    <div class="step-header"><div class="step-n blue">9</div><h3>Add a Caller Workflow and Trigger the First Deploy</h3></div>
+    <p>The repo's <code>_deploy-backend-aws.yml</code> is a <em>reusable</em> workflow — it must be called from a trigger workflow. Create one:</p>
+
+    <div class="cb">
+      <div class="cb-head"><span class="lang">YAML</span><span class="fn">.github/workflows/deploy-gemini-aws.yml  (create this file)</span></div>
+      <pre><span class="kw">name</span>: Deploy Gemini → AWS
+
+<span class="kw">on</span>:
+  <span class="kw">push</span>:
+    <span class="kw">branches</span>: [main]
+    <span class="kw">paths</span>:
+      - <span class="str">'scripts/gemini_web_server.py'</span>
+      - <span class="str">'examples/gemini-storefront/**'</span>
+      - <span class="str">'examples/demo_common/gemini_ucp_agent.py'</span>
+      - <span class="str">'Dockerfile.gemini'</span>
+  <span class="kw">workflow_dispatch</span>:    <span class="cm"># manual trigger from GitHub UI</span>
+
+<span class="kw">jobs</span>:
+  <span class="kw">build-and-push</span>:
+    <span class="kw">runs-on</span>: ubuntu-latest
+    <span class="kw">permissions</span>:
+      <span class="kw">id-token</span>: write
+      <span class="kw">contents</span>: read
+    <span class="kw">outputs</span>:
+      <span class="kw">image-tag</span>: ${{ steps.meta.outputs.version }}
+
+    <span class="kw">steps</span>:
+      - <span class="kw">uses</span>: actions/checkout@v4
+
+      - <span class="kw">name</span>: Configure AWS credentials
+        <span class="kw">uses</span>: aws-actions/configure-aws-credentials@v4
+        <span class="kw">with</span>:
+          <span class="kw">role-to-assume</span>: ${{ secrets.AWS_ROLE_ARN }}
+          <span class="kw">aws-region</span>:     ${{ vars.AWS_REGION || 'us-east-1' }}
+
+      - <span class="kw">name</span>: Login to ECR
+        <span class="kw">uses</span>: aws-actions/amazon-ecr-login@v2
+
+      - <span class="kw">name</span>: Build and push Gemini image
+        <span class="kw">id</span>: meta
+        <span class="kw">run</span>: |
+          TAG=${{ github.sha }}
+          IMAGE=${{ vars.ECR_REGISTRY }}/gemini-commerce:$TAG
+          docker build -f Dockerfile.gemini -t $IMAGE .
+          docker push $IMAGE
+          echo "version=$TAG" >> $GITHUB_OUTPUT
+
+  <span class="kw">deploy</span>:
+    <span class="kw">needs</span>: build-and-push
+    <span class="kw">uses</span>: ./.github/workflows/_deploy-backend-aws.yml
+    <span class="kw">with</span>:
+      <span class="kw">environment</span>: sandbox
+      <span class="kw">image-tag</span>:   ${{ needs.build-and-push.outputs.image-tag }}
+    <span class="kw">secrets</span>: inherit</pre>
+    </div>
+
+    <div class="cb">
+      <div class="cb-head"><span class="lang">Shell</span><span class="fn">push the workflow to trigger the first deploy</span></div>
+      <pre>git add .github/workflows/deploy-gemini-aws.yml
+git commit -m "ci: add Gemini AWS deploy workflow"
+git push origin main
+
+<span class="cm"># Watch it in GitHub → Actions tab</span>
+<span class="cm"># Build: ~5 min (Vite build + Docker push)</span>
+<span class="cm"># Deploy: ~3 min (ECS rolling update)</span></pre>
+    </div>
+
+    <div class="callout green">
+      <div class="ico">🔄</div>
+      <p><strong>After the first deploy, every git push to main that touches Gemini files automatically redeploys.</strong> The workflow: builds the Docker image → pushes to ECR → updates the ECS task definition → deploys → health checks → rolls back on failure. You never touch the AWS console again for routine deploys.</p>
+    </div>
+  </div>
+
+  <!-- ═══ PHASE 3 ═══ -->
+  <div class="phase" id="phase3">
+    <div class="phase-num">Phase 3 of 4</div>
+    <h2>☁️ Salesforce Updates</h2>
+    <div class="sub">Two changes in Salesforce settings — both are required for OAuth to work from the new AWS location.</div>
+  </div>
+
+  <!-- STEP 10 -->
+  <div class="step" id="s10">
+    <div class="step-header"><div class="step-n green">10</div><h3>Update Connected App Callback URL</h3></div>
+    <p>The Salesforce Connected App's OAuth Callback URL must match exactly what your app sends. Change it from the Railway URL to your ALB URL.</p>
+
+    <div class="g2">
+      <div class="card orange">
+        <h4>Before (Railway)</h4>
+        <p><code>https://perfect-achievement-production-<br>83ee.up.railway.app/api/oauth/callback</code></p>
+      </div>
+      <div class="card green">
+        <h4>After (AWS ALB)</h4>
+        <p><code>https://YOUR-ALB-DNS.us-east-1.elb.<br>amazonaws.com/api/oauth/callback</code></p>
+        <p style="margin-top:6px">Or your custom domain if you've set up Route 53.</p>
+      </div>
+    </div>
+
+    <p><strong>Where to change it:</strong> Salesforce Setup → App Manager → find your Connected App → Edit → OAuth Settings → Callback URL.</p>
+    <p style="margin-top:8px">Also update <code>SF_CALLBACK_URL</code> in AWS Secrets Manager (<code>commerce-agents/salesforce</code>) to match.</p>
+  </div>
+
+  <!-- STEP 11 -->
+  <div class="step" id="s11">
+    <div class="step-header"><div class="step-n green">11</div><h3>Update Salesforce Trusted IP Ranges</h3></div>
+    <p>ECS Fargate tasks egress through a NAT Gateway with a fixed Elastic IP. Salesforce blocks OAuth token requests from unknown IPs — add it to the allowlist.</p>
+
+    <div class="cb">
+      <div class="cb-head"><span class="lang">Shell</span><span class="fn">find your NAT Gateway Elastic IP</span></div>
+      <pre><span class="cm"># Find the NAT Gateway attached to your private subnets</span>
+aws ec2 describe-nat-gateways \
+  --query 'NatGateways[?State==`available`].[NatGatewayId,NatGatewayAddresses[0].PublicIp]' \
+  --output table
+<span class="cm"># → e.g. 54.123.45.67</span></pre>
+    </div>
+
+    <p><strong>Where to add it in Salesforce:</strong> Setup → Network Access → New → enter the NAT Gateway IP as both Start IP and End IP → Save.</p>
+    <p style="margin-top:8px">Or add it at the Connected App level: Setup → App Manager → your Connected App → Edit → IP Relaxation → set to "Relax IP restrictions" (less secure) or use the org-wide Trusted IP Range.</p>
+  </div>
+
+  <!-- ═══ PHASE 4 ═══ -->
+  <div class="phase" id="phase4">
+    <div class="phase-num">Phase 4 of 4</div>
+    <h2>✅ Verify the Deployment</h2>
+  </div>
+
+  <!-- STEP 12 -->
+  <div class="step" id="s12">
+    <div class="step-header"><div class="step-n purple">12</div><h3>Health and API Checks</h3></div>
+
+    <div class="cb">
+      <div class="cb-head"><span class="lang">Shell</span><span class="fn">smoke test from your terminal</span></div>
+      <pre>ALB="https://your-alb-dns.us-east-1.elb.amazonaws.com"
+
+<span class="cm"># 1. Health endpoint</span>
+curl -s $ALB/api/health | python3 -m json.tool
+<span class="cm"># → {"status":"ok","store":"...","model":"gemini-3.6-flash"}</span>
+
+<span class="cm"># 2. UCP manifest (Gemini fetches this at startup)</span>
+curl -s $ALB/.well-known/ucp | python3 -m json.tool | head -20
+<span class="cm"># → {"schema_version":"1.0","business":{...},"capabilities":{...}}</span>
+
+<span class="cm"># 3. Product search</span>
+curl -s "$ALB/ucp/products?q=laptop&limit=3" | python3 -m json.tool
+<span class="cm"># → {"products":[...],"total":3}</span>
+
+<span class="cm"># 4. Check logs in CloudWatch</span>
+aws logs tail /ecs/gemini-commerce --follow --since 5m</pre>
+    </div>
+  </div>
+
+  <!-- STEP 13 -->
+  <div class="step" id="s13">
+    <div class="step-header"><div class="step-n purple">13</div><h3>Full Smoke Test — Login and Chat</h3></div>
+    <p>Open the ALB URL in your browser. Login with Salesforce credentials, send a chat message, add a product to cart, and place a PO order. Confirm the order number appears in Salesforce.</p>
+
+    <div class="cb">
+      <div class="cb-head"><span class="lang">Shell</span><span class="fn">API-level smoke test (optional)</span></div>
+      <pre>ALB="https://your-alb-dns.us-east-1.elb.amazonaws.com"
+
+<span class="cm"># Login</span>
+curl -s -X POST $ALB/api/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"your@sf.user","password":"password+token"}' \
+  | python3 -m json.tool
+<span class="cm"># → {"authenticated":true,"buyer_id":"005..."}</span>
+
+<span class="cm"># Chat turn</span>
+curl -s -X POST $ALB/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message":"Find me a laptop under $2000"}' \
+  | python3 -m json.tool
+<span class="cm"># → {"reply":"...","tool_calls":[{"tool":"search_products",...}],"products":[...]}</span></pre>
+    </div>
+
+    <div class="callout green">
+      <div class="ico">🎉</div>
+      <p><strong>Deployment complete.</strong> The Gemini assistant is running on ECS Fargate. Future deploys happen automatically on every push to <code>main</code> that touches Gemini files — no manual steps.</p>
+    </div>
+  </div>
+
+  <hr>
+
+  <!-- ═══ SUMMARY TABLE ═══ -->
+  <div class="phase" id="summary">
+    <div class="phase-num">Summary</div>
+    <h2>📋 Complete Variable Reference</h2>
+  </div>
+
+  <table>
+    <thead><tr><th>Variable / Secret</th><th>Where Set</th><th>Value</th><th>Note</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><code>AWS_ROLE_ARN</code></td>
+        <td>GitHub Secret</td>
+        <td><code>arn:aws:iam::ACCT:role/GitHubActionsCommerceAgents</code></td>
+        <td><span class="tag tag-req">Required</span></td>
+      </tr>
+      <tr>
+        <td><code>ECR_REGISTRY</code></td>
+        <td>GitHub Variable</td>
+        <td><code>ACCT.dkr.ecr.REGION.amazonaws.com</code></td>
+        <td><span class="tag tag-req">Required</span></td>
+      </tr>
+      <tr>
+        <td><code>AWS_REGION</code></td>
+        <td>GitHub Variable</td>
+        <td><code>us-east-1</code></td>
+        <td><span class="tag tag-opt">Default: us-east-1</span></td>
+      </tr>
+      <tr>
+        <td><code>ECS_CLUSTER</code></td>
+        <td>GitHub Variable</td>
+        <td><code>commerce-agents</code></td>
+        <td><span class="tag tag-req">Required</span></td>
+      </tr>
+      <tr>
+        <td><code>SANDBOX_ECS_SERVICE</code></td>
+        <td>GitHub Variable</td>
+        <td><code>gemini-commerce</code></td>
+        <td><span class="tag tag-req">Required</span></td>
+      </tr>
+      <tr>
+        <td><code>SANDBOX_TASK_DEF_FAMILY</code></td>
+        <td>GitHub Variable</td>
+        <td><code>gemini-commerce</code></td>
+        <td><span class="tag tag-req">Required</span></td>
+      </tr>
+      <tr>
+        <td><code>SANDBOX_API_URL</code></td>
+        <td>GitHub Variable</td>
+        <td>ALB HTTPS URL</td>
+        <td><span class="tag tag-opt">For health check</span></td>
+      </tr>
+      <tr>
+        <td><code>GEMINI_API_KEY</code></td>
+        <td>Secrets Manager <code>commerce-agents/gemini</code></td>
+        <td>Google AI Studio key</td>
+        <td><span class="tag tag-req">Required</span> <span class="tag tag-new">Gemini-specific</span></td>
+      </tr>
+      <tr>
+        <td><code>SF_CLIENT_ID</code></td>
+        <td>Secrets Manager <code>commerce-agents/salesforce</code></td>
+        <td>Connected App consumer key</td>
+        <td><span class="tag tag-req">Required</span></td>
+      </tr>
+      <tr>
+        <td><code>SF_CLIENT_SECRET</code></td>
+        <td>Secrets Manager <code>commerce-agents/salesforce</code></td>
+        <td>Connected App consumer secret</td>
+        <td><span class="tag tag-req">Required</span></td>
+      </tr>
+      <tr>
+        <td><code>SF_INSTANCE_URL</code></td>
+        <td>Secrets Manager <code>commerce-agents/salesforce</code></td>
+        <td>Salesforce org base URL</td>
+        <td><span class="tag tag-req">Required</span></td>
+      </tr>
+      <tr>
+        <td><code>SF_COMMUNITY_URL</code></td>
+        <td>Secrets Manager <code>commerce-agents/salesforce</code></td>
+        <td>Experience Cloud site URL</td>
+        <td><span class="tag tag-req">Required</span></td>
+      </tr>
+      <tr>
+        <td><code>SF_CALLBACK_URL</code></td>
+        <td>Secrets Manager <code>commerce-agents/salesforce</code></td>
+        <td>ALB URL + <code>/api/oauth/callback</code></td>
+        <td><span class="tag tag-req">Update from Railway URL</span></td>
+      </tr>
+      <tr>
+        <td><code>UCP_BASE</code></td>
+        <td>Task definition env var</td>
+        <td>UCP product catalog URL</td>
+        <td><span class="tag tag-opt">Default: Railway UCP service</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+</div><!-- /content -->
+</div><!-- /layout -->
+</div><!-- /main -->
+
+<footer>
+  Source files: <code>Dockerfile.gemini</code> · <code>.github/workflows/_deploy-backend-aws.yml</code> · <code>salesforce/infrastructure/aws/ecs-task-definition.json</code> · <code>salesforce/infrastructure/aws/iam-oidc-policy.json</code>
+</footer>
+
+</body>
+</html>

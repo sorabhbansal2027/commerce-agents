@@ -1,0 +1,903 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Commerce Agents — All URLs</title>
+<style>
+  :root {
+    --bg: #0b0d12;
+    --surface: #13161e;
+    --surface2: #181c26;
+    --surface3: #1e2230;
+    --border: #252b3a;
+    --border2: #1e2438;
+    --text: #dde1ec;
+    --muted: #6a728a;
+    --dim: #3a4060;
+    --blue: #5b8dee;
+    --blue-bg: #0a1428;
+    --green: #4caf7d;
+    --green-bg: #081410;
+    --orange: #e8934a;
+    --orange-bg: #1a1208;
+    --purple: #9b7fe8;
+    --purple-bg: #150e28;
+    --teal: #38b2ac;
+    --teal-bg: #081414;
+    --red: #e05c5c;
+    --red-bg: #180808;
+    --yellow: #d4b44a;
+    --yellow-bg: #181408;
+    --pink: #d06090;
+    --pink-bg: #180810;
+    --accent: #cc785c;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+    font-size: 13px;
+    padding: 28px 16px 60px;
+  }
+
+  h1 { text-align: center; font-size: 22px; font-weight: 800; margin-bottom: 4px; }
+  .subtitle { text-align: center; color: var(--muted); font-size: 12px; margin-bottom: 28px; }
+
+  .wrap { max-width: 1100px; margin: 0 auto; }
+
+  /* ── TABS ── */
+  .tab-row {
+    display: flex; gap: 4px; margin-bottom: 24px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 0;
+  }
+  .tab-btn {
+    background: none; border: none; cursor: pointer;
+    padding: 9px 18px;
+    border-radius: 8px 8px 0 0;
+    font-size: 13px; font-weight: 600;
+    color: var(--muted);
+    border: 1px solid transparent;
+    border-bottom: none;
+    margin-bottom: -1px;
+    transition: color 0.15s, background 0.15s;
+  }
+  .tab-btn:hover { color: var(--text); }
+  .tab-btn.active {
+    color: var(--text);
+    background: var(--surface);
+    border-color: var(--border);
+  }
+  .tab-pane { display: none; }
+  .tab-pane.active { display: block; }
+
+  /* ── SECTION LABEL ── */
+  .sec {
+    font-size: 10px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 1.5px;
+    color: var(--muted);
+    margin: 28px 0 12px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .sec::after { content:''; flex:1; height:1px; background: var(--border); }
+
+  /* ── VERTICAL GRID ── */
+  .vert-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 14px;
+    margin-bottom: 8px;
+  }
+
+  /* ── VERTICAL CARD ── */
+  .vert-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .vert-header {
+    display: flex; align-items: center; gap: 10px;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  .vert-dot {
+    width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+  }
+  .vert-name { font-size: 13px; font-weight: 700; }
+  .vert-brand { font-size: 11px; color: var(--muted); margin-left: auto; }
+
+  .url-list { padding: 10px 14px 12px; }
+
+  /* ── URL ROW ── */
+  .url-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--border2);
+  }
+  .url-row:last-child { border-bottom: none; }
+
+  .url-badge {
+    flex-shrink: 0;
+    font-size: 9px; font-weight: 800;
+    text-transform: uppercase; letter-spacing: 0.5px;
+    padding: 3px 7px; border-radius: 4px;
+    min-width: 72px; text-align: center;
+  }
+  .badge-api      { background:#0a1428; border:1px solid #1e3060; color:var(--blue); }
+  .badge-store    { background:#081414; border:1px solid #143030; color:var(--teal); }
+  .badge-merchant { background:#150e28; border:1px solid #2e1e50; color:var(--purple); }
+  .badge-mcp      { background:#181408; border:1px solid #363010; color:var(--yellow); }
+  .badge-prod     { background:#0a1a08; border:1px solid #1e3a10; color:var(--green); }
+  .badge-sf       { background:#180810; border:1px solid #3a1430; color:var(--pink); }
+  .badge-show     { background:#1a1208; border:1px solid #3e2e10; color:var(--orange); }
+
+  .url-link {
+    font-family: 'Courier New', monospace;
+    font-size: 11.5px;
+    color: #7ba8e8;
+    text-decoration: none;
+    flex: 1;
+    word-break: break-all;
+  }
+  .url-link:hover { color: #aac8f8; text-decoration: underline; }
+
+  .url-label {
+    font-size: 10px; color: var(--muted); margin-left: 4px; flex-shrink: 0;
+  }
+
+  /* ── API ENDPOINTS TABLE ── */
+  .ep-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(480px, 1fr));
+    gap: 14px;
+  }
+  .ep-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .ep-header {
+    padding: 10px 14px;
+    font-size: 12px; font-weight: 700;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .ep-table { width: 100%; border-collapse: collapse; }
+  .ep-table tr:not(:last-child) td { border-bottom: 1px solid var(--border2); }
+  .ep-table td { padding: 7px 14px; vertical-align: middle; }
+  .method {
+    font-size: 9px; font-weight: 800; text-transform: uppercase;
+    padding: 2px 6px; border-radius: 3px;
+    font-family: monospace; white-space: nowrap;
+  }
+  .m-get    { background:#081414; color:#38b2ac; }
+  .m-post   { background:#0a1428; color:#5b8dee; }
+  .m-patch  { background:#181408; color:#d4b44a; }
+  .m-put    { background:#0e1a08; color:#4caf7d; }
+  .m-delete { background:#180808; color:#e05c5c; }
+  .ep-path { font-family: 'Courier New', monospace; font-size: 11px; color: #a0b8d8; }
+  .ep-note { font-size: 10px; color: var(--muted); }
+  .ep-base { font-size: 10px; color: var(--dim); font-family: monospace; margin-left: auto; }
+
+  /* ── FULL-WIDTH CARD ── */
+  .full-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    margin-bottom: 14px;
+  }
+  .full-header {
+    padding: 12px 16px;
+    font-size: 13px; font-weight: 700;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 10px;
+  }
+  .full-body { padding: 4px 0; }
+
+  /* ── ENV VAR TABLE ── */
+  .env-table { width: 100%; border-collapse: collapse; }
+  .env-table tr:not(:last-child) td { border-bottom: 1px solid var(--border2); }
+  .env-table td { padding: 8px 16px; vertical-align: top; }
+  .env-var  { font-family: monospace; font-size: 11px; color: #c8d0e8; }
+  .env-val  { font-family: monospace; font-size: 11px; color: var(--teal); }
+  .env-desc { font-size: 11px; color: var(--muted); }
+
+  /* ── PILL BADGE ── */
+  .pill {
+    display: inline-block; border-radius: 4px;
+    padding: 2px 7px; font-size: 10px; font-weight: 700;
+    vertical-align: middle;
+  }
+  .pill-blue   { background:var(--blue-bg); border:1px solid #1e3a6e; color:var(--blue); }
+  .pill-green  { background:var(--green-bg); border:1px solid #1a4020; color:var(--green); }
+  .pill-orange { background:var(--orange-bg); border:1px solid #3e2e10; color:var(--orange); }
+  .pill-purple { background:var(--purple-bg); border:1px solid #2e1e50; color:var(--purple); }
+  .pill-pink   { background:var(--pink-bg); border:1px solid #3a1430; color:var(--pink); }
+
+  /* ── COPY BUTTON ── */
+  .copy-btn {
+    background: none; border: 1px solid var(--border);
+    border-radius: 4px; padding: 2px 6px;
+    font-size: 9px; color: var(--muted); cursor: pointer;
+    flex-shrink: 0;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .copy-btn:hover { color: var(--text); border-color: var(--dim); }
+  .copy-btn.copied { color: var(--green); border-color: var(--green); }
+
+  /* ── STATUS DOT ── */
+  .status-dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    display: inline-block; vertical-align: middle; margin-right: 4px;
+    flex-shrink: 0;
+  }
+  .dot-local { background: var(--yellow); }
+  .dot-prod  { background: var(--green); }
+  .dot-sf    { background: var(--pink); }
+
+  /* ── NOTE BOX ── */
+  .note {
+    background: #110e08;
+    border: 1px solid #2e2810;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 11px; color: #a08060;
+    margin-top: 16px;
+    line-height: 1.6;
+  }
+  .note strong { color: var(--orange); }
+
+  a { color: inherit; }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+<h1>Commerce Agents — All URLs</h1>
+<p class="subtitle">Every endpoint, web app, MCP server, and production service for the commerce-agents repo</p>
+
+<!-- ══════════════════════════════════ TABS ══════════════════════════════════ -->
+<div class="tab-row">
+  <button class="tab-btn active" onclick="showTab('local')">🖥️ Local Dev</button>
+  <button class="tab-btn" onclick="showTab('prod')">🚀 Production / Railway</button>
+  <button class="tab-btn" onclick="showTab('api')">📡 API Endpoints</button>
+  <button class="tab-btn" onclick="showTab('mcp')">🔌 MCP Servers</button>
+</div>
+
+<!-- ══════════════════════ TAB: LOCAL DEV ══════════════════════ -->
+<div id="tab-local" class="tab-pane active">
+
+  <div class="note">
+    <strong>Start a vertical:</strong>&nbsp; <code>python scripts/run_demo.py &lt;vertical&gt;</code> starts the API + Storefront. Add <code>--merchant</code> for the portal, or <code>--all</code> for both. Each vertical runs on its own port set so multiple can coexist.
+  </div>
+
+  <div class="sec">Standard Verticals</div>
+  <div class="vert-grid">
+
+    <!-- RETAIL -->
+    <div class="vert-card">
+      <div class="vert-header">
+        <span class="vert-dot" style="background:#e8934a"></span>
+        <span class="vert-name">Retail</span>
+        <span class="vert-brand">ACME</span>
+      </div>
+      <div class="url-list">
+        <div class="url-row">
+          <span class="url-badge badge-api">API</span>
+          <a class="url-link" href="http://localhost:8000" target="_blank">http://localhost:8000</a>
+          <button class="copy-btn" onclick="copyUrl(this,'http://localhost:8000')">copy</button>
+        </div>
+        <div class="url-row">
+          <span class="url-badge badge-api">API Health</span>
+          <a class="url-link" href="http://localhost:8000/api/health" target="_blank">http://localhost:8000/api/health</a>
+          <button class="copy-btn" onclick="copyUrl(this,'http://localhost:8000/api/health')">copy</button>
+        </div>
+        <div class="url-row">
+          <span class="url-badge badge-store">Storefront</span>
+          <a class="url-link" href="http://localhost:3000" target="_blank">http://localhost:3000</a>
+          <button class="copy-btn" onclick="copyUrl(this,'http://localhost:3000')">copy</button>
+        </div>
+        <div class="url-row">
+          <span class="url-badge badge-show">Showcase</span>
+          <a class="url-link" href="http://localhost:3000/showcase" target="_blank">http://localhost:3000/showcase</a>
+          <button class="copy-btn" onclick="copyUrl(this,'http://localhost:3000/showcase')">copy</button>
+        </div>
+        <div class="url-row">
+          <span class="url-badge badge-merchant">Merchant</span>
+          <a class="url-link" href="http://localhost:3100" target="_blank">http://localhost:3100</a>
+          <button class="copy-btn" onclick="copyUrl(this,'http://localhost:3100')">copy</button>
+        </div>
+        <div class="url-row">
+          <span class="url-badge badge-show">Showcase</span>
+          <a class="url-link" href="http://localhost:3100/showcase" target="_blank">http://localhost:3100/showcase</a>
+          <button class="copy-btn" onclick="copyUrl(this,'http://localhost:3100/showcase')">copy</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- TRAVEL -->
+    <div class="vert-card">
+      <div class="vert-header">
+        <span class="vert-dot" style="background:#38b2ac"></span>
+        <span class="vert-name">Travel</span>
+        <span class="vert-brand">ACME Travel</span>
+      </div>
+      <div class="url-list">
+        <div class="url-row">
+          <span class="url-badge badge-api">API</span>
+          <a class="url-link" href="http://localhost:8001" target="_blank">http://localhost:8001</a>
+          <button class="copy-btn" onclick="copyUrl(this,'http://localhost:8001')">copy</button>
+        </div>
+        <div class="url-row">
+          <span class="url-badge badge-api">API Health</span>
+          <a class="url-link" href="http://localhost:8001/api/health" target="_blank">http://localhost:8001/api/health</a>
+          <button class="copy-btn" onclick="copyUrl(this,'http://localhost:8001/api/health')">copy</button>
+        </div>
+        <div class="url-row">
+          <span class="url-badge badge-store">Storefront</span>
+          <a class="url-link" href="http://localhost:3001" target="_blank">http://localhost:3001</a>
+          <button class="copy-btn" onclick="copyUrl(this,'http://localhost:3001')">copy</button>
+        </div>
+        <div class="url-row">
+          <span class="url-badge badge-show">Showcase</span>
+          <a class="url-link" href="http://localhost:3001/showcase" target="_blank">http://localhost:3001/showcase</a>
+          <button class="copy-btn" onclick="copyUrl(this,'http://localhost:3001/showcase')">copy</button>
+        </div>
+        <div class="url-row">
+          <span class="url-badge badge-merchant">Merchant</span>
+          <a class="url-link" href="http://localhost:3101" target="_blank">http://localhost:3101</a>
+          <button class="copy-btn" onclick="copyUrl(this,'http://localhost:3101')">copy</button>
+        </div>
+        <div class="url-row">
+          <span class="url-badge badge-show">Showcase</span>
+          <a class="url-link" href="http://localhost:3101/showcase" target="_blank">http://localhost:3101/showcase</a>
+          <button class="copy-btn" onclick="copyUrl(this,'http://localhost:3101/showcase')">copy</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- TELECOM -->
+    <div class="vert-card">
+      <div class="vert-header">
+        <span class="vert-dot" style="background:#5b8dee"></span>
+        <span class="vert-name">Telecom</span>
+        <span class="vert-brand">ACME Mobile</span>
+      </div>
+      <div class="url-list">
+        <div class="url-row">
+          <span class="url-badge badge-api">API</span>
+          <a class="url-link" href="http://localhost:8002" target="_blank">http://localhost:8002</a>
+          <button class="copy-btn" onclick="copyUrl(this,'http://localhost:8002')">copy</button>
+        </div>
+        <div class="url-row">
+          <span class="url-badge badge-api">API Health</span>
+          <a class="url-link" href="http://localhost:8002/api/health" target="_blank">http://localhost:8002/api/health</a>
+          <button class="copy-btn" onclick="copyUrl(this,'http://localhost:8002/api/health')">copy</button>
+        </div>
+        <div class="url-row">
+          <span class="url-badge badge-store">Storefront</span>
+          <a class="url-link" href="http://localhost:3002" target="_blank">http://localhost:3002</a>
+          <button class="copy-btn" onclick="copyUrl(this,'http://localhost:3002')">copy</button>
+        </div>
+        <div class="url-row">
+          <span class="url-badge badge-show">Showcase</span>
+          <a class="url-link" href="http://localhost:3002/showcase" target="_blank">http://localhost:3002/showcase</a>
+          <button class="copy-btn" onclick="copyUrl(this,'http://localhost:3002/showcase')">copy</button>
+        </div>
+        <div class="url-row">
+          <span class="url-badge badge-merchant">Merchant</span>
+          <a class="url-link" href="http://localhost:3102" target="_blank">http://localhost:3102</a>
+          <button class="copy-btn" onclick="copyUrl(this,'http://localhost:3102')">copy</button>
+        </div>
+        <div class="url-row">
+          <span class="url-badge badge-show">Showcase</span>
+          <a class="url-link" href="http://localhost:3102/showcase" target="_blank">http://localhost:3102/showcase</a>
+          <button class="copy-btn" onclick="copyUrl(this,'http://localhost:3102/showcase')">copy</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ENTERTAINMENT -->
+    <div class="vert-card">
+      <div class="vert-header">
+        <span class="vert-dot" style="background:#d06090"></span>
+        <span class="vert-name">Entertainment</span>
+        <span class="vert-brand">ACME Tickets</span>
+      </div>
+      <div class="url-list">
+        <div class="url-row">
+          <span class="url-badge badge-api">API</span>
+          <a class="url-link" href="http://localhost:8003" target="_blank">http://localhost:8003</a>
+          <button class="copy-btn" onclick="copyUrl(this,'http://localhost:8003')">copy</button>
+        </div>
+        <div class="url-row">
+          <span class="url-badge badge-api">API Health</span>
+          <a class="url-link" href="http://localhost:8003/api/health" target="_blank">http://localhost:8003/api/health</a>
+          <button class="copy-btn" onclick="copyUrl(this,'http://localhost:8003/api/health')">copy</button>
+        </div>
+        <div class="url-row">
+          <span class="url-badge badge-store">Storefront</span>
+          <a class="url-link" href="http://localhost:3003" target="_blank">http://localhost:3003</a>
+          <button class="copy-btn" onclick="copyUrl(this,'http://localhost:3003')">copy</button>
+        </div>
+        <div class="url-row">
+          <span class="url-badge badge-show">Showcase</span>
+          <a class="url-link" href="http://localhost:3003/showcase" target="_blank">http://localhost:3003/showcase</a>
+          <button class="copy-btn" onclick="copyUrl(this,'http://localhost:3003/showcase')">copy</button>
+        </div>
+        <div class="url-row">
+          <span class="url-badge badge-merchant">Merchant</span>
+          <a class="url-link" href="http://localhost:3103" target="_blank">http://localhost:3103</a>
+          <button class="copy-btn" onclick="copyUrl(this,'http://localhost:3103')">copy</button>
+        </div>
+        <div class="url-row">
+          <span class="url-badge badge-show">Showcase</span>
+          <a class="url-link" href="http://localhost:3103/showcase" target="_blank">http://localhost:3103/showcase</a>
+          <button class="copy-btn" onclick="copyUrl(this,'http://localhost:3103/showcase')">copy</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- SALESFORCE LOCAL -->
+    <div class="vert-card">
+      <div class="vert-header">
+        <span class="vert-dot" style="background:#4caf7d"></span>
+        <span class="vert-name">Salesforce</span>
+        <span class="vert-brand">B2B Commerce</span>
+      </div>
+      <div class="url-list">
+        <div class="url-row">
+          <span class="url-badge badge-api">API</span>
+          <a class="url-link" href="http://localhost:8005" target="_blank">http://localhost:8005</a>
+          <button class="copy-btn" onclick="copyUrl(this,'http://localhost:8005')">copy</button>
+        </div>
+        <div class="url-row">
+          <span class="url-badge badge-api">API Health</span>
+          <a class="url-link" href="http://localhost:8005/api/health" target="_blank">http://localhost:8005/api/health</a>
+          <button class="copy-btn" onclick="copyUrl(this,'http://localhost:8005/api/health')">copy</button>
+        </div>
+        <div class="url-row">
+          <span class="url-badge badge-store">Storefront</span>
+          <a class="url-link" href="http://localhost:3005" target="_blank">http://localhost:3005</a>
+          <button class="copy-btn" onclick="copyUrl(this,'http://localhost:3005')">copy</button>
+        </div>
+        <div class="url-row">
+          <span class="url-badge badge-show">Showcase</span>
+          <a class="url-link" href="http://localhost:3005/showcase" target="_blank">http://localhost:3005/showcase</a>
+          <button class="copy-btn" onclick="copyUrl(this,'http://localhost:3005/showcase')">copy</button>
+        </div>
+        <div class="url-row">
+          <span class="url-badge badge-merchant">Merchant</span>
+          <a class="url-link" href="http://localhost:3105" target="_blank">http://localhost:3105</a>
+          <button class="copy-btn" onclick="copyUrl(this,'http://localhost:3105')">copy</button>
+        </div>
+        <div class="url-row">
+          <span class="url-badge badge-show">Showcase</span>
+          <a class="url-link" href="http://localhost:3105/showcase" target="_blank">http://localhost:3105/showcase</a>
+          <button class="copy-btn" onclick="copyUrl(this,'http://localhost:3105/showcase')">copy</button>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /vert-grid -->
+
+  <div class="sec">Port Quick Reference</div>
+  <div class="full-card">
+    <div class="full-body">
+      <table class="env-table" style="width:100%">
+        <thead>
+          <tr style="border-bottom:1px solid var(--border)">
+            <td style="padding:8px 16px; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:1px; color:var(--muted)">Vertical</td>
+            <td style="padding:8px 16px; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:1px; color:var(--muted)">API</td>
+            <td style="padding:8px 16px; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:1px; color:var(--muted)">Storefront</td>
+            <td style="padding:8px 16px; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:1px; color:var(--muted)">Merchant Portal</td>
+            <td style="padding:8px 16px; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:1px; color:var(--muted)">Start Command</td>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td style="padding:8px 16px"><span class="pill pill-orange">retail</span></td><td style="padding:8px 16px; font-family:monospace; color:var(--blue)">:8000</td><td style="padding:8px 16px; font-family:monospace; color:var(--teal)">:3000</td><td style="padding:8px 16px; font-family:monospace; color:var(--purple)">:3100</td><td style="padding:8px 16px; font-family:monospace; font-size:11px; color:var(--muted)">python scripts/run_demo.py retail --all</td></tr>
+          <tr><td style="padding:8px 16px"><span class="pill pill-blue">travel</span></td><td style="padding:8px 16px; font-family:monospace; color:var(--blue)">:8001</td><td style="padding:8px 16px; font-family:monospace; color:var(--teal)">:3001</td><td style="padding:8px 16px; font-family:monospace; color:var(--purple)">:3101</td><td style="padding:8px 16px; font-family:monospace; font-size:11px; color:var(--muted)">python scripts/run_demo.py travel --all</td></tr>
+          <tr><td style="padding:8px 16px"><span class="pill pill-blue">telecom</span></td><td style="padding:8px 16px; font-family:monospace; color:var(--blue)">:8002</td><td style="padding:8px 16px; font-family:monospace; color:var(--teal)">:3002</td><td style="padding:8px 16px; font-family:monospace; color:var(--purple)">:3102</td><td style="padding:8px 16px; font-family:monospace; font-size:11px; color:var(--muted)">python scripts/run_demo.py telecom --all</td></tr>
+          <tr><td style="padding:8px 16px"><span class="pill pill-pink">entertainment</span></td><td style="padding:8px 16px; font-family:monospace; color:var(--blue)">:8003</td><td style="padding:8px 16px; font-family:monospace; color:var(--teal)">:3003</td><td style="padding:8px 16px; font-family:monospace; color:var(--purple)">:3103</td><td style="padding:8px 16px; font-family:monospace; font-size:11px; color:var(--muted)">python scripts/run_demo.py entertainment --all</td></tr>
+          <tr><td style="padding:8px 16px"><span class="pill pill-green">salesforce</span></td><td style="padding:8px 16px; font-family:monospace; color:var(--blue)">:8005</td><td style="padding:8px 16px; font-family:monospace; color:var(--teal)">:3005</td><td style="padding:8px 16px; font-family:monospace; color:var(--purple)">:3105</td><td style="padding:8px 16px; font-family:monospace; font-size:11px; color:var(--muted)">uvicorn salesforce.api.main:app --app-dir examples --port 8005</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div><!-- /tab-local -->
+
+<!-- ══════════════════════ TAB: PRODUCTION ══════════════════════ -->
+<div id="tab-prod" class="tab-pane">
+
+  <div class="sec">Railway — Deployed Services</div>
+  <div class="vert-grid">
+
+    <div class="vert-card">
+      <div class="vert-header">
+        <span class="status-dot dot-prod"></span>
+        <span class="vert-name">Commerce API (Salesforce)</span>
+        <span class="vert-brand">Railway · commerce-api</span>
+      </div>
+      <div class="url-list">
+        <div class="url-row">
+          <span class="url-badge badge-prod">PROD API</span>
+          <a class="url-link" href="https://diligent-flow-production-afd7.up.railway.app" target="_blank">https://diligent-flow-production-afd7.up.railway.app</a>
+          <button class="copy-btn" onclick="copyUrl(this,'https://diligent-flow-production-afd7.up.railway.app')">copy</button>
+        </div>
+        <div class="url-row">
+          <span class="url-badge badge-prod">Health</span>
+          <a class="url-link" href="https://diligent-flow-production-afd7.up.railway.app/api/health" target="_blank">https://diligent-flow-production-afd7.up.railway.app/api/health</a>
+          <button class="copy-btn" onclick="copyUrl(this,'https://diligent-flow-production-afd7.up.railway.app/api/health')">copy</button>
+        </div>
+        <div class="url-row">
+          <span class="url-badge badge-prod">Session</span>
+          <a class="url-link" href="https://diligent-flow-production-afd7.up.railway.app/api/session" target="_blank">https://diligent-flow-production-afd7.up.railway.app/api/session</a>
+          <button class="copy-btn" onclick="copyUrl(this,'https://diligent-flow-production-afd7.up.railway.app/api/session')">copy</button>
+        </div>
+        <div class="url-row">
+          <span class="url-badge badge-prod">Chat</span>
+          <a class="url-link" href="https://diligent-flow-production-afd7.up.railway.app/api/chat" target="_blank">https://diligent-flow-production-afd7.up.railway.app/api/chat</a>
+          <button class="copy-btn" onclick="copyUrl(this,'https://diligent-flow-production-afd7.up.railway.app/api/chat')">copy</button>
+        </div>
+        <div class="url-row">
+          <span class="url-badge badge-prod">Cart</span>
+          <a class="url-link" href="https://diligent-flow-production-afd7.up.railway.app/api/cart" target="_blank">https://diligent-flow-production-afd7.up.railway.app/api/cart</a>
+          <button class="copy-btn" onclick="copyUrl(this,'https://diligent-flow-production-afd7.up.railway.app/api/cart')">copy</button>
+        </div>
+        <div class="url-row">
+          <span class="url-badge badge-prod">Products</span>
+          <a class="url-link" href="https://diligent-flow-production-afd7.up.railway.app/api/products" target="_blank">https://diligent-flow-production-afd7.up.railway.app/api/products</a>
+          <button class="copy-btn" onclick="copyUrl(this,'https://diligent-flow-production-afd7.up.railway.app/api/products')">copy</button>
+        </div>
+        <div class="url-row">
+          <span class="url-badge badge-prod">Merchant</span>
+          <a class="url-link" href="https://diligent-flow-production-afd7.up.railway.app/api/merchant/health" target="_blank">https://diligent-flow-production-afd7.up.railway.app/api/merchant/health</a>
+          <button class="copy-btn" onclick="copyUrl(this,'https://diligent-flow-production-afd7.up.railway.app/api/merchant/health')">copy</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="vert-card">
+      <div class="vert-header">
+        <span class="status-dot dot-sf"></span>
+        <span class="vert-name">Salesforce Org (B2B Commerce)</span>
+        <span class="vert-brand">atci-b2b-lex--b2bpoc</span>
+      </div>
+      <div class="url-list">
+        <div class="url-row">
+          <span class="url-badge badge-sf">SF Org</span>
+          <a class="url-link" href="https://atci-b2b-lex--b2bpoc.sandbox.my.salesforce.com" target="_blank">https://atci-b2b-lex--b2bpoc.sandbox.my.salesforce.com</a>
+          <button class="copy-btn" onclick="copyUrl(this,'https://atci-b2b-lex--b2bpoc.sandbox.my.salesforce.com')">copy</button>
+        </div>
+        <div class="url-row">
+          <span class="url-badge badge-sf">Login</span>
+          <a class="url-link" href="https://atci-b2b-lex--b2bpoc.sandbox.my.salesforce.com/lightning/setup/home" target="_blank">https://atci-b2b-lex--b2bpoc.sandbox.my.salesforce.com/lightning/setup/home</a>
+          <button class="copy-btn" onclick="copyUrl(this,'https://atci-b2b-lex--b2bpoc.sandbox.my.salesforce.com/lightning/setup/home')">copy</button>
+        </div>
+        <div class="url-row">
+          <span class="url-badge badge-sf">LWC Deploy</span>
+          <a class="url-link" href="https://workbench.developerforce.com" target="_blank">https://workbench.developerforce.com</a>
+          <button class="copy-btn" onclick="copyUrl(this,'https://workbench.developerforce.com')">copy</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="sec">Deployed LWC Components (in Salesforce Org)</div>
+  <div class="full-card">
+    <div class="full-header">
+      <span class="status-dot dot-sf"></span>
+      Lightning Web Components — deployed to <span style="font-family:monospace; font-size:11px; margin-left:6px; color:var(--pink)">atci-b2b-lex--b2bpoc.sandbox.my.salesforce.com</span>
+    </div>
+    <div class="full-body">
+      <table class="env-table">
+        <tr>
+          <td style="width:180px"><span class="pill pill-pink">salesforceStorefront</span></td>
+          <td class="env-desc">Buyer-facing shopping assistant. Embedded in B2B Commerce store pages. Connects to Railway API.</td>
+          <td><code style="font-size:10px; color:var(--muted)">embed/lwc/salesforceStorefront/</code></td>
+        </tr>
+        <tr>
+          <td><span class="pill pill-pink">commerceAgentPanel</span></td>
+          <td class="env-desc">Merchant back-office panel. Embedded in Salesforce Experience Cloud portal pages.</td>
+          <td><code style="font-size:10px; color:var(--muted)">embed/lwc/commerceAgentPanel/</code></td>
+        </tr>
+        <tr>
+          <td><span class="pill pill-pink">salesforceMerchant</span></td>
+          <td class="env-desc">Merchant agent surface for Salesforce OMS. Used by operations teams.</td>
+          <td><code style="font-size:10px; color:var(--muted)">embed/lwc/salesforceMerchant/</code></td>
+        </tr>
+      </table>
+    </div>
+  </div>
+
+  <div class="note">
+    <strong>⚠ Data constraint:</strong> Only create data in <strong>atci-b2b-lex--b2bpoc.sandbox.my.salesforce.com</strong>. Do NOT push data to <code>ets2-org--1storedpro.sandbox.lightning.force.com</code>.
+  </div>
+
+</div><!-- /tab-prod -->
+
+<!-- ══════════════════════ TAB: API ENDPOINTS ══════════════════════ -->
+<div id="tab-api" class="tab-pane">
+
+  <div class="sec">Shopper API — Shared across all verticals <span style="font-family:monospace; font-size:10px; font-weight:400; margin-left:8px; color:var(--muted)">demo_common/storefront.py</span></div>
+  <div class="ep-grid">
+    <div class="ep-card">
+      <div class="ep-header">
+        <span class="pill pill-blue">Shopping Agent</span>
+        <span class="ep-base">base: http://localhost:{8000-8005}</span>
+      </div>
+      <table class="ep-table">
+        <tr><td><span class="method m-post">POST</span></td><td class="ep-path">/api/session</td><td class="ep-note">Create session, bind user profile</td></tr>
+        <tr><td><span class="method m-post">POST</span></td><td class="ep-path">/api/chat</td><td class="ep-note">Stream a turn (SSE: text_delta, cart_update…)</td></tr>
+        <tr><td><span class="method m-get">GET</span></td><td class="ep-path">/api/products</td><td class="ep-note">List products</td></tr>
+        <tr><td><span class="method m-get">GET</span></td><td class="ep-path">/api/products/{id}</td><td class="ep-note">Single product detail</td></tr>
+        <tr><td><span class="method m-get">GET</span></td><td class="ep-path">/api/cart</td><td class="ep-note">Current session cart</td></tr>
+        <tr><td><span class="method m-get">GET</span></td><td class="ep-path">/api/orders</td><td class="ep-note">Session order history</td></tr>
+        <tr><td><span class="method m-patch">PATCH</span></td><td class="ep-path">/api/memory</td><td class="ep-note">Update agent memory facts</td></tr>
+        <tr><td><span class="method m-post">POST</span></td><td class="ep-path">/api/reset</td><td class="ep-note">Reset session state</td></tr>
+        <tr><td><span class="method m-get">GET</span></td><td class="ep-path">/api/health</td><td class="ep-note">Health check</td></tr>
+      </table>
+    </div>
+
+    <div class="ep-card">
+      <div class="ep-header">
+        <span class="pill pill-purple">Merchant Agent</span>
+        <span class="ep-base">base: http://localhost:{port}/api/merchant</span>
+      </div>
+      <table class="ep-table">
+        <tr><td><span class="method m-post">POST</span></td><td class="ep-path">/session</td><td class="ep-note">Merchant session start</td></tr>
+        <tr><td><span class="method m-post">POST</span></td><td class="ep-path">/chat</td><td class="ep-note">Stream a merchant turn (SSE)</td></tr>
+        <tr><td><span class="method m-get">GET</span></td><td class="ep-path">/overview</td><td class="ep-note">Store KPIs and summary</td></tr>
+        <tr><td><span class="method m-get">GET</span></td><td class="ep-path">/listings</td><td class="ep-note">Product catalog listings</td></tr>
+        <tr><td><span class="method m-get">GET</span></td><td class="ep-path">/listings/{id}</td><td class="ep-note">Single listing detail</td></tr>
+        <tr><td><span class="method m-get">GET</span></td><td class="ep-path">/alerts</td><td class="ep-note">Active merchant alerts</td></tr>
+        <tr><td><span class="method m-post">POST</span></td><td class="ep-path">/changes/{id}/apply</td><td class="ep-note">Apply a staged change</td></tr>
+        <tr><td><span class="method m-post">POST</span></td><td class="ep-path">/changes/{id}/discard</td><td class="ep-note">Discard a staged change</td></tr>
+        <tr><td><span class="method m-get">GET</span></td><td class="ep-path">/quote-approvals</td><td class="ep-note">Pending quote work items</td></tr>
+        <tr><td><span class="method m-post">POST</span></td><td class="ep-path">/quote-approvals/{id}/approve</td><td class="ep-note">Approve a quote</td></tr>
+        <tr><td><span class="method m-post">POST</span></td><td class="ep-path">/quote-approvals/{id}/reject</td><td class="ep-note">Reject a quote</td></tr>
+        <tr><td><span class="method m-post">POST</span></td><td class="ep-path">/reset</td><td class="ep-note">Reset merchant state</td></tr>
+        <tr><td><span class="method m-get">GET</span></td><td class="ep-path">/health</td><td class="ep-note">Merchant health check</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <div class="sec">Vertical-Specific Endpoints</div>
+  <div class="ep-grid">
+
+    <div class="ep-card">
+      <div class="ep-header">
+        <span class="pill pill-orange">Retail</span>
+        <span class="ep-base">:8000</span>
+      </div>
+      <table class="ep-table">
+        <tr><td><span class="method m-post">POST</span></td><td class="ep-path">/api/cart/add</td><td class="ep-note">Add item to cart (demo shortcut)</td></tr>
+      </table>
+    </div>
+
+    <div class="ep-card">
+      <div class="ep-header">
+        <span class="pill pill-blue">Telecom</span>
+        <span class="ep-base">:8002</span>
+      </div>
+      <table class="ep-table">
+        <tr><td><span class="method m-post">POST</span></td><td class="ep-path">/api/cart/add</td><td class="ep-note">Add plan to cart</td></tr>
+        <tr><td><span class="method m-get">GET</span></td><td class="ep-path">/api/account</td><td class="ep-note">Current account details</td></tr>
+      </table>
+    </div>
+
+    <div class="ep-card">
+      <div class="ep-header">
+        <span class="pill pill-pink">Entertainment</span>
+        <span class="ep-base">:8003</span>
+      </div>
+      <table class="ep-table">
+        <tr><td><span class="method m-get">GET</span></td><td class="ep-path">/api/holds</td><td class="ep-note">Active seat holds</td></tr>
+        <tr><td><span class="method m-post">POST</span></td><td class="ep-path">/api/holds/release</td><td class="ep-note">Release a seat hold</td></tr>
+        <tr><td><span class="method m-post">POST</span></td><td class="ep-path">/api/waitlist/join</td><td class="ep-note">Join a waitlist</td></tr>
+        <tr><td><span class="method m-get">GET</span></td><td class="ep-path">/api/waitlist</td><td class="ep-note">Waitlist status</td></tr>
+        <tr><td><span class="method m-post">POST</span></td><td class="ep-path">/api/waitlist/claim</td><td class="ep-note">Claim a waitlisted seat</td></tr>
+        <tr><td><span class="method m-get">GET</span></td><td class="ep-path">/api/tickets</td><td class="ep-note">Purchased tickets</td></tr>
+        <tr><td><span class="method m-post">POST</span></td><td class="ep-path">/api/tickets/transfer</td><td class="ep-note">Transfer a ticket</td></tr>
+        <tr><td><span class="method m-post">POST</span></td><td class="ep-path">/api/tickets/transfer/cancel</td><td class="ep-note">Cancel transfer</td></tr>
+        <tr><td><span class="method m-post">POST</span></td><td class="ep-path">/api/demo/return</td><td class="ep-note">Demo: return ticket</td></tr>
+      </table>
+    </div>
+
+    <div class="ep-card">
+      <div class="ep-header">
+        <span class="pill pill-green">Salesforce</span>
+        <span class="ep-base">:8005 or Railway</span>
+      </div>
+      <table class="ep-table">
+        <tr><td><span class="method m-post">POST</span></td><td class="ep-path">/api/reload-products</td><td class="ep-note">Reload product catalog from SF org</td></tr>
+        <tr><td><span class="method m-get">GET</span></td><td class="ep-path">/api/debug-images</td><td class="ep-note">Debug image URL resolution</td></tr>
+      </table>
+    </div>
+
+  </div>
+
+  <div class="sec">SSE Event Types — /api/chat response stream</div>
+  <div class="full-card">
+    <div class="full-body">
+      <table class="env-table">
+        <tr><td style="width:160px"><code class="env-var">text_delta</code></td><td class="env-desc">Character stream of Claude's reply text</td><td><code style="font-size:10px; color:var(--muted)">data: {"text": "..."}</code></td></tr>
+        <tr><td><code class="env-var">cart_update</code></td><td class="env-desc">Fires after add_to_cart succeeds; contains full cart state</td><td><code style="font-size:10px; color:var(--muted)">data: {"cart": {"items":[...]}}</code></td></tr>
+        <tr><td><code class="env-var">progress</code></td><td class="env-desc">Tool call in-progress indicator</td><td><code style="font-size:10px; color:var(--muted)">data: {"message": "Searching..."}</code></td></tr>
+        <tr><td><code class="env-var">tool_call</code></td><td class="env-desc">Tool invocation details (name + input)</td><td><code style="font-size:10px; color:var(--muted)">data: {"name": "search_products", ...}</code></td></tr>
+        <tr><td><code class="env-var">ui</code></td><td class="env-desc">Completed generative UI block (products, comparison, plan…)</td><td><code style="font-size:10px; color:var(--muted)">data: {"component": "products", "payload":{...}}</code></td></tr>
+        <tr><td><code class="env-var">ui_partial</code></td><td class="env-desc">Streaming fragment of a UI block during generation</td><td><code style="font-size:10px; color:var(--muted)">data: {"component": "...", ...}</code></td></tr>
+        <tr><td><code class="env-var">suggestions</code></td><td class="env-desc">Follow-up prompt suggestions after turn ends</td><td><code style="font-size:10px; color:var(--muted)">data: {"suggestions": ["...", ...]}</code></td></tr>
+        <tr><td><code class="env-var">turn_complete</code></td><td class="env-desc">Turn finished; includes stop_reason, usage, elapsed_ms</td><td><code style="font-size:10px; color:var(--muted)">data: {"stop_reason": "end_turn", ...}</code></td></tr>
+        <tr><td><code class="env-var">error</code></td><td class="env-desc">Agent or tool error with message</td><td><code style="font-size:10px; color:var(--muted)">data: {"error": "..."}</code></td></tr>
+      </table>
+    </div>
+  </div>
+
+</div><!-- /tab-api -->
+
+<!-- ══════════════════════ TAB: MCP SERVERS ══════════════════════ -->
+<div id="tab-mcp" class="tab-pane">
+
+  <div class="sec">Managed Agents — MCP Servers (self-hosted)</div>
+  <div class="vert-grid">
+
+    <div class="vert-card">
+      <div class="vert-header">
+        <span class="vert-dot" style="background:var(--teal)"></span>
+        <span class="vert-name">Storefront MCP Server</span>
+        <span class="vert-brand">Shopping Agent</span>
+      </div>
+      <div class="url-list">
+        <div class="url-row">
+          <span class="url-badge badge-mcp">MCP</span>
+          <a class="url-link" href="http://localhost:8200/mcp" target="_blank">http://localhost:8200/mcp</a>
+          <button class="copy-btn" onclick="copyUrl(this,'http://localhost:8200/mcp')">copy</button>
+        </div>
+        <div class="url-row">
+          <span class="url-badge badge-mcp">ENV VAR</span>
+          <span class="url-link" style="color:var(--yellow)">STOREFRONT_MCP_PORT=8200</span>
+          <button class="copy-btn" onclick="copyUrl(this,'STOREFRONT_MCP_PORT=8200')">copy</button>
+        </div>
+        <div class="url-row">
+          <span class="url-badge badge-mcp">ENV VAR</span>
+          <span class="url-link" style="color:var(--yellow)">STOREFRONT_MCP_URL=https://&lt;your-host&gt;/mcp</span>
+        </div>
+        <div class="url-row">
+          <span class="url-badge" style="background:#0e1428;border:1px solid #1e3060;color:var(--blue);font-size:9px;font-weight:800;padding:3px 7px;border-radius:4px;min-width:72px;text-align:center;">Start</span>
+          <span class="url-link" style="color:var(--muted); font-size:11px;">python shopping-agent/managed-agents/storefront-mcp-server/storefront_mcp_server.py</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="vert-card">
+      <div class="vert-header">
+        <span class="vert-dot" style="background:var(--purple)"></span>
+        <span class="vert-name">Merchant MCP Server</span>
+        <span class="vert-brand">Merchant Agent</span>
+      </div>
+      <div class="url-list">
+        <div class="url-row">
+          <span class="url-badge badge-mcp">MCP</span>
+          <a class="url-link" href="http://localhost:8201/mcp" target="_blank">http://localhost:8201/mcp</a>
+          <button class="copy-btn" onclick="copyUrl(this,'http://localhost:8201/mcp')">copy</button>
+        </div>
+        <div class="url-row">
+          <span class="url-badge badge-mcp">ENV VAR</span>
+          <span class="url-link" style="color:var(--yellow)">MERCHANT_MCP_PORT=8201</span>
+          <button class="copy-btn" onclick="copyUrl(this,'MERCHANT_MCP_PORT=8201')">copy</button>
+        </div>
+        <div class="url-row">
+          <span class="url-badge badge-mcp">ENV VAR</span>
+          <span class="url-link" style="color:var(--yellow)">MERCHANT_MCP_URL=https://&lt;your-host&gt;/mcp</span>
+        </div>
+        <div class="url-row">
+          <span class="url-badge" style="background:#0e1428;border:1px solid #1e3060;color:var(--blue);font-size:9px;font-weight:800;padding:3px 7px;border-radius:4px;min-width:72px;text-align:center;">Start</span>
+          <span class="url-link" style="color:var(--muted); font-size:11px;">python merchant-agent/managed-agents/merchant-mcp-server/merchant_mcp_server.py</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="sec">Managed Agent Deploy Scripts</div>
+  <div class="full-card">
+    <div class="full-header">
+      <span class="pill pill-blue">scripts/deploy_managed_agent.sh</span>
+      <span style="font-size:11px; color:var(--muted); margin-left:8px">— Posts agent manifest to Managed Agents API</span>
+    </div>
+    <div class="full-body">
+      <table class="env-table">
+        <tr>
+          <td style="width:220px"><code class="env-var">deploy_managed_agent.sh shopping-agent/managed-agents/shopping-agent</code></td>
+          <td class="env-desc">Dry run — prints the /v1/agents request body</td>
+        </tr>
+        <tr>
+          <td><code class="env-var">deploy_managed_agent.sh shopping-agent/managed-agents/shopping-agent --live</code></td>
+          <td class="env-desc">Live deploy — uploads 5 skills, creates agent, prints agent ID</td>
+        </tr>
+        <tr>
+          <td><code class="env-var">deploy_managed_agent.sh merchant-agent/managed-agents/merchant-agent</code></td>
+          <td class="env-desc">Merchant agent dry run</td>
+        </tr>
+        <tr>
+          <td><code class="env-var">deploy_managed_agent.sh merchant-agent/managed-agents/merchant-agent --live</code></td>
+          <td class="env-desc">Merchant agent live deploy</td>
+        </tr>
+      </table>
+    </div>
+  </div>
+
+  <div class="sec">All Ports at a Glance</div>
+  <div class="full-card">
+    <div class="full-body">
+      <table class="env-table">
+        <thead>
+          <tr style="border-bottom:1px solid var(--border)">
+            <td style="padding:8px 16px; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:1px; color:var(--muted)">Port</td>
+            <td style="padding:8px 16px; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:1px; color:var(--muted)">Service</td>
+            <td style="padding:8px 16px; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:1px; color:var(--muted)">Type</td>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td style="padding:6px 16px; font-family:monospace; color:var(--blue)">3000</td><td style="padding:6px 16px" class="env-desc">Retail storefront (Next.js)</td><td style="padding:6px 16px"><span class="pill pill-blue" style="font-size:9px">Web</span></td></tr>
+          <tr><td style="padding:6px 16px; font-family:monospace; color:var(--blue)">3001</td><td style="padding:6px 16px" class="env-desc">Travel storefront (Next.js)</td><td style="padding:6px 16px"><span class="pill pill-blue" style="font-size:9px">Web</span></td></tr>
+          <tr><td style="padding:6px 16px; font-family:monospace; color:var(--blue)">3002</td><td style="padding:6px 16px" class="env-desc">Telecom storefront (Next.js)</td><td style="padding:6px 16px"><span class="pill pill-blue" style="font-size:9px">Web</span></td></tr>
+          <tr><td style="padding:6px 16px; font-family:monospace; color:var(--blue)">3003</td><td style="padding:6px 16px" class="env-desc">Entertainment storefront (Next.js)</td><td style="padding:6px 16px"><span class="pill pill-blue" style="font-size:9px">Web</span></td></tr>
+          <tr><td style="padding:6px 16px; font-family:monospace; color:var(--blue)">3005</td><td style="padding:6px 16px" class="env-desc">Salesforce storefront (Next.js)</td><td style="padding:6px 16px"><span class="pill pill-blue" style="font-size:9px">Web</span></td></tr>
+          <tr><td style="padding:6px 16px; font-family:monospace; color:var(--purple)">3100</td><td style="padding:6px 16px" class="env-desc">Retail merchant portal (Next.js)</td><td style="padding:6px 16px"><span class="pill pill-purple" style="font-size:9px">Web</span></td></tr>
+          <tr><td style="padding:6px 16px; font-family:monospace; color:var(--purple)">3101</td><td style="padding:6px 16px" class="env-desc">Travel merchant portal (Next.js)</td><td style="padding:6px 16px"><span class="pill pill-purple" style="font-size:9px">Web</span></td></tr>
+          <tr><td style="padding:6px 16px; font-family:monospace; color:var(--purple)">3102</td><td style="padding:6px 16px" class="env-desc">Telecom merchant portal (Next.js)</td><td style="padding:6px 16px"><span class="pill pill-purple" style="font-size:9px">Web</span></td></tr>
+          <tr><td style="padding:6px 16px; font-family:monospace; color:var(--purple)">3103</td><td style="padding:6px 16px" class="env-desc">Entertainment merchant portal (Next.js)</td><td style="padding:6px 16px"><span class="pill pill-purple" style="font-size:9px">Web</span></td></tr>
+          <tr><td style="padding:6px 16px; font-family:monospace; color:var(--purple)">3105</td><td style="padding:6px 16px" class="env-desc">Salesforce merchant portal (Next.js)</td><td style="padding:6px 16px"><span class="pill pill-purple" style="font-size:9px">Web</span></td></tr>
+          <tr><td style="padding:6px 16px; font-family:monospace; color:var(--orange)">8000</td><td style="padding:6px 16px" class="env-desc">Retail API (FastAPI/uvicorn)</td><td style="padding:6px 16px"><span class="pill pill-orange" style="font-size:9px">API</span></td></tr>
+          <tr><td style="padding:6px 16px; font-family:monospace; color:var(--orange)">8001</td><td style="padding:6px 16px" class="env-desc">Travel API (FastAPI/uvicorn)</td><td style="padding:6px 16px"><span class="pill pill-orange" style="font-size:9px">API</span></td></tr>
+          <tr><td style="padding:6px 16px; font-family:monospace; color:var(--orange)">8002</td><td style="padding:6px 16px" class="env-desc">Telecom API (FastAPI/uvicorn)</td><td style="padding:6px 16px"><span class="pill pill-orange" style="font-size:9px">API</span></td></tr>
+          <tr><td style="padding:6px 16px; font-family:monospace; color:var(--orange)">8003</td><td style="padding:6px 16px" class="env-desc">Entertainment API (FastAPI/uvicorn)</td><td style="padding:6px 16px"><span class="pill pill-orange" style="font-size:9px">API</span></td></tr>
+          <tr><td style="padding:6px 16px; font-family:monospace; color:var(--orange)">8005</td><td style="padding:6px 16px" class="env-desc">Salesforce API (FastAPI/uvicorn)</td><td style="padding:6px 16px"><span class="pill pill-orange" style="font-size:9px">API</span></td></tr>
+          <tr><td style="padding:6px 16px; font-family:monospace; color:var(--yellow)">8200</td><td style="padding:6px 16px" class="env-desc">Storefront MCP Server — shopping agent managed mode</td><td style="padding:6px 16px"><span class="pill" style="background:var(--yellow-bg);border:1px solid #363010;color:var(--yellow);font-size:9px">MCP</span></td></tr>
+          <tr><td style="padding:6px 16px; font-family:monospace; color:var(--yellow)">8201</td><td style="padding:6px 16px" class="env-desc">Merchant MCP Server — merchant agent managed mode</td><td style="padding:6px 16px"><span class="pill" style="background:var(--yellow-bg);border:1px solid #363010;color:var(--yellow);font-size:9px">MCP</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div><!-- /tab-mcp -->
+
+</div><!-- /wrap -->
+
+<script>
+function showTab(id) {
+  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + id).classList.add('active');
+  event.currentTarget.classList.add('active');
+}
+
+function copyUrl(btn, url) {
+  navigator.clipboard.writeText(url).then(() => {
+    btn.textContent = 'copied!';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'copy'; btn.classList.remove('copied'); }, 1500);
+  }).catch(() => {
+    const ta = document.createElement('textarea');
+    ta.value = url; document.body.appendChild(ta); ta.select();
+    document.execCommand('copy'); document.body.removeChild(ta);
+    btn.textContent = 'copied!'; btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'copy'; btn.classList.remove('copied'); }, 1500);
+  });
+}
+</script>
+
+</body>
+</html>

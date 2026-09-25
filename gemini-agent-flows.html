@@ -1,0 +1,1121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gemini Shopping Agent — How It Works</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0d1117; color: #e6edf3; min-height: 100vh; }
+
+  /* ── typography ── */
+  h1 { font-size: 22px; font-weight: 700; }
+  h2 { font-size: 14px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #7d8590; margin-bottom: 16px; }
+  h3 { font-size: 13px; font-weight: 600; }
+
+  /* ── layout ── */
+  .page { max-width: 1100px; margin: 0 auto; padding: 40px 24px 60px; }
+  .hero { text-align: center; margin-bottom: 48px; }
+  .hero p { color: #8b949e; font-size: 14px; margin-top: 6px; }
+  .badge { display: inline-block; background: #161b22; border: 1px solid #30363d; border-radius: 20px; padding: 3px 10px; font-size: 11px; color: #79c0ff; margin: 0 3px; }
+
+  /* ── section wrapper ── */
+  .section { margin-bottom: 48px; }
+
+  /* ════════════════════════════════
+     HOSTING DIAGRAM
+     ════════════════════════════════ */
+  .hosting { display: grid; grid-template-columns: 1fr 60px 1fr 60px 1fr; align-items: center; gap: 0; }
+  .host-box {
+    border-radius: 14px; padding: 20px 18px; border: 1px solid;
+    position: relative;
+  }
+  .host-box.railway { background: #0d1f33; border-color: #1e4976; }
+  .host-box.google  { background: #1a1a0d; border-color: #4a3d00; }
+  .host-box.sf      { background: #1a0d1a; border-color: #4a1a4a; }
+
+  .host-label {
+    font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+    position: absolute; top: -10px; left: 16px;
+    padding: 2px 10px; border-radius: 20px;
+  }
+  .railway .host-label { background: #1e4976; color: #79c0ff; }
+  .google .host-label  { background: #4a3d00; color: #e3b341; }
+  .sf .host-label      { background: #4a1a4a; color: #d2a8ff; }
+
+  .host-title { font-size: 15px; font-weight: 700; margin-bottom: 10px; margin-top: 4px; }
+  .railway .host-title { color: #79c0ff; }
+  .google .host-title  { color: #e3b341; }
+  .sf .host-title      { color: #d2a8ff; }
+
+  .component-list { list-style: none; }
+  .component-list li {
+    font-size: 12px; color: #8b949e; padding: 4px 0;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .component-list li::before { content: '▸'; color: #30363d; flex-shrink: 0; }
+  .component-list li strong { color: #e6edf3; }
+
+  .arrow-h { text-align: center; color: #30363d; font-size: 22px; }
+
+  /* ════════════════════════════════
+     FLOWS
+     ════════════════════════════════ */
+  .flows { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+
+  .flow-card {
+    background: #161b22; border: 1px solid #30363d; border-radius: 14px;
+    overflow: hidden;
+  }
+  .flow-header {
+    padding: 14px 18px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .flow-header.blue  { background: #0d1f33; border-bottom: 1px solid #1e4976; }
+  .flow-header.green { background: #0d1f0d; border-bottom: 1px solid #1e4a1e; }
+
+  .flow-icon { font-size: 20px; }
+  .flow-title { font-size: 14px; font-weight: 700; }
+  .flow-header.blue .flow-title  { color: #79c0ff; }
+  .flow-header.green .flow-title { color: #56d364; }
+  .flow-utterance {
+    font-size: 12px; color: #8b949e; font-style: italic; margin-top: 2px;
+  }
+
+  .steps { padding: 18px; }
+  .step {
+    display: flex; gap: 12px; margin-bottom: 16px;
+    position: relative;
+  }
+  .step:not(:last-child)::after {
+    content: ''; position: absolute;
+    left: 15px; top: 32px; bottom: -16px; width: 1px;
+    background: #21262d;
+  }
+
+  .step-num {
+    width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 700; z-index: 1;
+  }
+  .blue  .step-num { background: #0d1f33; border: 1.5px solid #1e4976; color: #79c0ff; }
+  .green .step-num { background: #0d1f0d; border: 1.5px solid #1e4a1e; color: #56d364; }
+
+  .step-body { flex: 1; padding-top: 4px; }
+  .step-actor {
+    font-size: 9px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+    margin-bottom: 3px;
+  }
+  .actor-user     { color: #58a6ff; }
+  .actor-react    { color: #79c0ff; }
+  .actor-fastapi  { color: #e3b341; }
+  .actor-gemini   { color: #f97316; }
+  .actor-ucp      { color: #a5b4fc; }
+  .actor-sf       { color: #d2a8ff; }
+  .actor-tracked  { color: #56d364; }
+
+  .step-desc { font-size: 12px; color: #c9d1d9; line-height: 1.5; }
+  .step-code {
+    display: inline-block; background: #0d1117; border: 1px solid #21262d;
+    border-radius: 5px; padding: 1px 6px; font-family: 'Cascadia Code', 'Fira Code', monospace;
+    font-size: 11px; color: #a5b4fc; margin-top: 3px;
+  }
+  .step-note {
+    font-size: 10px; color: #8b949e; margin-top: 4px; font-style: italic;
+  }
+
+  /* ════════════════════════════════
+     COORDINATION TABLE
+     ════════════════════════════════ */
+  .coord { background: #161b22; border: 1px solid #30363d; border-radius: 14px; overflow: hidden; }
+  table { width: 100%; border-collapse: collapse; }
+  thead tr { background: #1c2128; }
+  th { padding: 10px 14px; font-size: 11px; font-weight: 700; text-align: left; color: #7d8590; letter-spacing: .05em; text-transform: uppercase; border-bottom: 1px solid #30363d; }
+  td { padding: 10px 14px; font-size: 12px; color: #c9d1d9; border-bottom: 1px solid #21262d; vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  tbody tr:hover { background: #1c2128; }
+
+  .tag {
+    display: inline-block; border-radius: 4px; padding: 1px 7px;
+    font-size: 10px; font-weight: 700;
+  }
+  .tag-gemini  { background: #2d1800; color: #f97316; }
+  .tag-ucp     { background: #1a1a3d; color: #a5b4fc; }
+  .tag-fastapi { background: #2d2200; color: #e3b341; }
+  .tag-sf      { background: #2d0a2d; color: #d2a8ff; }
+  .tag-react   { background: #001f3d; color: #79c0ff; }
+
+  /* ════════════════════════════════
+     SDK SECTION
+     ════════════════════════════════ */
+  .sdk-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .sdk-panel {
+    background: #161b22; border: 1px solid #30363d; border-radius: 14px; overflow: hidden;
+  }
+  .sdk-panel-header {
+    padding: 12px 16px; display: flex; align-items: center; gap: 10px;
+    border-bottom: 1px solid #30363d;
+  }
+  .sdk-panel-header.py  { background: #1a1500; }
+  .sdk-panel-header.ts  { background: #001a2e; }
+  .sdk-panel-title { font-size: 13px; font-weight: 700; }
+  .sdk-panel-header.py .sdk-panel-title { color: #e3b341; }
+  .sdk-panel-header.ts .sdk-panel-title { color: #58a6ff; }
+  .sdk-panel-sub { font-size: 11px; color: #6e7681; margin-top: 1px; }
+
+  .sdk-row {
+    display: flex; align-items: flex-start; gap: 12px;
+    padding: 11px 16px; border-bottom: 1px solid #21262d;
+  }
+  .sdk-row:last-child { border-bottom: none; }
+  .sdk-icon {
+    width: 32px; height: 32px; border-radius: 8px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center; font-size: 15px;
+  }
+  .sdk-info { flex: 1; min-width: 0; }
+  .sdk-name { font-size: 12px; font-weight: 700; color: #e6edf3; margin-bottom: 2px; }
+  .sdk-import { font-family: 'Cascadia Code','Fira Code',monospace; font-size: 10px; color: #a5b4fc;
+                 background: #0d1117; border: 1px solid #21262d; border-radius: 4px;
+                 padding: 1px 6px; display: inline-block; margin-bottom: 4px; }
+  .sdk-desc { font-size: 11px; color: #8b949e; line-height: 1.5; }
+  .sdk-ver { font-size: 10px; color: #444c56; margin-left: 6px; }
+
+  /* ════════════════════════════════
+     MCP UI FLOW
+     ════════════════════════════════ */
+  .mcp-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+  .mcp-panel {
+    border-radius: 12px; border: 1px solid; padding: 16px;
+  }
+  .mcp-panel.left  { background: #0d1117; border-color: #1e4976; }
+  .mcp-panel.right { background: #0d1117; border-color: #1a3a1a; }
+  .mcp-panel-title { font-size: 11px; font-weight: 700; letter-spacing: .08em;
+                     text-transform: uppercase; margin-bottom: 10px; }
+  .mcp-panel.left  .mcp-panel-title { color: #79c0ff; }
+  .mcp-panel.right .mcp-panel-title { color: #56d364; }
+
+  .mcp-flow-row { display: flex; gap: 0; margin-bottom: 14px; }
+  .mcp-node {
+    flex: 1; border-radius: 8px; border: 1px solid #30363d;
+    padding: 10px 12px; background: #161b22;
+  }
+  .mcp-node-label { font-size: 9px; font-weight: 700; letter-spacing: .08em;
+                    text-transform: uppercase; margin-bottom: 3px; }
+  .mcp-node-text  { font-size: 11px; color: #c9d1d9; line-height: 1.5; }
+  .mcp-arrow { display: flex; align-items: center; padding: 0 8px;
+               color: #444c56; font-size: 14px; flex-shrink: 0; }
+  .mcp-arrow.rev { color: #56d364; }
+  .mcp-arrow.fwd { color: #79c0ff; }
+
+  .msg-bubble {
+    background: #0d1f33; border: 1px solid #1e4976; border-radius: 8px;
+    padding: 6px 10px; font-size: 11px; color: #c9d1d9; margin: 4px 0;
+    font-family: 'Cascadia Code','Fira Code',monospace;
+  }
+  .msg-bubble.green { background: #0d1f0d; border-color: #1e4a1e; }
+  .msg-bubble.orange { background: #1a0d00; border-color: #4a2800; color: #f97316; }
+
+  /* ════════════════════════════════
+     UCP CHAIN
+     ════════════════════════════════ */
+  .chain-row { display: flex; align-items: stretch; gap: 0; margin-bottom: 16px; }
+  .chain-node {
+    border: 1px solid #30363d; border-radius: 10px; padding: 13px 14px; flex: 1; min-width: 0;
+  }
+  .chain-node.n-gemini  { background: #180e00; border-color: #5a3000; }
+  .chain-node.n-fastapi { background: #1c1600; border-color: #4a3800; }
+  .chain-node.n-ucp     { background: #0d0d2a; border-color: #252566; }
+  .chain-node.n-sf      { background: #1a0d1a; border-color: #4a1a4a; }
+  .chain-node.n-startup { background: #0d1f33; border-color: #1e4976; }
+
+  .chain-arrow {
+    display: flex; align-items: center; padding: 0 6px;
+    color: #444c56; font-size: 16px; flex-shrink: 0;
+  }
+  .chain-label {
+    font-size: 9px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+    margin-bottom: 5px;
+  }
+  .chain-node.n-gemini  .chain-label { color: #f97316; }
+  .chain-node.n-fastapi .chain-label { color: #e3b341; }
+  .chain-node.n-ucp     .chain-label { color: #a5b4fc; }
+  .chain-node.n-sf      .chain-label { color: #d2a8ff; }
+  .chain-node.n-startup .chain-label { color: #79c0ff; }
+  .chain-main { font-size: 12px; font-weight: 600; color: #e6edf3; margin-bottom: 3px; }
+  .chain-sub  { font-size: 11px; color: #8b949e; line-height: 1.4; }
+  .mono       { font-family: 'Cascadia Code','Fira Code',monospace; font-size: 10px;
+                background: #0d1117; border: 1px solid #21262d; border-radius: 4px;
+                padding: 1px 5px; color: #a5b4fc; display: inline-block; margin-top: 2px; }
+
+  .phase-label {
+    font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em;
+    margin: 20px 0 8px; padding: 4px 10px; border-radius: 6px; display: inline-block;
+  }
+  .phase-startup { background: #0d1f33; color: #79c0ff; }
+  .phase-runtime { background: #1a0d00; color: #f97316; }
+  .phase-auth    { background: #1a0d1a; color: #d2a8ff; }
+
+  /* ════════════════════════════════
+     TOOL TABLE
+     ════════════════════════════════ */
+  .tool-file { font-family: 'Cascadia Code','Fira Code',monospace; font-size: 10px; color: #6e7681; }
+  .hosted-badge {
+    display: inline-block; border-radius: 4px; padding: 1px 7px;
+    font-size: 10px; font-weight: 700; background: #1e4976; color: #79c0ff;
+  }
+  .sf-call { font-family: 'Cascadia Code','Fira Code',monospace; font-size: 10px; color: #d2a8ff; }
+
+  /* ════════════════════════════════
+     AUTH FLOW
+     ════════════════════════════════ */
+  .auth-row {
+    display: flex; gap: 12px; margin-bottom: 10px; align-items: flex-start;
+  }
+  .auth-num {
+    width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0;
+    background: #2d0a2d; border: 1.5px solid #6e3d7a; color: #d2a8ff;
+    font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center;
+  }
+  .auth-body { flex: 1; }
+  .auth-title { font-size: 12px; font-weight: 600; color: #e6edf3; margin-bottom: 2px; }
+  .auth-sub   { font-size: 11px; color: #8b949e; line-height: 1.5; }
+
+  /* ════════════════════════════════
+     LEGEND
+     ════════════════════════════════ */
+  .legend {
+    display: flex; flex-wrap: wrap; gap: 10px 20px;
+    background: #161b22; border: 1px solid #30363d; border-radius: 10px;
+    padding: 14px 18px;
+  }
+  .legend-item { display: flex; align-items: center; gap: 6px; font-size: 11px; color: #8b949e; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- HERO -->
+  <div class="hero">
+    <h1>Gemini Shopping Agent — How It Works</h1>
+    <p>Two flows explained end-to-end &nbsp;·&nbsp; UCP coordination &nbsp;·&nbsp; Railway hosting</p>
+    <div style="margin-top: 10px;">
+      <span class="badge">gemini-2.0-flash</span>
+      <span class="badge">UCP · REST</span>
+      <span class="badge">Railway · Docker</span>
+      <span class="badge">Salesforce B2B</span>
+    </div>
+  </div>
+
+  <!-- ── HOSTING DIAGRAM ── -->
+  <div class="section">
+    <h2>What Lives Where</h2>
+    <div class="hosting">
+
+      <!-- Railway box -->
+      <div class="host-box railway">
+        <span class="host-label">Hosted on Railway</span>
+        <div class="host-title">Single Docker Container</div>
+        <ul class="component-list">
+          <li><strong>React SPA</strong> — chat UI, cart sidebar</li>
+          <li><strong>FastAPI server</strong> — port 8090</li>
+          <li><strong>TrackedAgent</strong> — session + cart state</li>
+          <li><strong>UCP endpoints</strong> — product search, checkout</li>
+          <li><strong>Salesforce connector</strong> — OAuth + REST calls</li>
+        </ul>
+        <div style="margin-top:12px; background:#0a1929; border-radius:8px; padding:8px 10px;">
+          <div style="font-size:10px; color:#586069; margin-bottom:4px;">URL</div>
+          <div style="font-size:11px; color:#58a6ff; word-break:break-all;">perfect-achievement-production-83ee.up.railway.app</div>
+        </div>
+      </div>
+
+      <div class="arrow-h">⟷</div>
+
+      <!-- Google box -->
+      <div class="host-box google">
+        <span class="host-label">Google Cloud (external)</span>
+        <div class="host-title">Gemini API</div>
+        <ul class="component-list">
+          <li><strong>gemini-2.0-flash</strong> model</li>
+          <li>Reads UCP tool definitions</li>
+          <li>Decides which tool to call</li>
+          <li>Generates natural language reply</li>
+          <li>Returns FunctionCall objects</li>
+        </ul>
+        <div style="margin-top:12px; background:#1a1500; border-radius:8px; padding:8px 10px;">
+          <div style="font-size:10px; color:#586069; margin-bottom:4px;">Key</div>
+          <div style="font-size:11px; color:#e3b341;">GEMINI_API_KEY (in Railway env)</div>
+        </div>
+      </div>
+
+      <div class="arrow-h">⟷</div>
+
+      <!-- Salesforce box -->
+      <div class="host-box sf">
+        <span class="host-label">Salesforce (external)</span>
+        <div class="host-title">B2B Commerce Org</div>
+        <ul class="component-list">
+          <li><strong>Product catalog</strong> — SOQL queries</li>
+          <li><strong>Pricing / entitlement</strong></li>
+          <li><strong>Order creation</strong> — SObject API</li>
+          <li><strong>OAuth</strong> — JWT client credentials</li>
+          <li>atci-b2b-lex--b2bpoc org</li>
+        </ul>
+        <div style="margin-top:12px; background:#1a0a1a; border-radius:8px; padding:8px 10px;">
+          <div style="font-size:10px; color:#586069; margin-bottom:4px;">Secrets</div>
+          <div style="font-size:11px; color:#d2a8ff;">SF_CLIENT_ID · SF_CLIENT_SECRET</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── SDKs USED ── -->
+  <div class="section">
+    <h2>SDKs &amp; Libraries Used</h2>
+    <div class="sdk-grid">
+
+      <!-- BACKEND -->
+      <div class="sdk-panel">
+        <div class="sdk-panel-header py">
+          <span style="font-size:18px;">🐍</span>
+          <div>
+            <div class="sdk-panel-title">Backend — Python (Railway container)</div>
+            <div class="sdk-panel-sub">scripts/gemini_web_server.py · examples/demo_common/gemini_ucp_agent.py</div>
+          </div>
+        </div>
+
+        <div class="sdk-row">
+          <div class="sdk-icon" style="background:#1a0d00;">🤖</div>
+          <div class="sdk-info">
+            <div class="sdk-name">google-genai <span class="sdk-ver">pip install google-genai</span></div>
+            <div class="sdk-import">from google import genai<br>from google.genai import types as gtypes</div>
+            <div class="sdk-desc">
+              Core Gemini SDK. Used for:<br>
+              · <code style="font-size:10px;color:#a5b4fc;">genai.Client(api_key=...)</code> — authenticated client<br>
+              · <code style="font-size:10px;color:#a5b4fc;">gtypes.FunctionDeclaration</code> — defines each UCP tool for Gemini<br>
+              · <code style="font-size:10px;color:#a5b4fc;">gtypes.Tool([...])</code> — groups declarations<br>
+              · <code style="font-size:10px;color:#a5b4fc;">gtypes.GenerateContentConfig</code> — wraps tools + system prompt<br>
+              · Reads <code style="font-size:10px;color:#a5b4fc;">FunctionCall</code> from model response, sends back <code style="font-size:10px;color:#a5b4fc;">FunctionResponse</code>
+            </div>
+          </div>
+        </div>
+
+        <div class="sdk-row">
+          <div class="sdk-icon" style="background:#1a1500;">⚡</div>
+          <div class="sdk-info">
+            <div class="sdk-name">FastAPI <span class="sdk-ver">pip install fastapi</span></div>
+            <div class="sdk-import">from fastapi import FastAPI<br>from fastapi.middleware.cors import CORSMiddleware</div>
+            <div class="sdk-desc">Web framework for all API endpoints (<code style="font-size:10px;color:#a5b4fc;">/api/chat</code>, <code style="font-size:10px;color:#a5b4fc;">/api/cart</code>, <code style="font-size:10px;color:#a5b4fc;">/ucp/*</code>). Serves the built React SPA as static files. Handles CORS so the frontend can reach the backend.</div>
+          </div>
+        </div>
+
+        <div class="sdk-row">
+          <div class="sdk-icon" style="background:#001a0d;">🦄</div>
+          <div class="sdk-info">
+            <div class="sdk-name">uvicorn <span class="sdk-ver">pip install uvicorn</span></div>
+            <div class="sdk-import">import uvicorn<br>uvicorn.run(app, host="0.0.0.0", port=8090)</div>
+            <div class="sdk-desc">ASGI server that runs the FastAPI app. Entrypoint for the Docker container — Railway starts this process on port 8090.</div>
+          </div>
+        </div>
+
+        <div class="sdk-row">
+          <div class="sdk-icon" style="background:#001429;">🌐</div>
+          <div class="sdk-info">
+            <div class="sdk-name">httpx <span class="sdk-ver">pip install httpx</span></div>
+            <div class="sdk-import">import httpx<br>self._http = httpx.Client(timeout=30)</div>
+            <div class="sdk-desc">HTTP client used inside <code style="font-size:10px;color:#a5b4fc;">GeminiUCPAgent._call_ucp()</code> to call UCP endpoints, and inside the UCP layer to call Salesforce REST API. Chosen over <code style="font-size:10px;color:#a5b4fc;">requests</code> for async-compatible usage with FastAPI.</div>
+          </div>
+        </div>
+
+        <div class="sdk-row">
+          <div class="sdk-icon" style="background:#1a001a;">✅</div>
+          <div class="sdk-info">
+            <div class="sdk-name">pydantic <span class="sdk-ver">bundled with FastAPI</span></div>
+            <div class="sdk-import">from pydantic import BaseModel</div>
+            <div class="sdk-desc">Request/response body validation. Every API endpoint (<code style="font-size:10px;color:#a5b4fc;">ChatRequest</code>, <code style="font-size:10px;color:#a5b4fc;">CartRequest</code>) uses a Pydantic model so FastAPI auto-validates incoming JSON.</div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- FRONTEND -->
+      <div class="sdk-panel">
+        <div class="sdk-panel-header ts">
+          <span style="font-size:18px;">⚛️</span>
+          <div>
+            <div class="sdk-panel-title">Frontend — TypeScript / React (Railway, served as static)</div>
+            <div class="sdk-panel-sub">examples/gemini-storefront/src/ · built by Vite, served by FastAPI</div>
+          </div>
+        </div>
+
+        <div class="sdk-row">
+          <div class="sdk-icon" style="background:#001a2e;">⚛️</div>
+          <div class="sdk-info">
+            <div class="sdk-name">React 18.3 <span class="sdk-ver">npm: react ^18.3.1</span></div>
+            <div class="sdk-import">import { useState, useCallback, useEffect } from 'react'</div>
+            <div class="sdk-desc">
+              All UI. Key hooks used:<br>
+              · <code style="font-size:10px;color:#a5b4fc;">useState</code> — messages, cartItems, loading, addedIds<br>
+              · <code style="font-size:10px;color:#a5b4fc;">useCallback</code> — sendMessage, addToCart, checkout, checkoutPO<br>
+              · <code style="font-size:10px;color:#a5b4fc;">useEffect</code> — watchdog that clears cart when order status = 'placed'<br>
+              No external state library (Redux / Zustand) — React built-ins only.
+            </div>
+          </div>
+        </div>
+
+        <div class="sdk-row">
+          <div class="sdk-icon" style="background:#1a1000;">⚡</div>
+          <div class="sdk-info">
+            <div class="sdk-name">Vite 5.4 <span class="sdk-ver">npm: vite ^5.4.1</span></div>
+            <div class="sdk-import">// vite.config.ts<br>proxy: { '/api': 'http://localhost:8090' }</div>
+            <div class="sdk-desc">Build tool. In dev: proxies <code style="font-size:10px;color:#a5b4fc;">/api/*</code> calls to the FastAPI backend at port 8090, so no CORS issues locally. In production: <code style="font-size:10px;color:#a5b4fc;">npm run build</code> outputs static files that FastAPI serves directly via <code style="font-size:10px;color:#a5b4fc;">StaticFiles</code>.</div>
+          </div>
+        </div>
+
+        <div class="sdk-row">
+          <div class="sdk-icon" style="background:#00142e;">📘</div>
+          <div class="sdk-info">
+            <div class="sdk-name">TypeScript 5.5 <span class="sdk-ver">npm: typescript ^5.5.3</span></div>
+            <div class="sdk-import">// types.ts<br>interface Message, Product, CartItem, CheckoutSession</div>
+            <div class="sdk-desc">Strict typing across all components. Key types: <code style="font-size:10px;color:#a5b4fc;">Message</code> (chat messages with optional products/toolCalls/checkoutSession), <code style="font-size:10px;color:#a5b4fc;">CartItem</code> (product + quantity), <code style="font-size:10px;color:#a5b4fc;">CheckoutSession</code> (status field drives cart-clear logic).</div>
+          </div>
+        </div>
+
+        <div class="sdk-row">
+          <div class="sdk-icon" style="background:#001a0d;">🔗</div>
+          <div class="sdk-info">
+            <div class="sdk-name">Native fetch API <span class="sdk-ver">no extra package needed</span></div>
+            <div class="sdk-import">const res = await fetch(`${API}/chat`, {<br>&nbsp;&nbsp;method: 'POST', headers: {'Content-Type': 'application/json'},<br>&nbsp;&nbsp;body: JSON.stringify({ message: text })<br>})</div>
+            <div class="sdk-desc">All HTTP calls use the browser's built-in <code style="font-size:10px;color:#a5b4fc;">fetch</code> — no axios or react-query. Keeps the bundle small. API base constant <code style="font-size:10px;color:#a5b4fc;">const API = '/api'</code> is proxied by Vite in dev and served directly in prod.</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- SDK summary strip -->
+    <div style="margin-top:12px; display:flex; flex-wrap:wrap; gap:8px; align-items:center;">
+      <span style="font-size:11px; color:#586069;">Install all backend deps:</span>
+      <code style="font-family:'Cascadia Code','Fira Code',monospace; font-size:11px; background:#161b22; border:1px solid #30363d; border-radius:6px; padding:4px 10px; color:#56d364;">pip install fastapi uvicorn google-genai httpx pydantic</code>
+      <span style="font-size:11px; color:#586069; margin-left:8px;">Frontend:</span>
+      <code style="font-family:'Cascadia Code','Fira Code',monospace; font-size:11px; background:#161b22; border:1px solid #30363d; border-radius:6px; padding:4px 10px; color:#79c0ff;">npm install &amp;&amp; npm run build</code>
+      <span style="font-size:11px; color:#586069; margin-left:8px;">Env var needed:</span>
+      <code style="font-family:'Cascadia Code','Fira Code',monospace; font-size:11px; background:#161b22; border:1px solid #30363d; border-radius:6px; padding:4px 10px; color:#e3b341;">GEMINI_API_KEY=...</code>
+    </div>
+  </div>
+
+  <!-- ── TWO FLOWS ── -->
+  <div class="section">
+    <h2>Two Flows Traced</h2>
+    <div class="flows">
+
+      <!-- FLOW 1 -->
+      <div class="flow-card blue">
+        <div class="flow-header blue">
+          <div class="flow-icon">🔍</div>
+          <div>
+            <div class="flow-title">Flow 1 — Product Discovery</div>
+            <div class="flow-utterance">"Show me laptops under $1,200"</div>
+          </div>
+        </div>
+        <div class="steps blue">
+
+          <div class="step">
+            <div class="step-num">1</div>
+            <div class="step-body">
+              <div class="step-actor actor-user">User</div>
+              <div class="step-desc">Types message in chat input box</div>
+            </div>
+          </div>
+
+          <div class="step">
+            <div class="step-num">2</div>
+            <div class="step-body">
+              <div class="step-actor actor-react">React Frontend</div>
+              <div class="step-desc">Sends HTTP POST to backend</div>
+              <div class="step-code">POST /api/chat {"message": "Show me laptops under $1,200"}</div>
+            </div>
+          </div>
+
+          <div class="step">
+            <div class="step-num">3</div>
+            <div class="step-body">
+              <div class="step-actor actor-fastapi">FastAPI Server</div>
+              <div class="step-desc">Forwards to Gemini API with the UCP tool definitions already loaded (from <span class="step-code">GET /.well-known/ucp</span> at startup)</div>
+            </div>
+          </div>
+
+          <div class="step">
+            <div class="step-num">4</div>
+            <div class="step-body">
+              <div class="step-actor actor-gemini">Gemini Model</div>
+              <div class="step-desc">Decides to call a tool. Returns:</div>
+              <div class="step-code">FunctionCall: search_products(query="laptop", max_price=1200)</div>
+            </div>
+          </div>
+
+          <div class="step">
+            <div class="step-num">5</div>
+            <div class="step-body">
+              <div class="step-actor actor-ucp">UCP Endpoint (same container)</div>
+              <div class="step-desc">FastAPI calls its own UCP layer</div>
+              <div class="step-code">GET /ucp/products?q=laptop&amp;max_price=1200</div>
+              <div class="step-note">→ queries Salesforce B2B via REST / SOQL</div>
+            </div>
+          </div>
+
+          <div class="step">
+            <div class="step-num">6</div>
+            <div class="step-body">
+              <div class="step-actor actor-fastapi">FastAPI Server</div>
+              <div class="step-desc">Feeds product list back to Gemini as a FunctionResponse, then loops</div>
+              <div class="step-code">role="user" → FunctionResponse: [ProBook, EliteBook, ...]</div>
+            </div>
+          </div>
+
+          <div class="step">
+            <div class="step-num">7</div>
+            <div class="step-body">
+              <div class="step-actor actor-gemini">Gemini Model</div>
+              <div class="step-desc">Generates natural language reply with product context — no more tool calls needed</div>
+            </div>
+          </div>
+
+          <div class="step">
+            <div class="step-num">8</div>
+            <div class="step-body">
+              <div class="step-actor actor-react">React Frontend</div>
+              <div class="step-desc">Receives JSON response, renders chat reply + product-grid cards</div>
+              <div class="step-code">{reply, products: [...], tool_calls: [...]}</div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- FLOW 2 -->
+      <div class="flow-card green">
+        <div class="flow-header green">
+          <div class="flow-icon">🛒</div>
+          <div>
+            <div class="flow-title">Flow 2 — Add to Cart</div>
+            <div class="flow-utterance">"Add 2 ProBook to my cart"</div>
+          </div>
+        </div>
+        <div class="steps green">
+
+          <div class="step">
+            <div class="step-num">1</div>
+            <div class="step-body">
+              <div class="step-actor actor-user">User</div>
+              <div class="step-desc">Types message, OR clicks the Add to Cart button on a product card</div>
+            </div>
+          </div>
+
+          <div class="step">
+            <div class="step-num">2</div>
+            <div class="step-body">
+              <div class="step-actor actor-react">React Frontend</div>
+              <div class="step-desc">Sends to backend — typed message uses <span class="step-code">/api/chat</span>, button click uses <span class="step-code">/api/cart</span></div>
+              <div class="step-code">POST /api/chat {"message": "Add 2 ProBook to my cart"}</div>
+            </div>
+          </div>
+
+          <div class="step">
+            <div class="step-num">3</div>
+            <div class="step-body">
+              <div class="step-actor actor-fastapi">FastAPI Server</div>
+              <div class="step-desc">Forwards to Gemini with conversation history (prior search results are in context)</div>
+            </div>
+          </div>
+
+          <div class="step">
+            <div class="step-num">4</div>
+            <div class="step-body">
+              <div class="step-actor actor-gemini">Gemini Model</div>
+              <div class="step-desc">Identifies the ProBook from prior context. Returns:</div>
+              <div class="step-code">FunctionCall: add_to_cart(product_id="P-001", quantity=2)</div>
+            </div>
+          </div>
+
+          <div class="step">
+            <div class="step-num">5</div>
+            <div class="step-body">
+              <div class="step-actor actor-ucp">UCP Endpoint (same container)</div>
+              <div class="step-desc">FastAPI calls the checkout-sessions endpoint</div>
+              <div class="step-code">POST /ucp/checkout-sessions  {items: [{product_id, qty: 2}]}</div>
+            </div>
+          </div>
+
+          <div class="step">
+            <div class="step-num">6</div>
+            <div class="step-body">
+              <div class="step-actor actor-tracked">TrackedAgent (in-memory)</div>
+              <div class="step-desc">Records the addition in <span class="step-code">self.cart</span> and <span class="step-code">self.cart_additions</span> — persists for the session lifetime</div>
+            </div>
+          </div>
+
+          <div class="step">
+            <div class="step-num">7</div>
+            <div class="step-body">
+              <div class="step-actor actor-gemini">Gemini Model</div>
+              <div class="step-desc">Receives tool result, generates confirmation reply</div>
+            </div>
+          </div>
+
+          <div class="step">
+            <div class="step-num">8</div>
+            <div class="step-body">
+              <div class="step-actor actor-react">React Frontend</div>
+              <div class="step-desc">Receives response, syncs cart sidebar from <span class="step-code">cart_additions</span> field — shows ProBook × 2</div>
+              <div class="step-code">{reply, cart_additions: [{product, quantity: 2}]}</div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── MCP UI FLOW ── -->
+  <div class="section">
+    <h2>MCP UI — How the Product Grid Is Returned &amp; Called</h2>
+
+    <!-- Split-screen architecture diagram -->
+    <div style="background:#161b22; border:1px solid #30363d; border-radius:14px; padding:18px 20px; margin-bottom:20px;">
+      <div style="font-size:12px; font-weight:600; color:#8b949e; margin-bottom:14px;">
+        Split-screen mode &nbsp;·&nbsp; <code style="font-size:11px;color:#a5b4fc;">scripts/gemini_mcp_ui_server.py</code> &nbsp;·&nbsp; port 8099
+      </div>
+      <div style="display:grid; grid-template-columns:1fr 32px 1fr; gap:0; align-items:stretch;">
+
+        <!-- Left panel -->
+        <div style="background:#0d1117; border:2px solid #1e4976; border-radius:10px; padding:14px 16px;">
+          <div style="font-size:10px; font-weight:700; color:#79c0ff; letter-spacing:.08em; text-transform:uppercase; margin-bottom:10px;">Left Panel — Gemini Chat</div>
+          <ul class="component-list">
+            <li>User types messages here</li>
+            <li><strong>POST /api/chat</strong> → FastAPI → Gemini</li>
+            <li>Shows Gemini text replies</li>
+            <li>Shows tool call log (which UCP tools fired)</li>
+            <li>On reply: calls <strong>pushProducts()</strong> to iframe</li>
+          </ul>
+        </div>
+
+        <!-- Arrow -->
+        <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; padding:0 4px;">
+          <div style="color:#79c0ff; font-size:11px;">→</div>
+          <div style="font-size:8px; color:#444c56; text-align:center; writing-mode:vertical-rl; transform:rotate(180deg); letter-spacing:.04em;">postMessage</div>
+          <div style="color:#56d364; font-size:11px;">←</div>
+        </div>
+
+        <!-- Right panel -->
+        <div style="background:#0d1117; border:2px solid #1a4a1a; border-radius:10px; padding:14px 16px;">
+          <div style="font-size:10px; font-weight:700; color:#56d364; letter-spacing:.08em; text-transform:uppercase; margin-bottom:10px;">Right Panel — MCP Apps Product Grid (iframe)</div>
+          <ul class="component-list">
+            <li>Served at <strong>GET /ui/product-grid</strong></li>
+            <li>Same HTML as <code style="font-size:10px;color:#a5b4fc;">ui://storefront/product-grid</code></li>
+            <li>Renders product cards from parent's data</li>
+            <li>Sends <strong>mcp/ui_ready</strong> on load</li>
+            <li>Sends <strong>mcp/call_tool</strong> on Add to Cart click</li>
+          </ul>
+        </div>
+      </div>
+      <div style="margin-top:10px; font-size:11px; color:#586069; text-align:center;">
+        Protocol: <strong style="color:#a5b4fc;">JSON-RPC 2.0 over window.postMessage</strong> — not network HTTP; same-page browser message passing
+      </div>
+    </div>
+
+    <!-- Flow A: Search → push to iframe -->
+    <div class="phase-label phase-runtime" style="background:#0d1f33; color:#79c0ff;">Flow A — Search results pushed to iframe</div>
+    <div class="mcp-flow-row" style="margin-top:10px;">
+      <div class="mcp-node">
+        <div class="mcp-node-label" style="color:#58a6ff;">User</div>
+        <div class="mcp-node-text">Types "Show me laptops" in chat input (left panel)</div>
+      </div>
+      <div class="mcp-arrow fwd">→</div>
+      <div class="mcp-node">
+        <div class="mcp-node-label" style="color:#e3b341;">FastAPI + Gemini</div>
+        <div class="mcp-node-text">Runs full UCP loop. Returns JSON with <span class="mono">products:[...]</span> array alongside the reply</div>
+      </div>
+      <div class="mcp-arrow fwd">→</div>
+      <div class="mcp-node">
+        <div class="mcp-node-label" style="color:#79c0ff;">Parent Page JS</div>
+        <div class="mcp-node-text">Calls <span class="mono">pushProducts(data.products)</span> — sends product array to iframe via postMessage</div>
+        <div class="msg-bubble">{ products: [ {id, title, price, image_url}, … ] }</div>
+      </div>
+      <div class="mcp-arrow fwd">→</div>
+      <div class="mcp-node">
+        <div class="mcp-node-label" style="color:#56d364;">Product Grid iframe</div>
+        <div class="mcp-node-text">Receives message, renders product cards with images, titles, prices, and an <strong>Add to Cart</strong> button on each</div>
+      </div>
+    </div>
+    <div style="padding:8px 0 16px 12px; font-size:11px; color:#8b949e;">
+      ⚠️ If iframe hasn't loaded yet when reply arrives, products are queued in <span class="mono">pendingProducts</span> and pushed once <span class="mono">mcp/ui_ready</span> fires.
+    </div>
+
+    <!-- Flow B: Add to cart from iframe -->
+    <div class="phase-label phase-runtime" style="background:#0d1f0d; color:#56d364;">Flow B — Add to Cart clicked inside iframe</div>
+    <div class="mcp-flow-row" style="margin-top:10px;">
+      <div class="mcp-node">
+        <div class="mcp-node-label" style="color:#56d364;">Product Grid iframe</div>
+        <div class="mcp-node-text">User clicks Add to Cart. Iframe sends JSON-RPC call to parent window:</div>
+        <div class="msg-bubble green">{ jsonrpc:"2.0", id:1, method:"mcp/call_tool", params:{ name:"add_to_cart", arguments:{product_id, quantity:1} } }</div>
+      </div>
+      <div class="mcp-arrow rev">→</div>
+      <div class="mcp-node">
+        <div class="mcp-node-label" style="color:#79c0ff;">Parent Page JS</div>
+        <div class="mcp-node-text">Listens via <span class="mono">window.addEventListener("message")</span>. Checks <span class="mono">msg.method === "mcp/call_tool"</span> and <span class="mono">name === "add_to_cart"</span>, then calls backend</div>
+        <div class="msg-bubble">POST /api/cart {product_id, quantity}</div>
+      </div>
+      <div class="mcp-arrow rev">→</div>
+      <div class="mcp-node">
+        <div class="mcp-node-label" style="color:#e3b341;">FastAPI + Gemini</div>
+        <div class="mcp-node-text">Gemini notified: <em>"User added product_id to cart qty 1"</em>. Runs UCP loop → creates checkout session via <span class="mono">POST /ucp/checkout-sessions</span></div>
+      </div>
+      <div class="mcp-arrow rev">→</div>
+      <div class="mcp-node">
+        <div class="mcp-node-label" style="color:#56d364;">iframe ← parent</div>
+        <div class="mcp-node-text">Parent responds to iframe with JSON-RPC result so the button state updates (no double-click):</div>
+        <div class="msg-bubble green">{ jsonrpc:"2.0", id:1, result:{} }</div>
+      </div>
+    </div>
+
+    <!-- Protocol reference -->
+    <div style="background:#161b22; border:1px solid #30363d; border-radius:10px; padding:14px 18px; margin-top:4px;">
+      <div style="font-size:12px; font-weight:600; color:#e6edf3; margin-bottom:10px;">JSON-RPC 2.0 Message Reference (postMessage protocol)</div>
+      <table style="font-size:11px; width:100%;">
+        <thead><tr>
+          <th style="padding:6px 10px; font-size:10px; color:#7d8590; text-align:left; border-bottom:1px solid #30363d;">Direction</th>
+          <th style="padding:6px 10px; font-size:10px; color:#7d8590; text-align:left; border-bottom:1px solid #30363d;">method</th>
+          <th style="padding:6px 10px; font-size:10px; color:#7d8590; text-align:left; border-bottom:1px solid #30363d;">Payload</th>
+          <th style="padding:6px 10px; font-size:10px; color:#7d8590; text-align:left; border-bottom:1px solid #30363d;">Purpose</th>
+        </tr></thead>
+        <tbody>
+          <tr>
+            <td style="padding:6px 10px; color:#56d364;">iframe → parent</td>
+            <td style="padding:6px 10px;"><span class="mono">mcp/ui_ready</span></td>
+            <td style="padding:6px 10px; color:#8b949e;">—</td>
+            <td style="padding:6px 10px; color:#c9d1d9;">iframe has loaded; parent can now push products</td>
+          </tr>
+          <tr>
+            <td style="padding:6px 10px; color:#56d364;">iframe → parent</td>
+            <td style="padding:6px 10px;"><span class="mono">mcp/call_tool</span></td>
+            <td style="padding:6px 10px;"><span class="mono">{name:"add_to_cart", arguments:{product_id, quantity}}</span></td>
+            <td style="padding:6px 10px; color:#c9d1d9;">User clicked Add to Cart button in the grid</td>
+          </tr>
+          <tr>
+            <td style="padding:6px 10px; color:#79c0ff;">parent → iframe</td>
+            <td style="padding:6px 10px;"><span class="mono">(products push)</span></td>
+            <td style="padding:6px 10px;"><span class="mono">{products:[{id, title, price, image_url}]}</span></td>
+            <td style="padding:6px 10px; color:#c9d1d9;">Push search results to render in the product grid</td>
+          </tr>
+          <tr>
+            <td style="padding:6px 10px; color:#79c0ff;">parent → iframe</td>
+            <td style="padding:6px 10px;"><span class="mono">(JSON-RPC result)</span></td>
+            <td style="padding:6px 10px;"><span class="mono">{jsonrpc:"2.0", id, result:{}}</span></td>
+            <td style="padding:6px 10px; color:#c9d1d9;">Acknowledge tool call so iframe resets button state</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── UCP ↔ SALESFORCE CHAIN ── -->
+  <div class="section">
+    <h2>UCP ↔ Tools ↔ Salesforce — Full Call Chain</h2>
+
+    <!-- PHASE: STARTUP -->
+    <div class="phase-label phase-startup">① Startup — Tool Registration (once)</div>
+    <div class="chain-row">
+      <div class="chain-node n-startup">
+        <div class="chain-label">FastAPI / TrackedAgent</div>
+        <div class="chain-main">Server starts</div>
+        <div class="chain-sub">Python process boots inside Railway container. <span class="mono">TrackedAgent.__init__</span> runs immediately.</div>
+      </div>
+      <div class="chain-arrow">→</div>
+      <div class="chain-node n-ucp">
+        <div class="chain-label">UCP Manifest</div>
+        <div class="chain-main">Fetch capabilities</div>
+        <div class="chain-sub"><span class="mono">GET /.well-known/ucp</span> — reads JSON listing every supported capability: <em>product_discovery</em>, <em>checkout</em>, <em>quotes</em>, <em>order_placement</em></div>
+      </div>
+      <div class="chain-arrow">→</div>
+      <div class="chain-node n-gemini">
+        <div class="chain-label">Gemini SDK</div>
+        <div class="chain-main">Build FunctionDeclarations</div>
+        <div class="chain-sub"><span class="mono">_build_tools()</span> converts each capability into a Gemini <span class="mono">FunctionDeclaration</span> — name, description, parameters schema. Stored in <span class="mono">GenerateContentConfig</span>.</div>
+      </div>
+      <div class="chain-arrow">→</div>
+      <div class="chain-node n-fastapi">
+        <div class="chain-label">Ready</div>
+        <div class="chain-main">Tools registered, ready</div>
+        <div class="chain-sub">Same tool list is sent on <strong>every turn</strong>. Gemini always knows what it can call without any re-discovery.</div>
+      </div>
+    </div>
+
+    <!-- PHASE: RUNTIME search_products -->
+    <div class="phase-label phase-runtime">② Runtime — search_products ("Show me laptops under $1,200")</div>
+    <div class="chain-row">
+      <div class="chain-node n-gemini">
+        <div class="chain-label">Gemini Model</div>
+        <div class="chain-main">Decides to call tool</div>
+        <div class="chain-sub">Returns <span class="mono">FunctionCall</span>:<br>name = <span class="mono">search_products</span><br>args = <span class="mono">{query:"laptop", max_price:1200}</span></div>
+      </div>
+      <div class="chain-arrow">→</div>
+      <div class="chain-node n-fastapi">
+        <div class="chain-label">FastAPI — _call_ucp()</div>
+        <div class="chain-main">Routes by tool name</div>
+        <div class="chain-sub">Reads <span class="mono">function_call.name</span>, maps it to the UCP endpoint from the manifest. Calls internally via HTTP (same process).</div>
+      </div>
+      <div class="chain-arrow">→</div>
+      <div class="chain-node n-ucp">
+        <div class="chain-label">UCP Endpoint (Railway)</div>
+        <div class="chain-main">GET /ucp/products</div>
+        <div class="chain-sub">Receives <span class="mono">?q=laptop&max_price=1200</span>. Builds SOQL query. Calls Salesforce REST API with stored OAuth token.</div>
+      </div>
+      <div class="chain-arrow">→</div>
+      <div class="chain-node n-sf">
+        <div class="chain-label">Salesforce B2B (external)</div>
+        <div class="chain-main">SOQL product query</div>
+        <div class="chain-sub"><span class="mono">SELECT Id, Name, Price FROM ProductCatalog WHERE Price &lt; 1200 AND Name LIKE '%laptop%'</span><br>Returns product list as JSON</div>
+      </div>
+    </div>
+    <div style="display:flex; align-items:center; gap:8px; margin: 6px 0 14px 0; padding-left: 16px;">
+      <span style="color:#444c56; font-size:13px;">↩ Result flows back:</span>
+      <span class="mono">FunctionResponse → Gemini → plain text reply → FastAPI → React</span>
+    </div>
+
+    <!-- PHASE: RUNTIME add_to_cart -->
+    <div class="phase-label phase-runtime">③ Runtime — add_to_cart ("Add 2 ProBook to my cart")</div>
+    <div class="chain-row">
+      <div class="chain-node n-gemini">
+        <div class="chain-label">Gemini Model</div>
+        <div class="chain-main">Decides to call tool</div>
+        <div class="chain-sub">Returns <span class="mono">FunctionCall</span>:<br>name = <span class="mono">add_to_cart</span><br>args = <span class="mono">{product_id:"P-001", quantity:2}</span></div>
+      </div>
+      <div class="chain-arrow">→</div>
+      <div class="chain-node n-fastapi">
+        <div class="chain-label">FastAPI — TrackedAgent</div>
+        <div class="chain-main">Routes + tracks</div>
+        <div class="chain-sub">Updates <span class="mono">self.cart[]</span> in memory. Records in <span class="mono">self.cart_additions</span> so React sidebar can sync. Then calls UCP.</div>
+      </div>
+      <div class="chain-arrow">→</div>
+      <div class="chain-node n-ucp">
+        <div class="chain-label">UCP Endpoint (Railway)</div>
+        <div class="chain-main">POST /ucp/checkout-sessions</div>
+        <div class="chain-sub">Creates or updates checkout session. Payload: <span class="mono">{items:[{product_id, qty:2}]}</span>. Returns session ID.</div>
+      </div>
+      <div class="chain-arrow">→</div>
+      <div class="chain-node n-sf">
+        <div class="chain-label">Salesforce B2B (external)</div>
+        <div class="chain-main">WebCart + CartItem SObjects</div>
+        <div class="chain-sub">Creates <span class="mono">WebCart</span> record + <span class="mono">CartItem</span> child. Or updates existing cart. Returns confirmation with cart total.</div>
+      </div>
+    </div>
+
+    <!-- PHASE: AUTH -->
+    <div class="phase-label phase-auth">④ Salesforce Auth — JWT Bearer (runs before every token-expired call)</div>
+    <div style="background:#161b22; border:1px solid #30363d; border-radius:14px; padding:20px 22px;">
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:24px;">
+        <div>
+          <div style="font-size:12px; font-weight:600; color:#d2a8ff; margin-bottom:14px;">OAuth JWT Bearer Flow</div>
+          <div class="auth-row">
+            <div class="auth-num">1</div>
+            <div class="auth-body">
+              <div class="auth-title">Sign JWT</div>
+              <div class="auth-sub">Server signs a JWT with <span class="mono">SF_PRIVATE_KEY</span>. Claims: <span class="mono">iss=SF_CLIENT_ID</span>, <span class="mono">sub=SF_USERNAME</span>, <span class="mono">aud=login.salesforce.com</span>, 3-min expiry.</div>
+            </div>
+          </div>
+          <div class="auth-row">
+            <div class="auth-num">2</div>
+            <div class="auth-body">
+              <div class="auth-title">Exchange for access token</div>
+              <div class="auth-sub"><span class="mono">POST /services/oauth2/token</span><br>grant_type = <span class="mono">urn:ietf:params:oauth:grant-type:jwt-bearer</span></div>
+            </div>
+          </div>
+          <div class="auth-row">
+            <div class="auth-num">3</div>
+            <div class="auth-body">
+              <div class="auth-title">Token stored in memory</div>
+              <div class="auth-sub">Salesforce returns <span class="mono">access_token</span> + <span class="mono">instance_url</span>. Cached in the Python process. Refreshed on 401.</div>
+            </div>
+          </div>
+          <div class="auth-row">
+            <div class="auth-num">4</div>
+            <div class="auth-body">
+              <div class="auth-title">Every API call uses it</div>
+              <div class="auth-sub">Header: <span class="mono">Authorization: Bearer {access_token}</span>. No user login required — server-to-server only.</div>
+            </div>
+          </div>
+        </div>
+        <div>
+          <div style="font-size:12px; font-weight:600; color:#d2a8ff; margin-bottom:14px;">Salesforce API Calls by Operation</div>
+          <table style="font-size:11px;">
+            <thead>
+              <tr>
+                <th style="font-size:10px; padding:6px 10px;">Operation</th>
+                <th style="font-size:10px; padding:6px 10px;">Salesforce API</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td style="padding:6px 10px; color:#e6edf3;">Product search</td><td style="padding:6px 10px;" class="sf-call">REST /query?q=SELECT…</td></tr>
+              <tr><td style="padding:6px 10px; color:#e6edf3;">Product detail</td><td style="padding:6px 10px;" class="sf-call">REST /sobjects/Product2/{id}</td></tr>
+              <tr><td style="padding:6px 10px; color:#e6edf3;">Add to cart</td><td style="padding:6px 10px;" class="sf-call">REST /sobjects/WebCart (POST)</td></tr>
+              <tr><td style="padding:6px 10px; color:#e6edf3;">Get cart</td><td style="padding:6px 10px;" class="sf-call">REST /sobjects/WebCart/{id}</td></tr>
+              <tr><td style="padding:6px 10px; color:#e6edf3;">Place order</td><td style="padding:6px 10px;" class="sf-call">REST /sobjects/Order (POST)</td></tr>
+              <tr><td style="padding:6px 10px; color:#e6edf3;">Save quote</td><td style="padding:6px 10px;" class="sf-call">REST /sobjects/Quote (POST)</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── ALL TOOLS TABLE ── -->
+  <div class="section">
+    <h2>All Tools — Where They Live &amp; What They Call</h2>
+    <div class="coord">
+      <table>
+        <thead>
+          <tr>
+            <th>Gemini Tool Name</th>
+            <th>UCP HTTP Endpoint</th>
+            <th>Salesforce Call</th>
+            <th>Defined In</th>
+            <th>Hosted</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong style="color:#f97316;">search_products</strong></td>
+            <td><span class="sf-call">GET /ucp/products<br>?q=&amp;max_price=&amp;category=</span></td>
+            <td><span class="sf-call">SOQL SELECT from Product2 / B2B ProductCatalog</span></td>
+            <td><span class="tool-file">examples/demo_common/ucp.py<br>→ build_ucp_router()</span></td>
+            <td><span class="hosted-badge">Railway</span></td>
+          </tr>
+          <tr>
+            <td><strong style="color:#f97316;">get_product_details</strong></td>
+            <td><span class="sf-call">GET /ucp/products/{product_id}</span></td>
+            <td><span class="sf-call">SOQL SELECT WHERE Id = '{id}'</span></td>
+            <td><span class="tool-file">examples/demo_common/ucp.py</span></td>
+            <td><span class="hosted-badge">Railway</span></td>
+          </tr>
+          <tr>
+            <td><strong style="color:#f97316;">add_to_cart</strong></td>
+            <td><span class="sf-call">POST /ucp/checkout-sessions<br>{items: [{product_id, qty}]}</span></td>
+            <td><span class="sf-call">POST /sobjects/WebCart<br>+ POST /sobjects/CartItem</span></td>
+            <td><span class="tool-file">examples/demo_common/ucp.py<br>+ scripts/gemini_web_server.py TrackedAgent</span></td>
+            <td><span class="hosted-badge">Railway</span></td>
+          </tr>
+          <tr>
+            <td><strong style="color:#f97316;">get_cart</strong></td>
+            <td><span class="sf-call">GET /ucp/checkout-sessions/{id}</span></td>
+            <td><span class="sf-call">GET /sobjects/WebCart/{id} with CartItems</span></td>
+            <td><span class="tool-file">examples/demo_common/ucp.py</span></td>
+            <td><span class="hosted-badge">Railway</span></td>
+          </tr>
+          <tr>
+            <td><strong style="color:#f97316;">place_b2b_order</strong></td>
+            <td><span class="sf-call">POST /ucp/checkout-sessions/{id}/place<br>{payment_method, po_number}</span></td>
+            <td><span class="sf-call">POST /sobjects/Order<br>+ POST /sobjects/OrderItem (per line)</span></td>
+            <td><span class="tool-file">examples/demo_common/ucp.py<br>shopping-agent/core/shopping_agent/tools/</span></td>
+            <td><span class="hosted-badge">Railway</span></td>
+          </tr>
+          <tr>
+            <td><strong style="color:#f97316;">save_as_quote</strong></td>
+            <td><span class="sf-call">POST /ucp/quotes<br>{items, name}</span></td>
+            <td><span class="sf-call">POST /sobjects/Quote<br>+ POST /sobjects/QuoteLineItem</span></td>
+            <td><span class="tool-file">examples/demo_common/ucp.py</span></td>
+            <td><span class="hosted-badge">Railway</span></td>
+          </tr>
+          <tr>
+            <td><strong style="color:#f97316;">load_quote</strong></td>
+            <td><span class="sf-call">GET /ucp/quotes/{quote_id}</span></td>
+            <td><span class="sf-call">SOQL SELECT Quote + QuoteLineItem WHERE Id = '{id}'</span></td>
+            <td><span class="tool-file">examples/demo_common/ucp.py</span></td>
+            <td><span class="hosted-badge">Railway</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div style="margin-top:10px; padding:10px 14px; background:#161b22; border:1px solid #21262d; border-radius:8px; font-size:11px; color:#8b949e; line-height:1.7;">
+      <strong style="color:#e6edf3;">Key point:</strong> Every tool is a Python function in the Railway container — none run inside Gemini's cloud. Gemini only <em>decides which tool to call</em> and <em>what arguments to pass</em>. The actual HTTP request to Salesforce always originates from Railway.
+    </div>
+  </div>
+
+  <!-- ── COORDINATION TABLE ── -->
+  <div class="section">
+    <h2>How UCP and Gemini Coordinate</h2>
+    <div class="coord">
+      <table>
+        <thead>
+          <tr>
+            <th>Moment</th>
+            <th>Who acts</th>
+            <th>What happens</th>
+            <th>Layer</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Server startup</strong></td>
+            <td>TrackedAgent</td>
+            <td>Fetches <code style="font-size:11px;color:#a5b4fc">GET /.well-known/ucp</code> — reads the manifest to discover which capabilities (search, checkout) are available, then builds Gemini <code style="font-size:11px;color:#a5b4fc">FunctionDeclaration</code> objects automatically. Gemini never needs manual tool registration.</td>
+            <td><span class="tag tag-ucp">UCP</span></td>
+          </tr>
+          <tr>
+            <td><strong>Every turn</strong></td>
+            <td>FastAPI → Gemini</td>
+            <td>The same tool definitions are sent on every request alongside the conversation history. Gemini decides whether to answer directly or call a tool — it is the single decision-maker.</td>
+            <td><span class="tag tag-gemini">Gemini</span></td>
+          </tr>
+          <tr>
+            <td><strong>Tool call returned</strong></td>
+            <td>FastAPI (agentic loop)</td>
+            <td>If Gemini returns a <code style="font-size:11px;color:#a5b4fc">FunctionCall</code>, FastAPI executes the matching UCP HTTP endpoint, collects the result, and re-sends to Gemini as a <code style="font-size:11px;color:#a5b4fc">FunctionResponse</code>. The loop repeats until Gemini returns plain text.</td>
+            <td><span class="tag tag-fastapi">FastAPI</span> <span class="tag tag-ucp">UCP</span></td>
+          </tr>
+          <tr>
+            <td><strong>UCP → Salesforce</strong></td>
+            <td>UCP layer</td>
+            <td>The UCP endpoint translates the call into a Salesforce REST / SOQL query using the stored OAuth token. Gemini never talks to Salesforce directly — UCP is the only bridge.</td>
+            <td><span class="tag tag-sf">Salesforce</span></td>
+          </tr>
+          <tr>
+            <td><strong>Cart state</strong></td>
+            <td>TrackedAgent</td>
+            <td><code style="font-size:11px;color:#a5b4fc">self.cart</code> is an in-memory Python list inside the running container. It survives across turns in a session but resets on deploy or container restart. The React cart sidebar mirrors it via <code style="font-size:11px;color:#a5b4fc">cart_additions</code> in the JSON response.</td>
+            <td><span class="tag tag-fastapi">FastAPI</span> <span class="tag tag-react">React</span></td>
+          </tr>
+          <tr>
+            <td><strong>Reply to user</strong></td>
+            <td>FastAPI → React</td>
+            <td>Once Gemini returns text (no more tool calls), FastAPI assembles a single JSON response with <code style="font-size:11px;color:#a5b4fc">reply</code>, <code style="font-size:11px;color:#a5b4fc">products</code>, <code style="font-size:11px;color:#a5b4fc">tool_calls</code>, <code style="font-size:11px;color:#a5b4fc">cart_additions</code>, and <code style="font-size:11px;color:#a5b4fc">checkout_session</code>. React renders it all in one update.</td>
+            <td><span class="tag tag-react">React</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── LEGEND ── -->
+  <div class="section">
+    <h2>Actor Legend</h2>
+    <div class="legend">
+      <div class="legend-item"><div class="dot" style="background:#58a6ff"></div>User — browser</div>
+      <div class="legend-item"><div class="dot" style="background:#79c0ff"></div>React SPA — chat UI &amp; cart (Railway)</div>
+      <div class="legend-item"><div class="dot" style="background:#e3b341"></div>FastAPI — web server, agentic loop (Railway)</div>
+      <div class="legend-item"><div class="dot" style="background:#f97316"></div>Gemini model — decision-maker (Google Cloud)</div>
+      <div class="legend-item"><div class="dot" style="background:#a5b4fc"></div>UCP endpoints — product &amp; checkout REST layer (Railway)</div>
+      <div class="legend-item"><div class="dot" style="background:#56d364"></div>TrackedAgent — session &amp; cart memory (Railway)</div>
+      <div class="legend-item"><div class="dot" style="background:#d2a8ff"></div>Salesforce B2B — catalog, orders (external)</div>
+    </div>
+  </div>
+
+  <div style="text-align:center; color:#586069; font-size:11px; margin-top: 8px;">
+    commerce-agents · Gemini UCP reference implementation · Railway single-container deployment
+  </div>
+
+</div>
+</body>
+</html>

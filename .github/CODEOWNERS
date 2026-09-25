@@ -1,0 +1,34 @@
+# CODEOWNERS for commerce-agents-main
+# Order matters: later rules override earlier ones.
+# GitHub requires at least one review from each owner before merge.
+
+# ── Default owner: tech lead reviews everything not matched below ─────────────
+*                                                 @sorabh-bansal
+
+# ── Salesforce Apex (triggers, handlers, services) ────────────────────────────
+/salesforce/force-app/main/default/classes/       @commerce-agents/apex-leads
+/salesforce/force-app/main/default/triggers/      @commerce-agents/apex-leads
+
+# ── Salesforce LWC ────────────────────────────────────────────────────────────
+/salesforce/force-app/main/default/lwc/           @commerce-agents/lwc-leads
+/embed/lwc/                                       @commerce-agents/lwc-leads
+
+# ── Salesforce metadata (permission sets, named credentials, objects) ─────────
+/salesforce/force-app/main/default/permissionsets/ @commerce-agents/platform
+/salesforce/force-app/main/default/namedCredentials/ @commerce-agents/platform
+/salesforce/config/                               @commerce-agents/platform
+/salesforce/sfdx-project.json                     @commerce-agents/platform
+
+# ── CI / GitHub Actions ───────────────────────────────────────────────────────
+/.github/workflows/                               @commerce-agents/platform
+/.github/CODEOWNERS                               @sorabh-bansal
+
+# ── Python backends ───────────────────────────────────────────────────────────
+/examples/salesforce/                             @commerce-agents/apex-leads
+/commerce-common/                                 @sorabh-bansal
+/shopping-agent/                                  @sorabh-bansal
+/merchant-agent/                                  @sorabh-bansal
+
+# ── Documentation ─────────────────────────────────────────────────────────────
+/salesforce/README.md                             @commerce-agents/platform
+/docs/                                            @sorabh-bansal

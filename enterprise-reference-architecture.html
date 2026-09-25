@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width">
+<title>Agentic Commerce Platform — Enterprise Reference Architecture</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#04080F;--surface:#080E1C;--s2:#0C1525;
+  --border:#172238;--border2:#213650;
+  --t1:#EEF4FF;--t2:#7BAAC6;--t3:#364F6A;
+  --blue:#3B82F6;--blue2:#1D4ED8;--bluebg:#09182E;
+  --amber:#F59E0B;--amber2:#B45309;--amberbg:#160D00;
+  --teal:#10B981;--teal2:#059669;--tealbg:#021610;
+  --purple:#7C3AED;--purplebg:#100826;
+  --green:#22C55E;--red:#EF4444;
+}
+html,body{background:var(--bg);color:var(--t1);
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;
+  min-height:100vh;font-size:14px}
+.page{display:flex;flex-direction:column;min-height:100vh}
+
+/* ─── Header ─── */
+.hdr{
+  background:linear-gradient(160deg,#060E1F 0%,#080E18 100%);
+  border-bottom:1px solid var(--border);
+  padding:16px 36px;display:flex;align-items:center;
+  justify-content:space-between;flex-shrink:0;gap:16px
+}
+.hdr-left{display:flex;align-items:center;gap:14px}
+.logomark{
+  width:40px;height:40px;border-radius:10px;flex-shrink:0;
+  background:linear-gradient(135deg,#1D4ED8,#7C3AED);
+  display:flex;align-items:center;justify-content:center;
+  font-size:20px;
+  box-shadow:0 4px 20px rgba(59,130,246,.3)
+}
+.hdr-title{font-size:20px;font-weight:800;letter-spacing:-.025em;line-height:1.2}
+.hdr-title em{color:var(--blue);font-style:normal}
+.hdr-sub{font-size:10.5px;color:var(--t3);letter-spacing:.05em;text-transform:uppercase;margin-top:3px}
+.badges{display:flex;gap:6px;flex-wrap:wrap}
+.badge{padding:3px 10px;border-radius:20px;font-size:9.5px;font-weight:700;
+  letter-spacing:.06em;display:inline-flex;align-items:center;gap:4px}
+.b-live{background:#071E0D;color:#4ADE80;border:1px solid #166534}
+.b-blue{background:var(--bluebg);color:#60A5FA;border:1px solid var(--blue2)}
+.b-amber{background:var(--amberbg);color:#FCD34D;border:1px solid var(--amber2)}
+.hdr-meta{text-align:right;font-size:10px;color:var(--t3);line-height:1.9;flex-shrink:0}
+.hdr-meta b{color:var(--t2);font-weight:600}
+
+/* ─── Metrics ─── */
+.metrics{display:grid;grid-template-columns:repeat(5,1fr);border-bottom:1px solid var(--border)}
+.metric{padding:11px 20px;border-right:1px solid var(--border);display:flex;flex-direction:column;gap:2px}
+.metric:last-child{border-right:none}
+.metric-n{font-size:26px;font-weight:800;letter-spacing:-.03em;line-height:1}
+.metric-l{font-size:9px;color:var(--t3);letter-spacing:.07em;text-transform:uppercase;font-weight:600}
+.c-blue{color:#60A5FA}.c-amber{color:#FCD34D}.c-teal{color:#34D399}.c-purple{color:#A78BFA}.c-green{color:#4ADE80}
+
+/* ─── Section ─── */
+.sec{padding:14px 36px;border-bottom:1px solid var(--border)}
+.sec-hdr{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;
+  color:var(--t3);margin-bottom:10px;display:flex;align-items:center;gap:10px}
+.sec-hdr::after{content:'';flex:1;height:1px;background:var(--border)}
+
+/* ─── SVG wrapper ─── */
+.arch-wrap{width:100%;overflow:hidden}
+.arch-svg{width:100%;display:block;max-width:1320px;margin:0 auto}
+
+/* ─── Journey ─── */
+.journey{display:grid;grid-template-columns:repeat(6,1fr);position:relative;gap:0}
+.journey::before{content:'';position:absolute;left:8.33%;right:8.33%;
+  top:24px;height:2px;
+  background:linear-gradient(90deg,#1D4ED8 0%,#7C3AED 50%,#0D9488 100%);z-index:0}
+.jstep{display:flex;flex-direction:column;align-items:center;gap:5px;padding:0 8px;position:relative;z-index:1}
+.jdot{width:48px;height:48px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font-size:14px;font-weight:800;background:var(--surface);border:2px solid;flex-shrink:0}
+.jname{font-size:11px;font-weight:700;color:var(--t2);text-align:center;line-height:1.3}
+.jwho{font-size:9px;color:var(--t3);text-align:center;line-height:1.4}
+.jtag{display:inline-block;padding:1px 6px;border-radius:3px;font-size:8px;font-weight:700;letter-spacing:.04em;text-align:center;margin-top:1px}
+.tr{background:#09182E;color:#60A5FA}
+.tw{background:#1A0808;color:#FCA5A5}
+.tu{background:#160D00;color:#FCD34D}
+.ts{background:#0F0620;color:#C4B5FD}
+
+/* ─── Caps ─── */
+.caps{display:grid;grid-template-columns:repeat(4,1fr);border-bottom:1px solid var(--border)}
+.cap{padding:14px 20px;border-right:1px solid var(--border)}
+.cap:last-child{border-right:none}
+.cap-icon{font-size:17px;margin-bottom:5px}
+.cap-title{font-size:11.5px;font-weight:800;margin-bottom:4px;letter-spacing:-.01em}
+.cap-body{font-size:10px;color:var(--t3);line-height:1.55}
+
+/* ─── Footer ─── */
+.footer{display:flex;align-items:center;justify-content:space-between;
+  padding:10px 36px;font-size:9.5px;color:var(--t3);margin-top:auto;
+  border-top:1px solid var(--border)}
+.footer b{color:var(--t2)}
+</style>
+</head>
+<body>
+<div class="page">
+
+<!-- Header -->
+<header class="hdr">
+  <div class="hdr-left">
+    <div class="logomark">🛒</div>
+    <div>
+      <div class="hdr-title">Agentic <em>Commerce</em> Platform</div>
+      <div class="hdr-sub">Enterprise Reference Architecture · Intelligent B2B Buyer Agent</div>
+    </div>
+  </div>
+  <div class="badges">
+    <span class="badge b-live">● PRODUCTION</span>
+    <span class="badge b-blue">MODEL-AGNOSTIC</span>
+    <span class="badge b-amber">MULTI-PLATFORM</span>
+  </div>
+  <div class="hdr-meta">
+    <b>Architecture Version</b> 2.0<br>
+    <b>Deployment</b> Railway · Salesforce B2B<br>
+    <b>Classification</b> Internal / Leadership
+  </div>
+</header>
+
+<!-- Metrics -->
+<div class="metrics">
+  <div class="metric"><div class="metric-n c-blue">3+</div><div class="metric-l">AI Models Supported</div></div>
+  <div class="metric"><div class="metric-n c-amber">12</div><div class="metric-l">MCP Commerce Tools</div></div>
+  <div class="metric"><div class="metric-n c-teal">4</div><div class="metric-l">Commerce Platforms</div></div>
+  <div class="metric"><div class="metric-n c-purple">9</div><div class="metric-l">Salesforce API Steps</div></div>
+  <div class="metric"><div class="metric-n c-green">&lt;2d</div><div class="metric-l">New Platform Onboard</div></div>
+</div>
+
+<!-- Architecture SVG -->
+<div class="sec">
+  <div class="sec-hdr">System Architecture Overview</div>
+  <div class="arch-wrap">
+  <svg class="arch-svg" viewBox="0 0 1140 538" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <linearGradient id="gBlue" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#0C1C3E"/><stop offset="100%" stop-color="#08132E"/></linearGradient>
+      <linearGradient id="gAmber" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#1A0C00"/><stop offset="100%" stop-color="#110800"/></linearGradient>
+      <linearGradient id="gGreen" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#07180C"/><stop offset="100%" stop-color="#051008"/></linearGradient>
+      <linearGradient id="gIface" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#09182E"/><stop offset="50%" stop-color="#0C1E3A"/><stop offset="100%" stop-color="#09182E"/></linearGradient>
+      <linearGradient id="gSF" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#061508"/><stop offset="100%" stop-color="#041006"/></linearGradient>
+      <marker id="ab" markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3z" fill="#3B82F6" opacity=".7"/></marker>
+      <marker id="ap" markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3z" fill="#7C3AED" opacity=".7"/></marker>
+      <marker id="at" markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3z" fill="#10B981" opacity=".6"/></marker>
+      <marker id="aa" markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3z" fill="#F59E0B" opacity=".7"/></marker>
+      <filter id="glowB"><feGaussianBlur stdDeviation="5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+      <filter id="glowG"><feGaussianBlur stdDeviation="4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+      <pattern id="dots" width="18" height="18" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r=".7" fill="#162236" opacity=".6"/></pattern>
+    </defs>
+
+    <!-- bg -->
+    <rect width="1140" height="538" fill="#04080F"/>
+    <rect width="1140" height="538" fill="url(#dots)"/>
+
+    <!-- ═══ LAYER 1: AI MODELS ═══ -->
+    <rect x="10" y="12" width="1120" height="118" rx="12" fill="#070C18" stroke="#172238" stroke-width="1"/>
+    <text x="26" y="9" font-size="8" font-weight="700" fill="#213650" letter-spacing="1.8" font-family="system-ui,sans-serif">AI INTELLIGENCE PLANE</text>
+
+    <!-- Gemini -->
+    <rect x="24" y="23" width="296" height="98" rx="10" fill="url(#gBlue)" stroke="#2563EB" stroke-width="1.5"/>
+    <circle cx="50" cy="51" r="15" fill="#1D4ED8" opacity=".9"/>
+    <text x="50" y="57" font-size="14" font-weight="900" fill="#fff" text-anchor="middle" font-family="sans-serif">G</text>
+    <text x="76" y="49" font-size="12.5" font-weight="800" fill="#93C5FD" font-family="system-ui,sans-serif">Gemini (Google)</text>
+    <text x="76" y="64" font-size="9.5" fill="#3A5A80" font-family="system-ui,sans-serif">gemini-2.0-flash · google.genai SDK</text>
+    <rect x="36" y="83" width="56" height="15" rx="3" fill="#0D1C36" stroke="#2563EB" stroke-width="1"/>
+    <text x="64" y="94" font-size="8.5" font-weight="700" fill="#60A5FA" text-anchor="middle" font-family="sans-serif">UCP REST</text>
+    <text x="99" y="94" font-size="8.5" fill="#2A4060" font-family="system-ui,sans-serif">Auto-discovers tools from /.well-known/ucp manifest</text>
+
+    <!-- Claude (primary) -->
+    <rect x="354" y="23" width="408" height="98" rx="10" fill="url(#gAmber)" stroke="#D97706" stroke-width="2" filter="url(#glowB)"/>
+    <circle cx="380" cy="51" r="15" fill="#B45309" opacity=".9"/>
+    <text x="380" y="57" font-size="13" font-weight="900" fill="#fff" text-anchor="middle" font-family="sans-serif">A</text>
+    <text x="406" y="49" font-size="12.5" font-weight="800" fill="#FCD34D" font-family="system-ui,sans-serif">Claude (Anthropic) ★ Primary</text>
+    <text x="406" y="64" font-size="9.5" fill="#5A3800" font-family="system-ui,sans-serif">claude-sonnet-5 · Messages API + MCP Managed Agent</text>
+    <rect x="366" y="83" width="52" height="15" rx="3" fill="#1E0D00" stroke="#D97706" stroke-width="1"/>
+    <text x="392" y="94" font-size="8.5" font-weight="700" fill="#FCD34D" text-anchor="middle" font-family="sans-serif">UCP+MCP</text>
+    <rect x="424" y="83" width="106" height="15" rx="3" fill="#16082A" stroke="#7C3AED" stroke-width="1"/>
+    <text x="477" y="94" font-size="8.5" font-weight="700" fill="#C4B5FD" text-anchor="middle" font-family="sans-serif">Full MCP Tools + UI Cards</text>
+    <rect x="536" y="83" width="96" height="15" rx="3" fill="#1E0D00" stroke="#D97706" stroke-width="1"/>
+    <text x="584" y="94" font-size="8.5" font-weight="700" fill="#FCD34D" text-anchor="middle" font-family="sans-serif">SSE Streaming Chat</text>
+    <rect x="638" y="83" width="112" height="15" rx="3" fill="#062010" stroke="#059669" stroke-width="1"/>
+    <text x="694" y="94" font-size="8.5" font-weight="700" fill="#6EE7B7" text-anchor="middle" font-family="sans-serif">Vertex AI · AWS Bedrock</text>
+
+    <!-- Any LLM -->
+    <rect x="796" y="23" width="334" height="98" rx="10" fill="url(#gGreen)" stroke="#059669" stroke-width="1.5"/>
+    <circle cx="822" cy="51" r="15" fill="#047857" opacity=".9"/>
+    <text x="822" y="57" font-size="14" fill="#fff" text-anchor="middle" font-family="sans-serif">⚡</text>
+    <text x="848" y="49" font-size="12.5" font-weight="800" fill="#6EE7B7" font-family="system-ui,sans-serif">Any LLM — Plug-In Ready</text>
+    <text x="848" y="64" font-size="9.5" fill="#1A4028" font-family="system-ui,sans-serif">GPT-4o · Mistral · Llama 3 · custom models</text>
+    <rect x="808" y="83" width="52" height="15" rx="3" fill="#041508" stroke="#059669" stroke-width="1"/>
+    <text x="834" y="94" font-size="8.5" font-weight="700" fill="#6EE7B7" text-anchor="middle" font-family="sans-serif">UCP REST</text>
+    <text x="868" y="94" font-size="8.5" fill="#1A4028" font-family="system-ui,sans-serif">Zero backend changes needed · function calling API</text>
+
+    <!-- ═══ CONNECTIONS: Models → Protocols ═══ -->
+    <line x1="172" y1="121" x2="172" y2="151" stroke="#3B82F6" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#ab)" opacity=".6"/>
+    <line x1="460" y1="121" x2="370" y2="151" stroke="#F59E0B" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#aa)" opacity=".7"/>
+    <line x1="620" y1="121" x2="730" y2="151" stroke="#7C3AED" stroke-width="2" marker-end="url(#ap)" opacity=".7"/>
+    <line x1="963" y1="121" x2="530" y2="151" stroke="#10B981" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#at)" opacity=".5"/>
+
+    <!-- ═══ LAYER 2: PROTOCOL BRIDGES ═══ -->
+    <rect x="10" y="143" width="1120" height="50" rx="9" fill="#060C18" stroke="#172238" stroke-width="1"/>
+    <text x="26" y="141" font-size="8" font-weight="700" fill="#213650" letter-spacing="1.8" font-family="system-ui,sans-serif">PROTOCOL BRIDGES</text>
+
+    <rect x="20" y="150" width="563" height="36" rx="8" fill="#091628" stroke="#2563EB" stroke-width="1.5"/>
+    <text x="42" y="166" font-size="11" font-weight="700" fill="#60A5FA" font-family="system-ui,sans-serif">🌐  UCP — Universal Commerce Protocol</text>
+    <text x="42" y="179" font-size="8.5" fill="#243C58" font-family="system-ui,sans-serif">RFC-8615 discovery · GET /.well-known/ucp · GET /ucp/products · POST /ucp/orders · model-agnostic REST bridge</text>
+
+    <rect x="597" y="150" width="533" height="36" rx="8" fill="#0E0620" stroke="#7C3AED" stroke-width="1.5"/>
+    <text x="617" y="166" font-size="11" font-weight="700" fill="#A78BFA" font-family="system-ui,sans-serif">🔌  MCP — Model Context Protocol  · port 8200/mcp</text>
+    <text x="617" y="179" font-size="8.5" fill="#301860" font-family="system-ui,sans-serif">Streamable HTTP · FastMCP · 12 tools + UI resources · always_ask permission gates · SSE events</text>
+
+    <!-- Protocol → Core connections -->
+    <line x1="302" y1="186" x2="302" y2="207" stroke="#3B82F6" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#ab)" opacity=".5"/>
+    <line x1="863" y1="186" x2="863" y2="207" stroke="#7C3AED" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#ap)" opacity=".5"/>
+
+    <!-- ═══ LAYER 3: AGENTIC CORE ═══ -->
+    <rect x="10" y="200" width="1120" height="136" rx="10" fill="#060C18" stroke="#172238" stroke-width="1"/>
+    <text x="26" y="198" font-size="8" font-weight="700" fill="#213650" letter-spacing="1.8" font-family="system-ui,sans-serif">AGENTIC COMMERCE ENGINE</text>
+
+    <!-- Read Tools -->
+    <rect x="20" y="208" width="352" height="118" rx="8" fill="#08101E" stroke="#182C4A" stroke-width="1.2"/>
+    <text x="34" y="226" font-size="8.5" font-weight="700" fill="#3B82F6" letter-spacing=".07em" font-family="system-ui,sans-serif">READ TOOLS · No Approval Required  (×10)</text>
+    <rect x="34" y="231" width="96" height="14" rx="3" fill="#091828"/><text x="38" y="242" font-size="8" fill="#60A5FA" font-family="sans-serif">🔍 search_products</text>
+    <rect x="136" y="231" width="90" height="14" rx="3" fill="#091828"/><text x="140" y="242" font-size="8" fill="#60A5FA" font-family="sans-serif">📖 product_details</text>
+    <rect x="232" y="231" width="66" height="14" rx="3" fill="#091828"/><text x="236" y="242" font-size="8" fill="#60A5FA" font-family="sans-serif">🛒 get_cart</text>
+    <rect x="304" y="231" width="60" height="14" rx="3" fill="#091828"/><text x="308" y="242" font-size="8" fill="#60A5FA" font-family="sans-serif">📦 orders</text>
+    <rect x="34" y="250" width="80" height="14" rx="3" fill="#091828"/><text x="38" y="261" font-size="8" fill="#60A5FA" font-family="sans-serif">📋 policies</text>
+    <rect x="120" y="250" width="84" height="14" rx="3" fill="#091828"/><text x="124" y="261" font-size="8" fill="#60A5FA" font-family="sans-serif">🧠 memories</text>
+    <rect x="210" y="250" width="96" height="14" rx="3" fill="#091828"/><text x="214" y="261" font-size="8" fill="#60A5FA" font-family="sans-serif">⚙️ preferences</text>
+    <rect x="312" y="250" width="52" height="14" rx="3" fill="#091828"/><text x="316" y="261" font-size="8" fill="#60A5FA" font-family="sans-serif">🚚 ship</text>
+    <text x="34" y="281" font-size="8.5" font-weight="700" fill="#EF4444" letter-spacing=".07em" font-family="system-ui,sans-serif">WRITE TOOLS · Buyer Confirms ⚠  (×5)</text>
+    <rect x="34" y="286" width="82" height="14" rx="3" fill="#180808"/><text x="38" y="297" font-size="8" fill="#FCA5A5" font-family="sans-serif">✏ add_to_cart</text>
+    <rect x="122" y="286" width="90" height="14" rx="3" fill="#180808"/><text x="126" y="297" font-size="8" fill="#FCA5A5" font-family="sans-serif">✏ update_qty</text>
+    <rect x="218" y="286" width="78" height="14" rx="3" fill="#180808"/><text x="222" y="297" font-size="8" fill="#FCA5A5" font-family="sans-serif">✏ remove</text>
+    <rect x="302" y="286" width="62" height="14" rx="3" fill="#180808"/><text x="306" y="297" font-size="8" fill="#FCA5A5" font-family="sans-serif">✏ memory</text>
+    <rect x="34" y="306" width="330" height="14" rx="3" fill="#180808"/>
+    <text x="38" y="317" font-size="8" fill="#FCA5A5" font-family="sans-serif">✏ place_order → POST /sobjects/Order + OrderItem×N + PATCH Activated</text>
+
+    <!-- Safety -->
+    <rect x="384" y="208" width="196" height="118" rx="8" fill="#08101E" stroke="#7A3500" stroke-width="1.2"/>
+    <text x="396" y="226" font-size="8.5" font-weight="700" fill="#F59E0B" letter-spacing=".07em" font-family="system-ui,sans-serif">SAFETY &amp; GOVERNANCE</text>
+    <rect x="396" y="231" width="176" height="14" rx="3" fill="#160C00"/><text x="400" y="242" font-size="8" fill="#FCD34D" font-family="sans-serif">🔒 always_ask gate on all writes</text>
+    <rect x="396" y="250" width="176" height="14" rx="3" fill="#160C00"/><text x="400" y="261" font-size="8" fill="#FCD34D" font-family="sans-serif">📜 Provenance tracking per item</text>
+    <rect x="396" y="269" width="176" height="14" rx="3" fill="#160C00"/><text x="400" y="280" font-size="8" fill="#FCD34D" font-family="sans-serif">⚖️ Quantity caps enforced</text>
+    <rect x="396" y="288" width="176" height="14" rx="3" fill="#160C00"/><text x="400" y="299" font-size="8" fill="#FCD34D" font-family="sans-serif">🏦 No payment credentials stored</text>
+    <rect x="396" y="307" width="176" height="14" rx="3" fill="#160C00"/><text x="400" y="318" font-size="8" fill="#FCD34D" font-family="sans-serif">✅ Buyer approves every mutation</text>
+
+    <!-- UI Resources -->
+    <rect x="592" y="208" width="538" height="118" rx="8" fill="#08101E" stroke="#0A4A2A" stroke-width="1.2"/>
+    <text x="606" y="226" font-size="8.5" font-weight="700" fill="#10B981" letter-spacing=".07em" font-family="system-ui,sans-serif">MCP UI RESOURCES + SSE EVENTS  (SEP-1865)</text>
+    <rect x="606" y="231" width="254" height="34" rx="5" fill="#03140A"/>
+    <text x="612" y="244" font-size="9" font-weight="700" fill="#34D399" font-family="system-ui,sans-serif">📦 product-grid card</text>
+    <text x="612" y="257" font-size="8" fill="#1A3E22" font-family="system-ui,sans-serif">uri: ui://storefront/product-grid · HTML inline</text>
+    <rect x="868" y="231" width="254" height="34" rx="5" fill="#03140A"/>
+    <text x="874" y="244" font-size="9" font-weight="700" fill="#34D399" font-family="system-ui,sans-serif">📋 checkout summary card</text>
+    <text x="874" y="257" font-size="8" fill="#1A3E22" font-family="system-ui,sans-serif">ui/checkout SSE → checkoutStaged=true</text>
+    <rect x="606" y="271" width="254" height="34" rx="5" fill="#03140A"/>
+    <text x="612" y="284" font-size="9" font-weight="700" fill="#34D399" font-family="system-ui,sans-serif">✅ order confirmation card</text>
+    <text x="612" y="297" font-size="8" fill="#1A3E22" font-family="system-ui,sans-serif">Real SF OrderNumber streamed inline</text>
+    <rect x="868" y="271" width="254" height="34" rx="5" fill="#03140A"/>
+    <text x="874" y="284" font-size="9" font-weight="700" fill="#34D399" font-family="system-ui,sans-serif">🔄 cart_update SSE</text>
+    <text x="874" y="297" font-size="8" fill="#1A3E22" font-family="system-ui,sans-serif">Sidebar count + subtotal live refresh</text>
+    <text x="606" y="320" font-size="8" fill="#1A3E22" font-family="system-ui,sans-serif">Sidebar button: "Checkout (PO)" → "Place Order (PO)" on checkoutStaged · clears on order confirmation</text>
+
+    <!-- Core → Interface -->
+    <line x1="570" y1="336" x2="570" y2="355" stroke="#60A5FA" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#ab)" opacity=".45"/>
+
+    <!-- ═══ LAYER 4: INTERFACE ═══ -->
+    <rect x="10" y="348" width="1120" height="50" rx="9" fill="url(#gIface)" stroke="#1E3C6A" stroke-width="1.5"/>
+    <text x="26" y="346" font-size="8" font-weight="700" fill="#213650" letter-spacing="1.8" font-family="system-ui,sans-serif">BACKEND INTERFACE LAYER</text>
+    <text x="570" y="368" font-size="13" font-weight="800" fill="#93C5FD" text-anchor="middle" font-family="system-ui,sans-serif">StorefrontBackend Interface</text>
+    <text x="570" y="383" font-size="9" fill="#2A4868" text-anchor="middle" font-family="system-ui,sans-serif">12-method contract · domain-neutral abstraction · implement once → all models and all platforms inherit automatically</text>
+    <text x="60" y="383" font-size="8" fill="#1A3050" font-family="system-ui,sans-serif">search_products · get_product · add_to_cart · update_cart · remove_from_cart · get_cart · place_order</text>
+    <text x="1080" y="383" font-size="8" fill="#1A3050" text-anchor="end" font-family="system-ui,sans-serif">get_orders · get_order_status · search_policies · get_preferences · get_fulfillment_options</text>
+
+    <!-- Interface → Platforms -->
+    <line x1="152" y1="398" x2="152" y2="418" stroke="#10B981" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#at)" opacity=".55"/>
+    <line x1="418" y1="398" x2="418" y2="418" stroke="#10B981" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#at)" opacity=".55"/>
+    <line x1="687" y1="398" x2="687" y2="418" stroke="#10B981" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#at)" opacity=".55"/>
+    <line x1="963" y1="398" x2="963" y2="418" stroke="#10B981" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#at)" opacity=".55"/>
+
+    <!-- ═══ LAYER 5: PLATFORMS ═══ -->
+    <rect x="10" y="411" width="1120" height="114" rx="10" fill="#050C09" stroke="#172238" stroke-width="1"/>
+    <text x="26" y="409" font-size="8" font-weight="700" fill="#213650" letter-spacing="1.8" font-family="system-ui,sans-serif">COMMERCE PLATFORMS</text>
+
+    <!-- Salesforce -->
+    <rect x="20" y="420" width="264" height="96" rx="9" fill="url(#gSF)" stroke="#16A34A" stroke-width="2" filter="url(#glowG)"/>
+    <rect x="30" y="428" width="42" height="13" rx="3" fill="#052E0A" stroke="#16A34A" stroke-width="1"/>
+    <text x="51" y="438" font-size="8" font-weight="800" fill="#4ADE80" text-anchor="middle" font-family="sans-serif">LIVE ✓</text>
+    <text x="80" y="438" font-size="11" font-weight="800" fill="#4ADE80" font-family="system-ui,sans-serif">Salesforce B2B</text>
+    <text x="30" y="455" font-size="8.5" fill="#1A4A20" font-family="system-ui,sans-serif">REST v62.0 · client_credentials OAuth2</text>
+    <text x="30" y="468" font-size="8.5" fill="#1A4A20" font-family="system-ui,sans-serif">WebCart · Order SObject · Pricebook</text>
+    <text x="30" y="481" font-size="8.5" fill="#1A4A20" font-family="system-ui,sans-serif">effectiveAccountId · 9-step order flow</text>
+    <rect x="30" y="487" width="244" height="22" rx="4" fill="#041508"/>
+    <text x="152" y="498" font-size="8" fill="#16A34A" text-anchor="middle" font-family="system-ui,sans-serif">Railway deployed · Orders 00000114-00000117</text>
+    <text x="152" y="508" font-size="7.5" fill="#0A3010" text-anchor="middle" font-family="system-ui,sans-serif">confirmed · Activated · real SF Orders</text>
+
+    <!-- Magento -->
+    <rect x="298" y="420" width="260" height="96" rx="9" fill="#080D1A" stroke="#2A3A50" stroke-width="1.2"/>
+    <text x="318" y="438" font-size="11" font-weight="800" fill="#CBD5E1" font-family="system-ui,sans-serif">Magento / Adobe Commerce</text>
+    <text x="308" y="455" font-size="8.5" fill="#243040" font-family="system-ui,sans-serif">REST Admin API v1 · JWT bearer</text>
+    <text x="308" y="468" font-size="8.5" fill="#243040" font-family="system-ui,sans-serif">POST /V1/orders · purchaseorder method</text>
+    <text x="308" y="481" font-size="8.5" fill="#243040" font-family="system-ui,sans-serif">GraphQL Storefront · synchronous</text>
+    <rect x="308" y="490" width="240" height="18" rx="3" fill="#080D1A" stroke="#2A3A50" stroke-width="1"/>
+    <text x="428" y="502" font-size="8" fill="#374151" text-anchor="middle" font-family="system-ui,sans-serif">Estimated onboarding: ~2 days</text>
+
+    <!-- SAP -->
+    <rect x="572" y="420" width="260" height="96" rx="9" fill="#080D1A" stroke="#2A3A50" stroke-width="1.2"/>
+    <text x="592" y="438" font-size="11" font-weight="800" fill="#CBD5E1" font-family="system-ui,sans-serif">SAP Commerce Cloud</text>
+    <text x="582" y="455" font-size="8.5" fill="#243040" font-family="system-ui,sans-serif">OCC API v2 · OAuth2 password grant</text>
+    <text x="582" y="468" font-size="8.5" fill="#243040" font-family="system-ui,sans-serif">POST /occ/v2/{site}/users/{uid}/orders</text>
+    <text x="582" y="481" font-size="8.5" fill="#243040" font-family="system-ui,sans-serif">paymentType: ACCOUNT (B2B PO native)</text>
+    <rect x="582" y="490" width="240" height="18" rx="3" fill="#080D1A" stroke="#2A3A50" stroke-width="1"/>
+    <text x="702" y="502" font-size="8" fill="#374151" text-anchor="middle" font-family="system-ui,sans-serif">Estimated onboarding: ~3 days</text>
+
+    <!-- commercetools -->
+    <rect x="846" y="420" width="284" height="96" rx="9" fill="#080D1A" stroke="#2A3A50" stroke-width="1.2"/>
+    <text x="866" y="438" font-size="11" font-weight="800" fill="#CBD5E1" font-family="system-ui,sans-serif">commercetools</text>
+    <text x="856" y="455" font-size="8.5" fill="#243040" font-family="system-ui,sans-serif">GraphQL API · client_credentials OAuth2</text>
+    <text x="856" y="468" font-size="8.5" fill="#243040" font-family="system-ui,sans-serif">createOrderFromCart mutation</text>
+    <text x="856" y="481" font-size="8.5" fill="#243040" font-family="system-ui,sans-serif">PO via custom Order type fields</text>
+    <rect x="856" y="490" width="264" height="18" rx="3" fill="#080D1A" stroke="#2A3A50" stroke-width="1"/>
+    <text x="988" y="502" font-size="8" fill="#374151" text-anchor="middle" font-family="system-ui,sans-serif">Estimated onboarding: ~2 days</text>
+  </svg>
+  </div>
+</div>
+
+<!-- Journey -->
+<div class="sec">
+  <div class="sec-hdr">B2B Buyer Commerce Journey — 6 Touchpoints</div>
+  <div class="journey">
+    <div class="jstep">
+      <div class="jdot" style="border-color:#3B82F6;color:#60A5FA">1</div>
+      <div class="jname">Discover</div>
+      <div class="jwho">"Show me laptops<br>under $1,200"</div>
+      <span class="jtag tr">search_products</span>
+      <span class="jtag tu">product-grid card</span>
+    </div>
+    <div class="jstep">
+      <div class="jdot" style="border-color:#7C3AED;color:#A78BFA">2</div>
+      <div class="jname">Add to Cart</div>
+      <div class="jwho">"Add 2 ProBook<br>to my cart"</div>
+      <span class="jtag tw">add_to_cart ⚠</span>
+      <span class="jtag ts">cart_update SSE</span>
+    </div>
+    <div class="jstep">
+      <div class="jdot" style="border-color:#0D9488;color:#2DD4BF">3</div>
+      <div class="jname">Policy Check</div>
+      <div class="jwho">"What's the<br>return policy?"</div>
+      <span class="jtag tr">search_policies</span>
+      <span class="jtag tr">recall_memories</span>
+    </div>
+    <div class="jstep">
+      <div class="jdot" style="border-color:#F59E0B;color:#FCD34D">4</div>
+      <div class="jname">Checkout (PO)</div>
+      <div class="jwho">Sidebar button →<br>checkout summary</div>
+      <span class="jtag tr">get_cart</span>
+      <span class="jtag ts">ui/checkout SSE</span>
+    </div>
+    <div class="jstep">
+      <div class="jdot" style="border-color:#EF4444;color:#FCA5A5">5</div>
+      <div class="jname">Place Order</div>
+      <div class="jwho">Real SF Order<br>created &amp; Activated</div>
+      <span class="jtag tw">place_order ⚠</span>
+      <span class="jtag tu">order confirm card</span>
+    </div>
+    <div class="jstep">
+      <div class="jdot" style="border-color:#475569;color:#94A3B8">6</div>
+      <div class="jname">Post-Order</div>
+      <div class="jwho">"Where's my<br>order?"</div>
+      <span class="jtag tr">get_order_status</span>
+      <span class="jtag tw">save_memory</span>
+    </div>
+  </div>
+</div>
+
+<!-- Enterprise capabilities -->
+<div class="caps">
+  <div class="cap">
+    <div class="cap-icon">🔄</div>
+    <div class="cap-title" style="color:#60A5FA">Model-Agnostic by Design</div>
+    <div class="cap-body">UCP discovery protocol allows any LLM — Gemini, GPT-4o, Llama, or a private model — to auto-configure as a fully-capable shopping agent with zero code changes to the commerce backend.</div>
+  </div>
+  <div class="cap">
+    <div class="cap-icon">🔒</div>
+    <div class="cap-title" style="color:#FCD34D">Enterprise Safety &amp; Governance</div>
+    <div class="cap-body">Every cart mutation and order is buyer-confirmed via always_ask gates. No payment credentials stored. Provenance tracking ensures the agent only writes what the buyer has seen and approved.</div>
+  </div>
+  <div class="cap">
+    <div class="cap-icon">⚡</div>
+    <div class="cap-title" style="color:#34D399">Rapid Platform Onboarding</div>
+    <div class="cap-body">Implement the 12-method StorefrontBackend interface once for a new platform. Magento ~2 days, SAP ~3 days, commercetools ~2 days. All AI models, tools, and UI resources inherit automatically.</div>
+  </div>
+  <div class="cap">
+    <div class="cap-icon">🎯</div>
+    <div class="cap-title" style="color:#C4B5FD">Intelligent Buyer Experience</div>
+    <div class="cap-body">Personalized memory, policy-aware recommendations, real-time cart updates via SSE, and rich UI components — product-grid, checkout summary, order confirmation — streamed inline into chat.</div>
+  </div>
+</div>
+
+<footer class="footer">
+  <span>Agentic Commerce Platform · Enterprise Reference Architecture · Internal / Leadership · <b>Version 2.0</b></span>
+  <span>StorefrontBackend interface — implement once, inherit everywhere · <b>production.railway.app</b></span>
+</footer>
+
+</div>
+</body>
+</html>

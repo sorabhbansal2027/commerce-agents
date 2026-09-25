@@ -1,0 +1,1 @@
+../../../../../../embed/lwc/commerceAgentPanel/commerceAgentPanel.js

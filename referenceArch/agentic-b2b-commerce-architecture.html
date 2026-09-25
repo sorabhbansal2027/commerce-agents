@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agentic B2B Commerce — Reference Architecture</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --navy: #1e2c4f;
+    --orange: #d97f5f;
+    --purple: #6c47b8;
+    --green: #1a7c52;
+    --client: #dde8ff;
+    --agent: #e9e0ff;
+    --backend: #d8f0e6;
+    --platform: #ffe8d0;
+    --data: #ffd8d8;
+    --text: #1a1a1a;
+    --muted: #666;
+    --border: #e0e0e0;
+    --card: #ffffff;
+  }
+
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #f6f7fb;
+    color: var(--text);
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  /* ── PAGE WRAPPER ─────────────────────────────── */
+  .page {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 32px 24px 48px;
+  }
+
+  /* ── HEADER ──────────────────────────────────── */
+  .header {
+    background: var(--navy);
+    border-radius: 16px;
+    padding: 28px 32px;
+    margin-bottom: 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 24px;
+  }
+  .header-left {}
+  .header-eyebrow {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,.5);
+    margin-bottom: 6px;
+  }
+  .header-title {
+    font-size: 26px;
+    font-weight: 900;
+    color: #fff;
+    line-height: 1.2;
+    margin-bottom: 8px;
+  }
+  .header-sub {
+    font-size: 13px;
+    color: rgba(255,255,255,.65);
+    max-width: 520px;
+    line-height: 1.5;
+  }
+  .header-badge {
+    background: rgba(255,255,255,.12);
+    border: 1px solid rgba(255,255,255,.2);
+    border-radius: 8px;
+    padding: 10px 14px;
+    color: rgba(255,255,255,.8);
+    font-size: 11px;
+    text-align: right;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .header-badge strong { display: block; color: #fff; font-size: 15px; font-weight: 800; margin-bottom: 2px; }
+
+  /* ── TWO-COL LAYOUT ──────────────────────────── */
+  .main-grid {
+    display: grid;
+    grid-template-columns: 1fr 300px;
+    gap: 16px;
+    align-items: start;
+  }
+
+  /* ── ARCHITECTURE DIAGRAM ────────────────────── */
+  .arch-card {
+    background: var(--card);
+    border-radius: 14px;
+    border: 1px solid var(--border);
+    padding: 20px;
+  }
+  .arch-title {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .07em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 16px;
+  }
+
+  .arch-layers { display: flex; flex-direction: column; gap: 0; }
+
+  .arch-row { display: flex; align-items: stretch; }
+
+  .arch-side-label {
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    transform: rotate(180deg);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: .07em;
+    text-transform: uppercase;
+    color: #aaa;
+    width: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .arch-layer {
+    flex: 1;
+    border-radius: 10px;
+    padding: 10px 10px;
+    display: flex;
+    gap: 6px;
+    align-items: flex-start;
+    margin-bottom: 0;
+  }
+  .arch-layer.client   { background: var(--client); }
+  .arch-layer.agent    { background: var(--agent); }
+  .arch-layer.backend  { background: var(--backend); }
+  .arch-layer.platform { background: var(--platform); }
+  .arch-layer.data     { background: var(--data); }
+
+  .arch-box {
+    flex: 1;
+    background: rgba(255,255,255,.75);
+    border-radius: 7px;
+    padding: 8px 9px;
+    border: 1px solid rgba(0,0,0,.07);
+  }
+  .arch-box.wide { flex: 1.8; }
+  .arch-box-label {
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1.2;
+    color: var(--text);
+  }
+  .arch-box-sub {
+    font-size: 10px;
+    color: var(--muted);
+    margin-top: 2px;
+    line-height: 1.3;
+  }
+  .arch-box-tag {
+    display: inline-block;
+    margin-top: 4px;
+    background: rgba(0,0,0,.07);
+    border-radius: 4px;
+    padding: 1px 5px;
+    font-size: 9px;
+    font-weight: 600;
+    color: #555;
+  }
+
+  .arch-arrow {
+    display: flex;
+    align-items: center;
+    margin: 0 0 0 18px;
+    height: 20px;
+    position: relative;
+  }
+  .arch-arrow-line {
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+    position: relative;
+  }
+  .arch-arrow-line::after {
+    content: '';
+    position: absolute;
+    right: -1px;
+    top: -3px;
+    border: 4px solid transparent;
+    border-left: 5px solid var(--border);
+  }
+  .arch-arrow-label {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 1px 7px;
+    font-size: 9px;
+    color: #888;
+    white-space: nowrap;
+    top: 50%;
+    transform: translate(-50%, -50%);
+  }
+
+  /* ── RIGHT SIDEBAR ───────────────────────────── */
+  .sidebar { display: flex; flex-direction: column; gap: 14px; }
+
+  .info-card {
+    background: var(--card);
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    padding: 14px 16px;
+  }
+  .info-card-title {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .07em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 10px;
+  }
+
+  .kpi-grid { display: flex; flex-direction: column; gap: 8px; }
+  .kpi { display: flex; align-items: flex-start; gap: 10px; }
+  .kpi-num {
+    font-size: 22px;
+    font-weight: 900;
+    color: var(--navy);
+    line-height: 1;
+    flex-shrink: 0;
+    min-width: 54px;
+  }
+  .kpi-num span { font-size: 13px; font-weight: 700; color: var(--orange); }
+  .kpi-desc { font-size: 11px; color: var(--muted); line-height: 1.4; }
+  .kpi-divider { height: 1px; background: var(--border); }
+
+  .layer-legend { display: flex; flex-direction: column; gap: 6px; }
+  .legend-row { display: flex; align-items: center; gap: 8px; }
+  .legend-dot { width: 12px; height: 12px; border-radius: 4px; flex-shrink: 0; }
+  .legend-text { font-size: 11px; color: var(--text); font-weight: 500; }
+  .legend-sub { font-size: 10px; color: var(--muted); }
+
+  .principle-list { display: flex; flex-direction: column; gap: 7px; }
+  .principle { display: flex; gap: 8px; }
+  .p-icon { font-size: 14px; line-height: 1.3; flex-shrink: 0; }
+  .p-text { font-size: 11px; line-height: 1.4; color: var(--text); }
+  .p-text strong { display: block; font-weight: 700; }
+
+  /* ── BOTTOM SECTION ──────────────────────────── */
+  .bottom-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 14px;
+    margin-top: 16px;
+  }
+
+  .bottom-card {
+    background: var(--card);
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    padding: 14px 16px;
+  }
+  .bottom-card-title {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .07em;
+    color: var(--muted);
+    margin-bottom: 10px;
+  }
+  .pill-wrap { display: flex; flex-wrap: wrap; gap: 5px; }
+  .pill {
+    background: #f0f0f0;
+    border-radius: 20px;
+    padding: 3px 9px;
+    font-size: 10px;
+    font-weight: 600;
+    color: #444;
+  }
+  .pill.navy  { background: var(--navy); color: #fff; }
+  .pill.orange { background: var(--orange); color: #fff; }
+
+  .before-after { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .ba { border-radius: 8px; padding: 8px; }
+  .ba.before { background: #fef2f2; }
+  .ba.after  { background: #f0fdf4; }
+  .ba-label { font-size: 9px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; margin-bottom: 5px; }
+  .ba.before .ba-label { color: #dc2626; }
+  .ba.after  .ba-label { color: #16a34a; }
+  .ba-line { font-size: 10px; line-height: 1.7; color: #333; }
+
+  .vertical-list { display: flex; flex-direction: column; gap: 8px; }
+  .vertical { display: flex; gap: 8px; align-items: flex-start; }
+  .v-icon { font-size: 16px; line-height: 1; flex-shrink: 0; }
+  .v-name { font-size: 11px; font-weight: 700; }
+  .v-detail { font-size: 10px; color: var(--muted); }
+
+  /* ── FOOTER ──────────────────────────────────── */
+  .footer {
+    margin-top: 24px;
+    border-top: 1px solid var(--border);
+    padding-top: 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 10px;
+    color: #aaa;
+  }
+  .footer strong { color: #888; }
+
+  /* ── PRINT ───────────────────────────────────── */
+  @media print {
+    body { background: #fff; }
+    .page { padding: 16px; }
+    .arch-card, .info-card, .bottom-card { break-inside: avoid; }
+  }
+  @page { size: A4 landscape; margin: 12mm; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- HEADER -->
+  <div class="header">
+    <div class="header-left">
+      <div class="header-eyebrow">Reference Architecture · Agentic AI</div>
+      <div class="header-title">Agentic B2B Commerce<br>on Salesforce + Claude</div>
+      <div class="header-sub">A catalog-neutral, platform-portable agent that turns conversational intent into live commerce transactions — replacing portal navigation with natural language procurement.</div>
+    </div>
+    <div class="header-badge">
+      <strong>$25T</strong>
+      Global B2B e-commerce<br>market by 2028
+    </div>
+  </div>
+
+  <!-- MAIN GRID -->
+  <div class="main-grid">
+
+    <!-- ARCHITECTURE DIAGRAM -->
+    <div class="arch-card">
+      <div class="arch-title">System Architecture — Five Layers</div>
+      <div class="arch-layers">
+
+        <!-- CLIENT -->
+        <div class="arch-row">
+          <div class="arch-side-label">Client</div>
+          <div class="arch-layer client">
+            <div class="arch-box wide">
+              <div class="arch-box-label">⚡ Salesforce LWC</div>
+              <div class="arch-box-sub">Floating chat widget</div>
+              <span class="arch-box-tag">Experience Cloud</span>
+            </div>
+            <div class="arch-box">
+              <div class="arch-box-label">🌐 Web Storefront</div>
+              <div class="arch-box-sub">Next.js / React</div>
+              <span class="arch-box-tag">port 3005</span>
+            </div>
+            <div class="arch-box">
+              <div class="arch-box-label">📱 Mobile / API</div>
+              <div class="arch-box-sub">Any SSE client</div>
+              <span class="arch-box-tag">headless</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- ARROW 1 -->
+        <div class="arch-arrow" style="margin-left:18px;">
+          <div class="arch-arrow-line"></div>
+          <span class="arch-arrow-label">SSE stream · REST JSON · ui events</span>
+        </div>
+
+        <!-- AGENT -->
+        <div class="arch-row">
+          <div class="arch-side-label">Agent</div>
+          <div class="arch-layer agent">
+            <div class="arch-box wide">
+              <div class="arch-box-label">🤖 Claude (claude-sonnet-5)</div>
+              <div class="arch-box-sub">Orchestrates tools · composes UI · manages context</div>
+              <span class="arch-box-tag">Anthropic Messages API</span>
+            </div>
+            <div class="arch-box">
+              <div class="arch-box-label">🎯 Skills</div>
+              <div class="arch-box-sub">5 injectable flows per role</div>
+              <span class="arch-box-tag">SKILL.md</span>
+            </div>
+            <div class="arch-box">
+              <div class="arch-box-label">🔒 Provenance Gate</div>
+              <div class="arch-box-sub">Server-side enrichment + validation</div>
+              <span class="arch-box-tag">enrichment.py</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- ARROW 2 -->
+        <div class="arch-arrow" style="margin-left:18px;">
+          <div class="arch-arrow-line"></div>
+          <span class="arch-arrow-label">tool calls · structured payloads · session state</span>
+        </div>
+
+        <!-- BACKEND -->
+        <div class="arch-row">
+          <div class="arch-side-label">Backend</div>
+          <div class="arch-layer backend">
+            <div class="arch-box">
+              <div class="arch-box-label">🚀 FastAPI</div>
+              <div class="arch-box-sub">Session · routing · SSE</div>
+              <span class="arch-box-tag">Python 3.11</span>
+            </div>
+            <div class="arch-box">
+              <div class="arch-box-label">🛒 StorefrontBackend</div>
+              <div class="arch-box-sub">Catalog · cart · orders</div>
+              <span class="arch-box-tag">interface</span>
+            </div>
+            <div class="arch-box">
+              <div class="arch-box-label">🏪 MerchantBackend</div>
+              <div class="arch-box-sub">Inventory · pricing · analytics</div>
+              <span class="arch-box-tag">interface</span>
+            </div>
+            <div class="arch-box">
+              <div class="arch-box-label">🧠 Memory Store</div>
+              <div class="arch-box-sub">Per-session context</div>
+              <span class="arch-box-tag">in-memory / Redis</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- ARROW 3 -->
+        <div class="arch-arrow" style="margin-left:18px;">
+          <div class="arch-arrow-line"></div>
+          <span class="arch-arrow-label">REST · SOQL · OAuth 2.0 · Connect API</span>
+        </div>
+
+        <!-- PLATFORM -->
+        <div class="arch-row">
+          <div class="arch-side-label">Platform</div>
+          <div class="arch-layer platform">
+            <div class="arch-box wide">
+              <div class="arch-box-label">☁️ Salesforce B2B Commerce</div>
+              <div class="arch-box-sub">Products · carts · buyer entitlement</div>
+              <span class="arch-box-tag">Commerce API · ConnectApi</span>
+            </div>
+            <div class="arch-box">
+              <div class="arch-box-label">📦 Salesforce OMS</div>
+              <div class="arch-box-sub">Order lifecycle</div>
+              <span class="arch-box-tag">OrderSummary SOQL</span>
+            </div>
+            <div class="arch-box">
+              <div class="arch-box-label">🔌 Alt Platforms</div>
+              <div class="arch-box-sub">SAP · Oracle · Custom ERP</div>
+              <span class="arch-box-tag">swap backend only</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- ARROW 4 -->
+        <div class="arch-arrow" style="margin-left:18px;">
+          <div class="arch-arrow-line"></div>
+          <span class="arch-arrow-label">SOQL object model · entitlement filter</span>
+        </div>
+
+        <!-- DATA -->
+        <div class="arch-row">
+          <div class="arch-side-label">Data</div>
+          <div class="arch-layer data">
+            <div class="arch-box">
+              <div class="arch-box-label">📋 Product Catalog</div>
+              <div class="arch-box-sub">ProductCategoryProduct</div>
+            </div>
+            <div class="arch-box">
+              <div class="arch-box-label">🔐 Entitlement</div>
+              <div class="arch-box-sub">CommerceEntitlementProduct</div>
+            </div>
+            <div class="arch-box">
+              <div class="arch-box-label">🛍️ Cart & Orders</div>
+              <div class="arch-box-sub">CartItem · OrderSummary</div>
+            </div>
+            <div class="arch-box">
+              <div class="arch-box-label">🖼️ Media Assets</div>
+              <div class="arch-box-sub">CDN / StaticFiles</div>
+              <span class="arch-box-tag">Railway / S3</span>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- arch-layers -->
+    </div><!-- arch-card -->
+
+    <!-- SIDEBAR -->
+    <div class="sidebar">
+
+      <!-- BUSINESS IMPACT -->
+      <div class="info-card">
+        <div class="info-card-title">Business Impact</div>
+        <div class="kpi-grid">
+          <div class="kpi">
+            <div class="kpi-num">30<span>min</span></div>
+            <div class="kpi-desc">→ 2 min per procurement task. 28,000 hrs/yr returned per 100-person team.</div>
+          </div>
+          <div class="kpi-divider"></div>
+          <div class="kpi">
+            <div class="kpi-num">~0<span>%</span></div>
+            <div class="kpi-desc">Off-contract purchases. Entitlement gate is a code constraint, not a training prompt.</div>
+          </div>
+          <div class="kpi-divider"></div>
+          <div class="kpi">
+            <div class="kpi-num">$500<span>K+</span></div>
+            <div class="kpi-desc">Saved per $50M org from 1% order error reduction alone.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- LAYER LEGEND -->
+      <div class="info-card">
+        <div class="info-card-title">Layer Key</div>
+        <div class="layer-legend">
+          <div class="legend-row">
+            <div class="legend-dot" style="background:var(--client)"></div>
+            <div><div class="legend-text">Client</div><div class="legend-sub">LWC · Web · Mobile</div></div>
+          </div>
+          <div class="legend-row">
+            <div class="legend-dot" style="background:var(--agent)"></div>
+            <div><div class="legend-text">AI Agent</div><div class="legend-sub">Claude · Skills · Gate</div></div>
+          </div>
+          <div class="legend-row">
+            <div class="legend-dot" style="background:var(--backend)"></div>
+            <div><div class="legend-text">Backend API</div><div class="legend-sub">FastAPI · Interfaces</div></div>
+          </div>
+          <div class="legend-row">
+            <div class="legend-dot" style="background:var(--platform)"></div>
+            <div><div class="legend-text">Commerce Platform</div><div class="legend-sub">Salesforce · SAP · Oracle</div></div>
+          </div>
+          <div class="legend-row">
+            <div class="legend-dot" style="background:var(--data)"></div>
+            <div><div class="legend-text">Data Objects</div><div class="legend-sub">Catalog · Entitlement · Orders</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- DESIGN PRINCIPLES -->
+      <div class="info-card">
+        <div class="info-card-title">Enterprise-Grade Design Principles</div>
+        <div class="principle-list">
+          <div class="principle">
+            <div class="p-icon">🔒</div>
+            <div class="p-text"><strong>Provenance gate</strong>Agent cannot add products it didn't search. Every cart write validated server-side.</div>
+          </div>
+          <div class="principle">
+            <div class="p-icon">🔌</div>
+            <div class="p-text"><strong>Platform abstraction</strong>StorefrontBackend interface — swap Salesforce for SAP by implementing one Python class.</div>
+          </div>
+          <div class="principle">
+            <div class="p-icon">📡</div>
+            <div class="p-text"><strong>Real-time streaming</strong>SSE delivers UI components as they're generated — no polling, no loading screens.</div>
+          </div>
+          <div class="principle">
+            <div class="p-icon">🎯</div>
+            <div class="p-text"><strong>Entitlement-first</strong>Policy compliance is structural, not behavioral — enforced in code, not in the prompt.</div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- sidebar -->
+  </div><!-- main-grid -->
+
+  <!-- BOTTOM SECTION -->
+  <div class="bottom-grid">
+
+    <!-- BEFORE / AFTER -->
+    <div class="bottom-card">
+      <div class="bottom-card-title">Before vs. After</div>
+      <div class="before-after">
+        <div class="ba before">
+          <div class="ba-label">Today</div>
+          <div class="ba-line">Log into portal</div>
+          <div class="ba-line">Navigate 4 categories</div>
+          <div class="ba-line">Filter products manually</div>
+          <div class="ba-line">Check budget in sheet</div>
+          <div class="ba-line">Add items one by one</div>
+          <div class="ba-line">Submit for approval</div>
+          <div class="ba-line" style="font-weight:700;margin-top:4px">~30 minutes</div>
+        </div>
+        <div class="ba after">
+          <div class="ba-label">With agent</div>
+          <div class="ba-line">"Equip 10 engineers"</div>
+          <div class="ba-line">Agent recommends bundle</div>
+          <div class="ba-line">Budget validated live</div>
+          <div class="ba-line">"Add all to cart"</div>
+          <div class="ba-line">Checkout → approval</div>
+          <div class="ba-line" style="opacity:.3">—</div>
+          <div class="ba-line" style="font-weight:700;margin-top:4px">~2 minutes</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- VERTICALS -->
+    <div class="bottom-card">
+      <div class="bottom-card-title">Applicable Verticals</div>
+      <div class="vertical-list">
+        <div class="vertical">
+          <div class="v-icon">💻</div>
+          <div><div class="v-name">IT Hardware / Technology</div><div class="v-detail">Current demo — laptops, servers, networking</div></div>
+        </div>
+        <div class="vertical">
+          <div class="v-icon">⚙️</div>
+          <div><div class="v-name">MRO / Industrial</div><div class="v-detail">Parts, tools, consumables, maintenance supplies</div></div>
+        </div>
+        <div class="vertical">
+          <div class="v-icon">🏥</div>
+          <div><div class="v-name">Healthcare / Pharma</div><div class="v-detail">Medical supplies, equipment, reagents</div></div>
+        </div>
+        <div class="vertical">
+          <div class="v-icon">🏢</div>
+          <div><div class="v-name">Office / Facilities</div><div class="v-detail">Furniture, stationery, FM services</div></div>
+        </div>
+        <div class="vertical">
+          <div class="v-icon">💼</div>
+          <div><div class="v-name">Financial Services</div><div class="v-detail">Software licenses, subscriptions, compliance tools</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TECH STACK -->
+    <div class="bottom-card">
+      <div class="bottom-card-title">Technology Stack</div>
+      <div style="margin-bottom:8px;">
+        <div style="font-size:10px;font-weight:700;color:#888;margin-bottom:5px;">AI &amp; Agent</div>
+        <div class="pill-wrap">
+          <span class="pill navy">Claude claude-sonnet-5</span>
+          <span class="pill">Anthropic Messages API</span>
+          <span class="pill">SSE streaming</span>
+        </div>
+      </div>
+      <div style="margin-bottom:8px;">
+        <div style="font-size:10px;font-weight:700;color:#888;margin-bottom:5px;">Backend</div>
+        <div class="pill-wrap">
+          <span class="pill">FastAPI</span>
+          <span class="pill">Python 3.11</span>
+          <span class="pill">Pydantic</span>
+          <span class="pill">Railway (PaaS)</span>
+        </div>
+      </div>
+      <div style="margin-bottom:8px;">
+        <div style="font-size:10px;font-weight:700;color:#888;margin-bottom:5px;">Salesforce</div>
+        <div class="pill-wrap">
+          <span class="pill">B2B Commerce</span>
+          <span class="pill">OMS / OrderSummary</span>
+          <span class="pill">LWC</span>
+          <span class="pill">Experience Cloud</span>
+        </div>
+      </div>
+      <div>
+        <div style="font-size:10px;font-weight:700;color:#888;margin-bottom:5px;">Frontend</div>
+        <div class="pill-wrap">
+          <span class="pill">Next.js</span>
+          <span class="pill">TypeScript</span>
+          <span class="pill">Tailwind CSS</span>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- bottom-grid -->
+
+  <!-- FOOTER -->
+  <div class="footer">
+    <span><strong>Agentic B2B Commerce</strong> — Reference Architecture</span>
+    <span>Built on Claude · Salesforce B2B Commerce · FastAPI · LWC</span>
+    <span>Print: File → Print → Save as PDF (Landscape · A4)</span>
+  </div>
+
+</div><!-- page -->
+</body>
+</html>

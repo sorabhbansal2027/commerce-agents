@@ -1,0 +1,836 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Claude Internal Execution — "Find laptop under $1300 with 16 GB RAM and add to cart"</title>
+<style>
+  :root {
+    --bg: #0d0f14;
+    --surface: #161920;
+    --surface2: #1e2230;
+    --border: #2a2f40;
+    --text: #e8eaf0;
+    --muted: #7a8099;
+    --accent: #cc785c;
+    --blue: #5b8dee;
+    --green: #4caf7d;
+    --purple: #9b7fe8;
+    --orange: #e8934a;
+    --teal: #38b2ac;
+    --red: #e05c5c;
+    --yellow: #e8c84a;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+    font-size: 14px;
+    min-height: 100vh;
+    padding: 32px 20px;
+  }
+
+  h1 {
+    text-align: center;
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 6px;
+  }
+
+  .subtitle {
+    text-align: center;
+    color: var(--muted);
+    font-size: 13px;
+    margin-bottom: 36px;
+  }
+
+  .prompt-banner {
+    background: linear-gradient(135deg, #1a1e2e, #1e2235);
+    border: 1px solid #3a4060;
+    border-radius: 12px;
+    padding: 16px 24px;
+    margin: 0 auto 40px;
+    max-width: 860px;
+    text-align: center;
+  }
+  .prompt-banner .label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+  .prompt-banner .text {
+    font-size: 18px;
+    font-weight: 600;
+    color: #fff;
+    font-style: italic;
+  }
+  .prompt-banner .text span { color: var(--accent); }
+
+  .flow {
+    max-width: 920px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  /* ── PHASE HEADERS ── */
+  .phase {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 14px;
+    margin-top: 8px;
+  }
+  .phase-num {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 700;
+    flex-shrink: 0;
+  }
+  .phase-title { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; }
+
+  /* ── CARDS ── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 20px;
+    margin-bottom: 4px;
+  }
+  .card-title { font-size: 13px; font-weight: 600; margin-bottom: 10px; }
+  .card-body { font-size: 12px; color: var(--muted); line-height: 1.7; }
+
+  /* ── CONNECTOR ── */
+  .connector {
+    display: flex;
+    justify-content: center;
+    margin: 6px 0;
+  }
+  .connector-line {
+    width: 2px;
+    height: 28px;
+    background: linear-gradient(to bottom, var(--border), var(--border));
+    position: relative;
+  }
+  .connector-line::after {
+    content: '';
+    position: absolute;
+    bottom: -6px;
+    left: -4px;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-top: 7px solid var(--border);
+  }
+  .connector-line.active { background: var(--blue); }
+  .connector-line.active::after { border-top-color: var(--blue); }
+  .connector-line.tool  { background: var(--orange); }
+  .connector-line.tool::after  { border-top-color: var(--orange); }
+  .connector-line.result { background: var(--green); }
+  .connector-line.result::after { border-top-color: var(--green); }
+
+  /* ── STEP ROWS ── */
+  .step-row {
+    display: grid;
+    grid-template-columns: 40px 1fr;
+    gap: 16px;
+    align-items: start;
+    margin-bottom: 8px;
+  }
+  .step-icon {
+    width: 36px; height: 36px;
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+  .step-content { flex: 1; }
+
+  /* ── INFERENCE BLOCK ── */
+  .inference {
+    background: linear-gradient(135deg, #12162a, #151929);
+    border: 1px solid #2e3555;
+    border-radius: 12px;
+    padding: 18px 20px;
+    position: relative;
+    overflow: hidden;
+  }
+  .inference::before {
+    content: 'CLAUDE MODEL';
+    position: absolute;
+    top: 10px; right: 16px;
+    font-size: 9px;
+    letter-spacing: 1.5px;
+    color: #4a5278;
+    font-weight: 700;
+  }
+  .inference-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--blue);
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .inference-title svg { opacity: 0.8; }
+  .inf-row { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 10px; }
+  .inf-chip {
+    background: #1e2340;
+    border: 1px solid #2e3555;
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-size: 11px;
+    color: #8a9bc0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .inf-chip .dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  /* ── TOOL CALL BLOCK ── */
+  .tool-call {
+    background: linear-gradient(135deg, #1a1408, #1e1a0a);
+    border: 1px solid #3d3010;
+    border-radius: 12px;
+    padding: 16px 20px;
+  }
+  .tool-call-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+  .tool-badge {
+    background: #2a2008;
+    border: 1px solid #4a3a10;
+    border-radius: 6px;
+    padding: 4px 10px;
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--orange);
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+  .tool-name {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--orange);
+    font-family: 'Courier New', monospace;
+  }
+  .tool-params {
+    background: #100e04;
+    border: 1px solid #2a2408;
+    border-radius: 8px;
+    padding: 12px 14px;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    color: #c8b87a;
+    line-height: 1.6;
+  }
+  .param-key { color: #7a9ae0; }
+  .param-val { color: #7ec88a; }
+  .param-num { color: var(--orange); }
+  .tool-note { margin-top: 10px; font-size: 11px; color: #7a6840; display: flex; gap: 6px; align-items: flex-start; }
+
+  /* ── RESULT BLOCK ── */
+  .tool-result {
+    background: linear-gradient(135deg, #081408, #0c1a0c);
+    border: 1px solid #1a3a1a;
+    border-radius: 12px;
+    padding: 16px 20px;
+  }
+  .result-header {
+    display: flex; align-items: center; gap: 10px; margin-bottom: 12px;
+  }
+  .result-badge {
+    background: #0c1c0c;
+    border: 1px solid #1e4a1e;
+    border-radius: 6px;
+    padding: 4px 10px;
+    font-size: 10px; font-weight: 700;
+    color: var(--green); letter-spacing: 0.5px; text-transform: uppercase;
+  }
+  .result-title { font-size: 14px; font-weight: 600; color: var(--green); }
+  .product-card {
+    background: #0a160a;
+    border: 1px solid #1e3a1e;
+    border-radius: 8px;
+    padding: 12px 14px;
+    margin-top: 4px;
+  }
+  .product-name { font-size: 13px; font-weight: 700; color: #b8e4b8; margin-bottom: 6px; }
+  .product-specs { display: flex; flex-wrap: wrap; gap: 6px; }
+  .spec-tag {
+    background: #0c200c;
+    border: 1px solid #1a3a1a;
+    border-radius: 4px;
+    padding: 3px 8px;
+    font-size: 11px; color: #6ab86a;
+  }
+  .spec-tag.highlight { background: #122812; border-color: #2a5a2a; color: #88e888; font-weight: 600; }
+  .result-list { margin-top: 10px; }
+  .result-item {
+    padding: 6px 0;
+    border-bottom: 1px solid #1a2a1a;
+    font-size: 12px;
+    color: #7ab87a;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .result-item:last-child { border-bottom: none; }
+  .result-item .item-name { color: #b8d8b8; }
+  .result-item .item-price { color: var(--green); font-weight: 600; }
+  .result-item .item-ram { color: #7ab87a; font-size: 11px; }
+
+  /* ── SKILL ROUTING BLOCK ── */
+  .routing {
+    background: linear-gradient(135deg, #130f1e, #161228);
+    border: 1px solid #2e2545;
+    border-radius: 12px;
+    padding: 18px 20px;
+  }
+  .routing-title {
+    font-size: 13px; font-weight: 700;
+    color: var(--purple);
+    margin-bottom: 14px;
+    display: flex; gap: 8px; align-items: center;
+  }
+  .skill-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .skill-card {
+    background: #1a1528;
+    border: 1px solid #2a2040;
+    border-radius: 8px;
+    padding: 10px 12px;
+  }
+  .skill-card.active-skill {
+    background: #1e1a30;
+    border-color: #4a3880;
+    box-shadow: 0 0 0 1px rgba(155, 127, 232, 0.2);
+  }
+  .skill-name { font-size: 12px; font-weight: 600; color: var(--purple); margin-bottom: 4px; }
+  .skill-card.active-skill .skill-name { color: #bf9ff8; }
+  .skill-desc { font-size: 11px; color: #7060a0; }
+  .skill-card.active-skill .skill-desc { color: #9a80c8; }
+  .active-badge {
+    display: inline-block;
+    background: #2a1e48;
+    border: 1px solid #4a3880;
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-size: 9px;
+    font-weight: 700;
+    color: var(--purple);
+    letter-spacing: 0.5px;
+    margin-left: 6px;
+    vertical-align: middle;
+  }
+
+  /* ── CONTEXT BLOCK ── */
+  .context-block {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px 20px;
+  }
+  .context-title { font-size: 12px; font-weight: 700; color: var(--teal); margin-bottom: 12px; letter-spacing: 0.5px; text-transform: uppercase; }
+  .context-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .ctx-item {
+    background: #141820;
+    border: 1px solid #242a38;
+    border-radius: 8px;
+    padding: 10px 12px;
+  }
+  .ctx-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+  .ctx-value { font-size: 12px; color: var(--text); font-weight: 500; }
+
+  /* ── GATE BLOCK ── */
+  .gate {
+    background: linear-gradient(135deg, #0d1318, #101520);
+    border: 1px solid #1e2d3a;
+    border-radius: 10px;
+    padding: 14px 18px;
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+  }
+  .gate-icon { font-size: 20px; flex-shrink: 0; margin-top: 2px; }
+  .gate-title { font-size: 13px; font-weight: 700; color: var(--teal); margin-bottom: 6px; }
+  .gate-checks { display: flex; flex-direction: column; gap: 4px; }
+  .gate-check { font-size: 12px; color: #5a8a7a; display: flex; gap: 8px; align-items: center; }
+  .gate-check .ok { color: var(--green); font-weight: 700; }
+  .gate-check .fail { color: var(--red); font-weight: 700; }
+
+  /* ── CART UPDATE BLOCK ── */
+  .cart-update {
+    background: linear-gradient(135deg, #0f1508, #141a0a);
+    border: 2px solid #3a6a10;
+    border-radius: 12px;
+    padding: 16px 20px;
+    position: relative;
+    overflow: hidden;
+  }
+  .cart-update::before {
+    content: 'CART UPDATED';
+    position: absolute;
+    top: 0; right: 0;
+    background: var(--green);
+    color: #0a1008;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 1px;
+    padding: 4px 10px;
+    border-bottom-left-radius: 8px;
+  }
+  .cart-update-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: #8ae84a;
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .cart-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .cart-table th { color: var(--muted); font-size: 10px; text-align: left; text-transform: uppercase; letter-spacing: 0.5px; padding: 4px 8px; border-bottom: 1px solid #2a3a10; }
+  .cart-table td { color: #a8d868; padding: 8px 8px; border-bottom: 1px solid #1a2808; }
+  .cart-table td.price { color: var(--green); font-weight: 700; }
+  .cart-total-row { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; padding-top: 10px; border-top: 1px solid #2a4010; }
+  .cart-total-label { font-size: 13px; color: #8a9870; font-weight: 600; }
+  .cart-total-val { font-size: 18px; font-weight: 800; color: var(--green); }
+
+  /* ── RESPONSE BLOCK ── */
+  .response-block {
+    background: linear-gradient(135deg, #0e1520, #121a28);
+    border: 1px solid #2a3a50;
+    border-radius: 12px;
+    padding: 16px 20px;
+  }
+  .response-title { font-size: 13px; font-weight: 700; color: var(--blue); margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+  .response-bubble {
+    background: #101828;
+    border: 1px solid #1e2e40;
+    border-radius: 10px;
+    padding: 14px 16px;
+    font-size: 13px;
+    color: #c8d8f0;
+    line-height: 1.7;
+  }
+  .response-bubble strong { color: var(--blue); }
+  .chips-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  .chip {
+    background: #0e1828;
+    border: 1px solid #2a3a50;
+    border-radius: 20px;
+    padding: 5px 12px;
+    font-size: 11px;
+    color: #7090b8;
+  }
+
+  /* ── SSE STREAM ── */
+  .sse-stream {
+    background: #0a0e14;
+    border: 1px solid #1a2030;
+    border-radius: 10px;
+    padding: 14px 16px;
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    margin-top: 12px;
+  }
+  .sse-line { padding: 3px 0; display: flex; gap: 10px; }
+  .sse-event { color: #5a6a7a; min-width: 90px; }
+  .sse-data { color: #7090b8; }
+  .sse-data .k { color: #5878a0; }
+  .sse-data .v { color: #60a878; }
+  .sse-data .vs { color: #a878a0; }
+
+  /* ── LAYER LABELS ── */
+  .section-label {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--muted);
+    margin: 28px 0 12px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .section-label::before, .section-label::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  /* ── LEGEND ── */
+  .legend {
+    max-width: 920px;
+    margin: 36px auto 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    justify-content: center;
+    padding: 16px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+  }
+  .legend-item { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--muted); }
+  .legend-dot { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+
+  .turquoise { color: var(--teal) !important; }
+  .mt-12 { margin-top: 12px; }
+</style>
+</head>
+<body>
+
+<h1>Claude Internal Execution Flow</h1>
+<p class="subtitle">How Claude processes a multi-step agentic request — step by step</p>
+
+<div class="prompt-banner">
+  <div class="label">User Prompt</div>
+  <div class="text">"<span>Find laptop under $1,300</span> with <span>16 GB RAM</span> and <span>add to cart</span>"</div>
+</div>
+
+<div class="flow">
+
+  <!-- ═════════════════════════════════════════════════════════════ -->
+  <div class="section-label">Step 1 — Context Assembly</div>
+
+  <div class="context-block">
+    <div class="context-title">Request Context Built Before First Inference</div>
+    <div class="context-grid">
+      <div class="ctx-item">
+        <div class="ctx-label">System Prompt</div>
+        <div class="ctx-value">Shopping assistant instructions (static, cached)</div>
+      </div>
+      <div class="ctx-item">
+        <div class="ctx-label">Session State</div>
+        <div class="ctx-value">User: SF Community User<br>Session: <code style="color:#7a99c0;font-size:11px">abc123…</code></div>
+      </div>
+      <div class="ctx-item">
+        <div class="ctx-label">Tool Registry</div>
+        <div class="ctx-value">14 tools loaded (search, cart, orders, quotes…)</div>
+      </div>
+      <div class="ctx-item">
+        <div class="ctx-label">Fenced Data</div>
+        <div class="ctx-value">Cart: empty · Orders: 3 · Memory facts: 5</div>
+      </div>
+      <div class="ctx-item">
+        <div class="ctx-label">Messages</div>
+        <div class="ctx-value">1 user message: "Find laptop under $1,300…"</div>
+      </div>
+      <div class="ctx-item">
+        <div class="ctx-label">Model</div>
+        <div class="ctx-value">claude-sonnet-4-6 via Messages API (streaming)</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="connector"><div class="connector-line active"></div></div>
+
+  <!-- ═════════════════════════════════════════════════════════════ -->
+  <div class="section-label">Step 2 — Skill Routing &amp; First Inference</div>
+
+  <div class="routing">
+    <div class="routing-title">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      Skill Router: Matching Request to Active Skills
+    </div>
+    <div class="skill-grid">
+      <div class="skill-card active-skill">
+        <div class="skill-name">product-discovery <span class="active-badge">ACTIVE</span></div>
+        <div class="skill-desc">Search catalog by filters — matches "find laptop under $1,300"</div>
+      </div>
+      <div class="skill-card active-skill">
+        <div class="skill-name">purchase-management <span class="active-badge">ACTIVE</span></div>
+        <div class="skill-desc">Add items to cart — matches "add to cart"</div>
+      </div>
+      <div class="skill-card">
+        <div class="skill-name">order-status</div>
+        <div class="skill-desc">Track recent orders — not triggered</div>
+      </div>
+      <div class="skill-card">
+        <div class="skill-name">account-management</div>
+        <div class="skill-desc">Address, profile management — not triggered</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="connector"><div class="connector-line active"></div></div>
+
+  <div class="inference">
+    <div class="inference-title">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5b8dee" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l2 2"/></svg>
+      Inference #1 — Intent Parsing &amp; Tool Selection
+    </div>
+    <div style="font-size:12px; color:#8a9bc0; line-height:1.8; margin-bottom:12px;">
+      Claude analyzes the user's composite request. It identifies <strong style="color:#bf9ff8">two sub-tasks</strong>:
+      find a laptop matching constraints, then add the best match to cart. It decides to call
+      <code style="color:var(--orange)">search_products</code> first before attempting the cart action.
+    </div>
+    <div class="inf-row">
+      <div class="inf-chip"><div class="dot" style="background:#9b7fe8"></div>Intent: Find + Purchase</div>
+      <div class="inf-chip"><div class="dot" style="background:var(--orange)"></div>Tool decision: search_products</div>
+      <div class="inf-chip"><div class="dot" style="background:var(--blue)"></div>Constraint extraction: price ≤ $1300, RAM ≥ 16GB</div>
+      <div class="inf-chip"><div class="dot" style="background:var(--teal)"></div>Provenance check deferred (no product in session yet)</div>
+    </div>
+  </div>
+
+  <div class="connector"><div class="connector-line tool"></div></div>
+
+  <!-- ═════════════════════════════════════════════════════════════ -->
+  <div class="section-label">Step 3 — Tool Call #1: Search Products</div>
+
+  <div class="tool-call">
+    <div class="tool-call-header">
+      <div class="tool-badge">Tool Call #1</div>
+      <div class="tool-name">search_products(…)</div>
+    </div>
+    <div class="tool-params">
+      {<br>
+      &nbsp;&nbsp;<span class="param-key">"q"</span>: <span class="param-val">"laptop"</span>,<br>
+      &nbsp;&nbsp;<span class="param-key">"max_price"</span>: <span class="param-num">1300</span>,<br>
+      &nbsp;&nbsp;<span class="param-key">"filters"</span>: { <span class="param-key">"ram"</span>: <span class="param-val">"16GB"</span> },<br>
+      &nbsp;&nbsp;<span class="param-key">"limit"</span>: <span class="param-num">8</span><br>
+      }
+    </div>
+    <div class="tool-note">
+      <span>→</span>
+      <span>Routes to <code style="color:#c8a060">StorefrontBackend.search_products()</code> →
+      SOQL query against Salesforce Product2 catalog → filtered by price &amp; attributes →
+      sorted by relevance score</span>
+    </div>
+  </div>
+
+  <div class="connector"><div class="connector-line result"></div></div>
+
+  <div class="tool-result">
+    <div class="result-header">
+      <div class="result-badge">Tool Result #1</div>
+      <div class="result-title">6 matching products found</div>
+    </div>
+    <div class="result-list">
+      <div class="result-item">
+        <span class="item-name">ProBook Elite 15 (16GB DDR5)</span>
+        <span class="item-ram">16GB · Intel i7 · 512GB SSD</span>
+        <span class="item-price">$1,299.00</span>
+      </div>
+      <div class="result-item">
+        <span class="item-name">WorkStation Pro 14 (16GB)</span>
+        <span class="item-ram">16GB · AMD Ryzen 7 · 256GB SSD</span>
+        <span class="item-price">$1,249.00</span>
+      </div>
+      <div class="result-item">
+        <span class="item-name">UltraBook 13 (16GB)</span>
+        <span class="item-ram">16GB · Intel i5 · 512GB SSD</span>
+        <span class="item-price">$1,149.00</span>
+      </div>
+      <div class="result-item" style="color:#5a7a5a">
+        <span class="item-name">+ 3 more products…</span>
+        <span></span>
+        <span></span>
+      </div>
+    </div>
+    <div style="margin-top:10px; font-size:11px; color:#5a8a5a;">
+      ↳ Results stored in session provenance registry — gates will block adding products not in this result set
+    </div>
+  </div>
+
+  <div class="connector"><div class="connector-line active"></div></div>
+
+  <!-- ═════════════════════════════════════════════════════════════ -->
+  <div class="section-label">Step 4 — Inference #2: Product Selection</div>
+
+  <div class="inference">
+    <div class="inference-title">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5b8dee" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l2 2"/></svg>
+      Inference #2 — Best-Match Selection &amp; Cart Tool Decision
+    </div>
+    <div style="font-size:12px; color:#8a9bc0; line-height:1.8; margin-bottom:12px;">
+      Claude evaluates the 6 results against the user's original intent. The <strong style="color:#bf9ff8">ProBook Elite 15</strong>
+      is selected as the top match — it satisfies both constraints (16GB DDR5, $1,299 ≤ $1,300)
+      and has the highest spec level. Claude decides to call <code style="color:var(--orange)">add_to_cart</code>
+      immediately per the user's explicit intent.
+    </div>
+    <div class="inf-row">
+      <div class="inf-chip"><div class="dot" style="background:#4caf7d"></div>Selected: ProBook Elite 15 · product_id = "01t…ABC"</div>
+      <div class="inf-chip"><div class="dot" style="background:var(--orange)"></div>Next tool: add_to_cart</div>
+      <div class="inf-chip"><div class="dot" style="background:#e84a4a"></div>Provenance gate: product IS in session results ✓</div>
+    </div>
+  </div>
+
+  <div class="connector"><div class="connector-line tool"></div></div>
+
+  <!-- ═════════════════════════════════════════════════════════════ -->
+  <div class="section-label">Step 5 — Gate Check &amp; Tool Call #2: Add to Cart</div>
+
+  <div class="gate">
+    <div class="gate-icon">🔒</div>
+    <div>
+      <div class="gate-title">Safety Gates (checked before write)</div>
+      <div class="gate-checks">
+        <div class="gate-check"><span class="ok">✓</span> Provenance gate: product_id in session's search results</div>
+        <div class="gate-check"><span class="ok">✓</span> Options gate: no unresolved variant selection required</div>
+        <div class="gate-check"><span class="ok">✓</span> Quantity limit: 1 ≤ max_quantity_per_item (10)</div>
+        <div class="gate-check"><span class="ok">✓</span> Cart capacity: 1 item &lt; max_cart_lines (20)</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="connector"><div class="connector-line tool"></div></div>
+
+  <div class="tool-call">
+    <div class="tool-call-header">
+      <div class="tool-badge">Tool Call #2</div>
+      <div class="tool-name">add_to_cart(…)</div>
+    </div>
+    <div class="tool-params">
+      {<br>
+      &nbsp;&nbsp;<span class="param-key">"product_id"</span>: <span class="param-val">"01tXX0000000001AAA"</span>,<br>
+      &nbsp;&nbsp;<span class="param-key">"quantity"</span>: <span class="param-num">1</span><br>
+      }
+    </div>
+    <div class="tool-note">
+      <span>→</span>
+      <span>Routes to <code style="color:#c8a060">gated_add_to_cart()</code> → acquires session cart lock →
+      calls <code style="color:#c8a060">SalesforceOMSBackend.add_to_cart()</code> →
+      B2B Commerce REST API: <code style="color:#c8a060">POST /carts/active/cart-items</code> →
+      Salesforce WebCart record updated</span>
+    </div>
+  </div>
+
+  <div class="connector"><div class="connector-line result"></div></div>
+
+  <!-- ═════════════════════════════════════════════════════════════ -->
+  <div class="section-label">Step 6 — Cart Update &amp; SSE Event</div>
+
+  <div class="cart-update">
+    <div class="cart-update-title">
+      🛒 Cart Write Confirmed — Salesforce WebCart Updated
+    </div>
+    <table class="cart-table">
+      <tr>
+        <th>Product</th><th>Specs</th><th>Qty</th><th>Unit Price</th><th>Line Total</th>
+      </tr>
+      <tr>
+        <td>ProBook Elite 15</td>
+        <td>16GB DDR5 · Intel Core i7 · 512GB SSD</td>
+        <td>1</td>
+        <td class="price">$1,299.00</td>
+        <td class="price">$1,299.00</td>
+      </tr>
+    </table>
+    <div class="cart-total-row">
+      <div>
+        <div class="cart-total-label">Cart Total</div>
+        <div style="font-size:11px; color:#5a7a5a; margin-top:2px">1 item · USD</div>
+      </div>
+      <div class="cart-total-val">$1,299.00</div>
+    </div>
+    <div class="sse-stream">
+      <div class="sse-line">
+        <span class="sse-event">event: cart_update</span>
+        <span class="sse-data">
+          data: {<span class="k">"type"</span>:<span class="vs">"cart_update"</span>, <span class="k">"data"</span>:{<span class="k">"cart"</span>:{<span class="k">"items"</span>:[{...}], <span class="k">"item_count"</span>:<span class="v">1</span>, <span class="k">"subtotal"</span>:<span class="v">1299.0</span>}}}
+        </span>
+      </div>
+      <div style="font-size:10px; color:#3a5a3a; margin-top:6px;">↳ Streamed to LWC over SSE — LWC updates this._cart in real-time → cart badge shows "1"</div>
+    </div>
+  </div>
+
+  <div class="connector"><div class="connector-line active"></div></div>
+
+  <!-- ═════════════════════════════════════════════════════════════ -->
+  <div class="section-label">Step 7 — Inference #3: Response Generation</div>
+
+  <div class="inference">
+    <div class="inference-title">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5b8dee" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l2 2"/></svg>
+      Inference #3 — Final Response &amp; Suggestion Generation
+    </div>
+    <div style="font-size:12px; color:#8a9bc0; line-height:1.8; margin-bottom:12px;">
+      Both sub-tasks complete. Claude generates a confirmation response combining the product
+      details from the search result and the cart state from the tool result. It also generates
+      3 contextual follow-up suggestions for the UI chips.
+    </div>
+    <div class="inf-row">
+      <div class="inf-chip"><div class="dot" style="background:var(--blue)"></div>No more tool calls needed</div>
+      <div class="inf-chip"><div class="dot" style="background:var(--purple)"></div>text_delta events streamed incrementally</div>
+      <div class="inf-chip"><div class="dot" style="background:var(--teal)"></div>suggestions event generated</div>
+    </div>
+  </div>
+
+  <div class="connector"><div class="connector-line active"></div></div>
+
+  <!-- ═════════════════════════════════════════════════════════════ -->
+  <div class="section-label">Step 8 — Final Response Streamed to LWC</div>
+
+  <div class="response-block">
+    <div class="response-title">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#5b8dee" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+      Claude's Response (streamed as text_delta SSE events)
+    </div>
+    <div class="response-bubble">
+      I've added the <strong>ProBook Elite 15</strong> to your cart. Here's what you're getting:
+      <ul style="margin:10px 0 0 18px; color:#a0b8d8;">
+        <li>16GB DDR5 RAM — meets your memory requirement</li>
+        <li>Intel Core i7 processor</li>
+        <li>512GB SSD storage</li>
+        <li><strong>Price: $1,299.00</strong> — under your $1,300 budget</li>
+      </ul>
+      <div style="margin-top:10px;">
+        Your cart total is <strong>$1,299.00</strong>. Ready to proceed to checkout, or would you like to add anything else?
+      </div>
+    </div>
+    <div class="chips-row">
+      <div class="chip">Proceed to checkout →</div>
+      <div class="chip">Add monitors to my order</div>
+      <div class="chip">Compare with other laptops</div>
+    </div>
+    <div class="sse-stream mt-12">
+      <div class="sse-line">
+        <span class="sse-event">event: text_delta</span>
+        <span class="sse-data">data: {<span class="k">"type"</span>:<span class="vs">"text_delta"</span>, <span class="k">"text"</span>:<span class="vs">"I've added the ProBook Elite 15…"</span>}</span>
+      </div>
+      <div class="sse-line">
+        <span class="sse-event">event: suggestions</span>
+        <span class="sse-data">data: {<span class="k">"type"</span>:<span class="vs">"suggestions"</span>, <span class="k">"suggestions"</span>:[<span class="vs">"Proceed to checkout"</span>, <span class="vs">"Add monitors"</span>, ...]}</span>
+      </div>
+      <div class="sse-line">
+        <span class="sse-event">event: turn_complete</span>
+        <span class="sse-data">data: {<span class="k">"type"</span>:<span class="vs">"turn_complete"</span>}</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+<!-- /flow -->
+
+<!-- LEGEND -->
+<div class="legend">
+  <div class="legend-item"><div class="legend-dot" style="background:#5b8dee"></div>Claude model inference</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--orange)"></div>Tool call (outbound)</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--green)"></div>Tool result (inbound)</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--purple)"></div>Skill routing</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--teal)"></div>Safety gate / context</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#8ae84a"></div>SSE events to LWC client</div>
+</div>
+
+<div style="text-align:center; margin-top:28px; font-size:11px; color:#3a4060;">
+  Total LLM inferences: <strong style="color:#5b8dee">3</strong> &nbsp;·&nbsp;
+  Tool calls: <strong style="color:var(--orange)">2</strong> &nbsp;·&nbsp;
+  SSE events streamed: <strong style="color:#8ae84a">~8–12</strong> &nbsp;·&nbsp;
+  Salesforce API calls: <strong style="color:var(--green)">3</strong> (search · cart-items POST · get_cart)
+</div>
+
+</body>
+</html>

@@ -1,0 +1,944 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Commerce Agents — Features Reference</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface2: #22263a;
+    --border: #2e3349;
+    --text: #e8eaf0;
+    --muted: #8b90a8;
+    --shopping: #6c8ef7;
+    --merchant: #f7c26c;
+    --common: #4ecdc4;
+    --plugin: #e879f9;
+    --green: #4ade80;
+    --red: #f87171;
+    --orange: #fb923c;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; font-size: 14px; line-height: 1.6; }
+
+  header { padding: 32px 48px 20px; border-bottom: 1px solid var(--border); }
+  header h1 { font-size: 24px; font-weight: 700; letter-spacing: -0.02em; }
+  header p { color: var(--muted); font-size: 13px; margin-top: 4px; }
+
+  /* ── Tab bar ── */
+  .tabs { display: flex; padding: 0 48px; border-bottom: 1px solid var(--border); gap: 0; }
+  .tab {
+    padding: 12px 22px; cursor: pointer; font-size: 13px; font-weight: 600;
+    color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .tab.active { color: var(--text); border-bottom-color: var(--shopping); }
+  .tab.merchant.active { border-bottom-color: var(--merchant); }
+  .tab.plugin.active { border-bottom-color: var(--plugin); }
+  .tab:hover:not(.active) { color: var(--text); }
+
+  /* ── Panels ── */
+  .panel { display: none; padding: 32px 48px 48px; }
+  .panel.active { display: block; }
+
+  /* ── Role header ── */
+  .role-header { margin-bottom: 28px; }
+  .role-header h2 { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
+  .role-header p  { color: var(--muted); font-size: 13px; max-width: 680px; }
+
+  /* ── Category grid ── */
+  .cat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; }
+
+  /* ── Category card ── */
+  .cat-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    overflow: hidden;
+  }
+  .cat-card-header {
+    padding: 12px 16px; display: flex; align-items: center; gap: 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  .cat-icon {
+    width: 30px; height: 30px; border-radius: 6px; display: flex; align-items: center;
+    justify-content: center; font-size: 15px; flex-shrink: 0;
+  }
+  .cat-title { font-size: 13px; font-weight: 700; }
+  .cat-count { margin-left: auto; font-size: 11px; color: var(--muted); background: var(--surface2); padding: 2px 8px; border-radius: 20px; }
+
+  .tool-list { padding: 10px 16px; }
+  .tool-row {
+    display: flex; align-items: flex-start; gap: 10px; padding: 6px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .tool-row:last-child { border-bottom: none; }
+  .tool-name {
+    font-size: 12px; font-family: 'Menlo', 'Consolas', monospace;
+    font-weight: 600; color: var(--text); min-width: 220px; flex-shrink: 0;
+  }
+  .tool-name.blue   { color: var(--shopping); }
+  .tool-name.yellow { color: var(--merchant); }
+  .tool-name.purple { color: var(--plugin); }
+  .tool-desc { font-size: 11px; color: var(--muted); line-height: 1.5; }
+
+  /* ── Skills table ── */
+  .skills-section { margin-top: 36px; }
+  .skills-section h3 { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-bottom: 14px; }
+  .skill-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; }
+  .skill-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    padding: 12px 14px;
+  }
+  .skill-name { font-size: 12px; font-weight: 700; font-family: 'Menlo', 'Consolas', monospace; margin-bottom: 4px; }
+  .skill-name.blue   { color: var(--shopping); }
+  .skill-name.yellow { color: var(--merchant); }
+  .skill-desc { font-size: 11px; color: var(--muted); line-height: 1.5; }
+
+  /* ── Plugin commands ── */
+  .cmd-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; margin-top: 12px; }
+  .cmd-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    padding: 14px 16px; display: flex; gap: 12px; align-items: flex-start;
+  }
+  .cmd-icon { font-size: 20px; flex-shrink: 0; margin-top: 1px; }
+  .cmd-name { font-size: 12px; font-weight: 700; font-family: 'Menlo', 'Consolas', monospace; color: var(--plugin); margin-bottom: 3px; }
+  .cmd-desc { font-size: 11px; color: var(--muted); line-height: 1.5; }
+
+  /* ── Summary row ── */
+  .summary-bar {
+    display: flex; gap: 24px; flex-wrap: wrap; margin-bottom: 28px;
+    padding: 16px 20px; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px;
+  }
+  .stat { text-align: center; }
+  .stat-num { font-size: 28px; font-weight: 800; line-height: 1; }
+  .stat-num.blue   { color: var(--shopping); }
+  .stat-num.yellow { color: var(--merchant); }
+  .stat-num.purple { color: var(--plugin); }
+  .stat-label { font-size: 11px; color: var(--muted); margin-top: 3px; }
+
+  .divider { border: none; border-top: 1px solid var(--border); margin: 28px 0; }
+  .section-title { font-size: 15px; font-weight: 700; margin-bottom: 16px; }
+
+  /* ── Safety / fencing section ── */
+  .fence-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+  .fence-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    padding: 12px 14px;
+  }
+  .fence-card .fc-title { font-size: 12px; font-weight: 700; margin-bottom: 4px; }
+  .fence-card .fc-body  { font-size: 11px; color: var(--muted); line-height: 1.5; }
+  .badge { display: inline-block; font-size: 10px; padding: 2px 7px; border-radius: 3px; margin-right: 3px; }
+  .badge.read  { background: rgba(78,205,196,0.15); color: var(--common); }
+  .badge.write { background: rgba(251,146,60,0.15);  color: var(--orange); }
+  .badge.gated { background: rgba(248,113,113,0.15); color: var(--red); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Commerce Agents — Features Reference</h1>
+  <p>Every tool, skill, and command for the Shopping Agent, Merchant Agent, and Commerce Builder plugin</p>
+</header>
+
+<div class="tabs">
+  <div class="tab active" onclick="showPanel('shopping', this)">🛒 Shopping Agent</div>
+  <div class="tab merchant" onclick="showPanel('merchant', this)">📊 Merchant Agent</div>
+  <div class="tab plugin" onclick="showPanel('plugin', this)">🔌 Commerce Builder Plugin</div>
+</div>
+
+<!-- ══════════════════════════════════════
+     PANEL: Shopping Agent
+══════════════════════════════════════ -->
+<div id="panel-shopping" class="panel active">
+
+  <div class="role-header">
+    <h2 style="color:var(--shopping)">Shopping Agent (Storefront)</h2>
+    <p>Serves the buyer: product discovery, cart management, quotes, approvals, order tracking, assets, subscriptions, and personalisation.</p>
+  </div>
+
+  <div class="summary-bar">
+    <div class="stat"><div class="stat-num blue">40+</div><div class="stat-label">Tools</div></div>
+    <div class="stat"><div class="stat-num blue">10</div><div class="stat-label">Skills</div></div>
+    <div class="stat"><div class="stat-num blue">13</div><div class="stat-label">Tool Categories</div></div>
+    <div class="stat"><div class="stat-num blue">5</div><div class="stat-label">Verticals</div></div>
+  </div>
+
+  <div class="cat-grid">
+
+    <!-- Catalog & Search -->
+    <div class="cat-card">
+      <div class="cat-card-header">
+        <div class="cat-icon" style="background:rgba(108,142,247,0.15)">🔍</div>
+        <div class="cat-title">Catalog &amp; Search</div>
+        <div class="cat-count">6 tools</div>
+      </div>
+      <div class="tool-list">
+        <div class="tool-row">
+          <div class="tool-name blue">search_products</div>
+          <div class="tool-desc">Full-text + facet search across the product catalog; returns structured results with price, availability, and variants</div>
+        </div>
+        <div class="tool-row">
+          <div class="tool-name blue">get_product_details</div>
+          <div class="tool-desc">Deep detail for a single product: specs, images, variants, entitlements</div>
+        </div>
+        <div class="tool-row">
+          <div class="tool-name blue">get_product_recommendations</div>
+          <div class="tool-desc">Personalised or cross-sell recommendations for a given product or category</div>
+        </div>
+        <div class="tool-row">
+          <div class="tool-name blue">get_categories</div>
+          <div class="tool-desc">Retrieves the category tree for browse or refinement</div>
+        </div>
+        <div class="tool-row">
+          <div class="tool-name blue">compare_products</div>
+          <div class="tool-desc">Side-by-side attribute comparison for a list of product IDs</div>
+        </div>
+        <div class="tool-row">
+          <div class="tool-name blue">check_product_availability</div>
+          <div class="tool-desc">Stock and lead-time check, optionally at a given quantity</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Cart Management -->
+    <div class="cat-card">
+      <div class="cat-card-header">
+        <div class="cat-icon" style="background:rgba(108,142,247,0.15)">🛒</div>
+        <div class="cat-title">Cart Management</div>
+        <div class="cat-count">5 tools</div>
+      </div>
+      <div class="tool-list">
+        <div class="tool-row">
+          <div class="tool-name blue">get_cart</div>
+          <div class="tool-desc">Returns current cart contents with line prices, totals, and delivery group</div>
+        </div>
+        <div class="tool-row">
+          <div class="tool-name blue">add_to_cart</div>
+          <div class="tool-desc">Adds a product + quantity; falls back to direct CartItem insert for non-indexed products</div>
+        </div>
+        <div class="tool-row">
+          <div class="tool-name blue">update_cart_item</div>
+          <div class="tool-desc">Updates the quantity of an existing cart line</div>
+        </div>
+        <div class="tool-row">
+          <div class="tool-name blue">remove_from_cart</div>
+          <div class="tool-desc">Removes a specific line item from the cart</div>
+        </div>
+        <div class="tool-row">
+          <div class="tool-name blue">clear_cart</div>
+          <div class="tool-desc">Empties all items from the active cart</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Quotes -->
+    <div class="cat-card">
+      <div class="cat-card-header">
+        <div class="cat-icon" style="background:rgba(108,142,247,0.15)">📋</div>
+        <div class="cat-title">Quotes</div>
+        <div class="cat-count">5 tools</div>
+      </div>
+      <div class="tool-list">
+        <div class="tool-row">
+          <div class="tool-name blue">create_quote</div>
+          <div class="tool-desc">Creates a Salesforce Quote with line items from the cart; links to Pricebook2</div>
+        </div>
+        <div class="tool-row">
+          <div class="tool-name blue">get_quotes</div>
+          <div class="tool-desc">Lists quotes for the current account with status and totals</div>
+        </div>
+        <div class="tool-row">
+          <div class="tool-name blue">get_quote_details</div>
+          <div class="tool-desc">Full quote with all line items, expiry, and approval state</div>
+        </div>
+        <div class="tool-row">
+          <div class="tool-name blue">load_quote_to_cart</div>
+          <div class="tool-desc">Re-populates the cart from an existing approved quote</div>
+        </div>
+        <div class="tool-row">
+          <div class="tool-name blue">submit_quote_for_approval</div>
+          <div class="tool-desc">Submits a quote to the configured Salesforce approval process</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Approvals -->
+    <div class="cat-card">
+      <div class="cat-card-header">
+        <div class="cat-icon" style="background:rgba(108,142,247,0.15)">✅</div>
+        <div class="cat-title">Approvals</div>
+        <div class="cat-count">3 tools</div>
+      </div>
+      <div class="tool-list">
+        <div class="tool-row">
+          <div class="tool-name blue">get_pending_approvals</div>
+          <div class="tool-desc">Lists approval requests awaiting the current user's action</div>
+        </div>
+        <div class="tool-row">
+          <div class="tool-name blue">approve_request</div>
+          <div class="tool-desc">Approves a pending ProcessInstanceWorkitem with optional comments</div>
+        </div>
+        <div class="tool-row">
+          <div class="tool-name blue">reject_request</div>
+          <div class="tool-desc">Rejects a pending approval with mandatory rejection reason</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Orders -->
+    <div class="cat-card">
+      <div class="cat-card-header">
+        <div class="cat-icon" style="background:rgba(108,142,247,0.15)">📦</div>
+        <div class="cat-title">Orders &amp; Fulfilment</div>
+        <div class="cat-count">4 tools</div>
+      </div>
+      <div class="tool-list">
+        <div class="tool-row">
+          <div class="tool-name blue">get_orders</div>
+          <div class="tool-desc">Lists OrderSummary records for the account with status and delivery estimate</div>
+        </div>
+        <div class="tool-row">
+          <div class="tool-name blue">get_order_details</div>
+          <div class="tool-desc">Full order with line items, shipments, and tracking</div>
+        </div>
+        <div class="tool-row">
+          <div class="tool-name blue">track_order</div>
+          <div class="tool-desc">Returns current carrier tracking status and estimated delivery date</div>
+        </div>
+        <div class="tool-row">
+          <div class="tool-name blue">initiate_return</div>
+          <div class="tool-desc">Creates a return request for one or more order lines</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Assets -->
+    <div class="cat-card">
+      <div class="cat-card-header">
+        <div class="cat-icon" style="background:rgba(108,142,247,0.15)">🏷️</div>
+        <div class="cat-title">Assets &amp; Contracts</div>
+        <div class="cat-count">3 tools</div>
+      </div>
+      <div class="tool-list">
+        <div class="tool-row">
+          <div class="tool-name blue">get_assets</div>
+          <div class="tool-desc">Lists active Asset records for the account (installed products)</div>
+        </div>
+        <div class="tool-row">
+          <div class="tool-name blue">get_asset_details</div>
+          <div class="tool-desc">Full asset record with contract, warranty, and renewal date</div>
+        </div>
+        <div class="tool-row">
+          <div class="tool-name blue">renew_asset</div>
+          <div class="tool-desc">Initiates a renewal quote for an expiring asset or contract</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Subscriptions -->
+    <div class="cat-card">
+      <div class="cat-card-header">
+        <div class="cat-icon" style="background:rgba(108,142,247,0.15)">🔄</div>
+        <div class="cat-title">Subscriptions</div>
+        <div class="cat-count">4 tools</div>
+      </div>
+      <div class="tool-list">
+        <div class="tool-row">
+          <div class="tool-name blue">get_subscriptions</div>
+          <div class="tool-desc">Lists active subscriptions for the account</div>
+        </div>
+        <div class="tool-row">
+          <div class="tool-name blue">upgrade_subscription</div>
+          <div class="tool-desc">Submits a mid-term upgrade for a subscription tier</div>
+        </div>
+        <div class="tool-row">
+          <div class="tool-name blue">cancel_subscription</div>
+          <div class="tool-desc">Cancels a subscription with optional reason and effective date</div>
+        </div>
+        <div class="tool-row">
+          <div class="tool-name blue">add_subscription_seats</div>
+          <div class="tool-desc">Adds user seats to an existing subscription</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Promotions -->
+    <div class="cat-card">
+      <div class="cat-card-header">
+        <div class="cat-icon" style="background:rgba(108,142,247,0.15)">🎁</div>
+        <div class="cat-title">Promotions &amp; Pricing</div>
+        <div class="cat-count">3 tools</div>
+      </div>
+      <div class="tool-list">
+        <div class="tool-row">
+          <div class="tool-name blue">get_promotions</div>
+          <div class="tool-desc">Lists active promotions and their eligibility criteria</div>
+        </div>
+        <div class="tool-row">
+          <div class="tool-name blue">apply_promotion</div>
+          <div class="tool-desc">Applies a coupon or promo code to the active cart</div>
+        </div>
+        <div class="tool-row">
+          <div class="tool-name blue">get_price_breaks</div>
+          <div class="tool-desc">Returns volume-price tier table for a given product</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Personalisation -->
+    <div class="cat-card">
+      <div class="cat-card-header">
+        <div class="cat-icon" style="background:rgba(108,142,247,0.15)">🧠</div>
+        <div class="cat-title">Memory &amp; Personalisation</div>
+        <div class="cat-count">3 tools</div>
+      </div>
+      <div class="tool-list">
+        <div class="tool-row">
+          <div class="tool-name blue">remember_preference</div>
+          <div class="tool-desc">Stores a buyer preference (brand, category, shipping) for future turns</div>
+        </div>
+        <div class="tool-row">
+          <div class="tool-name blue">get_preferences</div>
+          <div class="tool-desc">Retrieves stored preferences to inform search and recommendations</div>
+        </div>
+        <div class="tool-row">
+          <div class="tool-name blue">forget_preference</div>
+          <div class="tool-desc">Removes a stored preference by key</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Presentation -->
+    <div class="cat-card">
+      <div class="cat-card-header">
+        <div class="cat-icon" style="background:rgba(108,142,247,0.15)">🖥️</div>
+        <div class="cat-title">Presentation (UI)</div>
+        <div class="cat-count">5 tools</div>
+      </div>
+      <div class="tool-list">
+        <div class="tool-row">
+          <div class="tool-name blue">show_products</div>
+          <div class="tool-desc">Renders a product grid card in the storefront UI</div>
+        </div>
+        <div class="tool-row">
+          <div class="tool-name blue">show_cart</div>
+          <div class="tool-desc">Renders the cart panel with current totals</div>
+        </div>
+        <div class="tool-row">
+          <div class="tool-name blue">show_order</div>
+          <div class="tool-desc">Renders a structured order detail card</div>
+        </div>
+        <div class="tool-row">
+          <div class="tool-name blue">show_quote</div>
+          <div class="tool-desc">Renders a quote summary card with line items and approval state</div>
+        </div>
+        <div class="tool-row">
+          <div class="tool-name blue">show_comparison</div>
+          <div class="tool-desc">Renders a side-by-side product comparison table</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Account -->
+    <div class="cat-card">
+      <div class="cat-card-header">
+        <div class="cat-icon" style="background:rgba(108,142,247,0.15)">👤</div>
+        <div class="cat-title">Account &amp; Profile</div>
+        <div class="cat-count">3 tools</div>
+      </div>
+      <div class="tool-list">
+        <div class="tool-row">
+          <div class="tool-name blue">get_account_info</div>
+          <div class="tool-desc">Returns the buyer's account details and entitlements</div>
+        </div>
+        <div class="tool-row">
+          <div class="tool-name blue">get_contacts</div>
+          <div class="tool-desc">Lists contacts for the account (for quote addressees)</div>
+        </div>
+        <div class="tool-row">
+          <div class="tool-name blue">get_shipping_addresses</div>
+          <div class="tool-desc">Returns saved shipping addresses for cart checkout</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Support -->
+    <div class="cat-card">
+      <div class="cat-card-header">
+        <div class="cat-icon" style="background:rgba(108,142,247,0.15)">💬</div>
+        <div class="cat-title">Support &amp; Cases</div>
+        <div class="cat-count">3 tools</div>
+      </div>
+      <div class="tool-list">
+        <div class="tool-row">
+          <div class="tool-name blue">get_cases</div>
+          <div class="tool-desc">Lists open support cases for the account</div>
+        </div>
+        <div class="tool-row">
+          <div class="tool-name blue">create_case</div>
+          <div class="tool-desc">Opens a new support case with subject, description, and priority</div>
+        </div>
+        <div class="tool-row">
+          <div class="tool-name blue">add_case_comment</div>
+          <div class="tool-desc">Adds a follow-up comment to an open case</div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /cat-grid -->
+
+  <!-- Skills -->
+  <div class="skills-section">
+    <h3>Shopping Skills (10) — domain-level conversation flows</h3>
+    <div class="skill-grid">
+      <div class="skill-card">
+        <div class="skill-name blue">search-discovery</div>
+        <div class="skill-desc">Handles product search, browse, filtering, and recommendation requests from the buyer</div>
+      </div>
+      <div class="skill-card">
+        <div class="skill-name blue">purchase-research</div>
+        <div class="skill-desc">Deep product evaluation: specs, comparisons, compatibility checks, price/value analysis</div>
+      </div>
+      <div class="skill-card">
+        <div class="skill-name blue">planning-goals</div>
+        <div class="skill-desc">Multi-item project planning ("equip a new office") leading to a curated cart or quote</div>
+      </div>
+      <div class="skill-card">
+        <div class="skill-name blue">customer-care</div>
+        <div class="skill-desc">Order status, returns, shipping inquiries, and escalation to a human agent</div>
+      </div>
+      <div class="skill-card">
+        <div class="skill-name blue">quote-management</div>
+        <div class="skill-desc">Creating, editing, loading, and sharing formal B2B quotes</div>
+      </div>
+      <div class="skill-card">
+        <div class="skill-name blue">approval-workflow</div>
+        <div class="skill-desc">Submitting quotes for approval, tracking status, and handling reject-revise cycles</div>
+      </div>
+      <div class="skill-card">
+        <div class="skill-name blue">asset-management</div>
+        <div class="skill-desc">Managing installed products, contract details, and renewal initiation</div>
+      </div>
+      <div class="skill-card">
+        <div class="skill-name blue">promotions</div>
+        <div class="skill-desc">Discovering eligible promotions, applying codes, and surfacing volume discounts</div>
+      </div>
+      <div class="skill-card">
+        <div class="skill-name blue">subscriptions</div>
+        <div class="skill-desc">Subscription lifecycle: upgrades, seat additions, downgrades, cancellations</div>
+      </div>
+      <div class="skill-card">
+        <div class="skill-name blue">memory-personalization</div>
+        <div class="skill-desc">Storing and recalling buyer preferences to personalise future recommendations and search</div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /panel-shopping -->
+
+
+<!-- ══════════════════════════════════════
+     PANEL: Merchant Agent
+══════════════════════════════════════ -->
+<div id="panel-merchant" class="panel">
+
+  <div class="role-header">
+    <h2 style="color:var(--merchant)">Merchant Agent (Portal)</h2>
+    <p>Serves the operator: business performance, catalog operations, pricing, inventory, quote approvals, campaigns, and staged writes with host approval.</p>
+  </div>
+
+  <div class="summary-bar">
+    <div class="stat"><div class="stat-num yellow">20+</div><div class="stat-label">Tools</div></div>
+    <div class="stat"><div class="stat-num yellow">5</div><div class="stat-label">Skills</div></div>
+    <div class="stat"><div class="stat-num yellow">9</div><div class="stat-label">Tool Categories</div></div>
+    <div class="stat"><div class="stat-num yellow">1</div><div class="stat-label">Staged-Write Protocol</div></div>
+  </div>
+
+  <!-- Staged-write callout -->
+  <div style="background:rgba(247,194,108,0.07); border:1px solid rgba(247,194,108,0.3); border-radius:8px; padding:14px 16px; margin-bottom:24px; font-size:12px; color:var(--muted);">
+    <strong style="color:var(--merchant)">Staged-Write Protocol</strong> — All writes (price, listing, inventory, promotion) go through <code style="background:var(--surface2);padding:1px 4px;border-radius:3px;">changes.py</code>: propose → review → <code>apply_change</code>. The host UI must confirm before any mutation reaches Salesforce. Reads are unrestricted.
+  </div>
+
+  <div class="cat-grid">
+
+    <!-- Performance -->
+    <div class="cat-card">
+      <div class="cat-card-header">
+        <div class="cat-icon" style="background:rgba(247,194,108,0.15)">📈</div>
+        <div class="cat-title">Performance &amp; Analytics</div>
+        <div class="cat-count">4 tools</div>
+      </div>
+      <div class="tool-list">
+        <div class="tool-row">
+          <div class="tool-name yellow">get_business_snapshot</div>
+          <div class="tool-desc">High-level KPIs: revenue, orders, conversion, AOV, top SKUs for a date range</div>
+        </div>
+        <div class="tool-row">
+          <div class="tool-name yellow">query_metrics</div>
+          <div class="tool-desc">Flexible metric query: filter by category, product, region, or date window</div>
+        </div>
+        <div class="tool-row">
+          <div class="tool-name yellow">run_analysis</div>
+          <div class="tool-desc">Delegates to the Merchant Analysis model for deep trend and opportunity analysis</div>
+        </div>
+        <div class="tool-row">
+          <div class="tool-name yellow">get_low_stock_alerts</div>
+          <div class="tool-desc">Lists products below reorder threshold with days-of-cover estimate</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Catalog -->
+    <div class="cat-card">
+      <div class="cat-card-header">
+        <div class="cat-icon" style="background:rgba(247,194,108,0.15)">📂</div>
+        <div class="cat-title">Catalog Management</div>
+        <div class="cat-count">3 tools <span class="badge write">write</span></div>
+      </div>
+      <div class="tool-list">
+        <div class="tool-row">
+          <div class="tool-name yellow">get_catalog_listings</div>
+          <div class="tool-desc">Lists all active Product2 records with status, category, and price</div>
+        </div>
+        <div class="tool-row">
+          <div class="tool-name yellow">stage_listing_update</div>
+          <div class="tool-desc">Stages a product listing change (name, description, status, category) for host approval</div>
+        </div>
+        <div class="tool-row">
+          <div class="tool-name yellow">stage_new_listing</div>
+          <div class="tool-desc">Stages creation of a new product listing including initial PricebookEntry</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pricing -->
+    <div class="cat-card">
+      <div class="cat-card-header">
+        <div class="cat-icon" style="background:rgba(247,194,108,0.15)">💲</div>
+        <div class="cat-title">Pricing</div>
+        <div class="cat-count">3 tools <span class="badge write">write</span></div>
+      </div>
+      <div class="tool-list">
+        <div class="tool-row">
+          <div class="tool-name yellow">get_pricing</div>
+          <div class="tool-desc">Returns current PricebookEntry data for one or more products across pricebooks</div>
+        </div>
+        <div class="tool-row">
+          <div class="tool-name yellow">stage_price_update</div>
+          <div class="tool-desc">Stages a unit price or discount change for host approval before any PricebookEntry update</div>
+        </div>
+        <div class="tool-row">
+          <div class="tool-name yellow">stage_volume_pricing</div>
+          <div class="tool-desc">Stages a volume-tier pricing table for a product</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Inventory -->
+    <div class="cat-card">
+      <div class="cat-card-header">
+        <div class="cat-icon" style="background:rgba(247,194,108,0.15)">🏭</div>
+        <div class="cat-title">Inventory</div>
+        <div class="cat-count">3 tools <span class="badge write">write</span></div>
+      </div>
+      <div class="tool-list">
+        <div class="tool-row">
+          <div class="tool-name yellow">get_inventory</div>
+          <div class="tool-desc">Returns current stock levels and reorder points by product or warehouse</div>
+        </div>
+        <div class="tool-row">
+          <div class="tool-name yellow">stage_inventory_adjustment</div>
+          <div class="tool-desc">Stages a stock quantity adjustment or reorder-point change for host approval</div>
+        </div>
+        <div class="tool-row">
+          <div class="tool-name yellow">stage_backorder_policy</div>
+          <div class="tool-desc">Stages a change to backorder eligibility for a product</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Promotions -->
+    <div class="cat-card">
+      <div class="cat-card-header">
+        <div class="cat-icon" style="background:rgba(247,194,108,0.15)">🎯</div>
+        <div class="cat-title">Promotions &amp; Campaigns</div>
+        <div class="cat-count">3 tools <span class="badge write">write</span></div>
+      </div>
+      <div class="tool-list">
+        <div class="tool-row">
+          <div class="tool-name yellow">get_promotions</div>
+          <div class="tool-desc">Lists all active and scheduled promotions with eligibility and budget</div>
+        </div>
+        <div class="tool-row">
+          <div class="tool-name yellow">stage_promotion</div>
+          <div class="tool-desc">Stages a new promotion (coupon, bundle, clearance) for host approval</div>
+        </div>
+        <div class="tool-row">
+          <div class="tool-name yellow">stage_promotion_update</div>
+          <div class="tool-desc">Stages changes to an existing promotion (end date, discount %, eligibility)</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Quote Approvals -->
+    <div class="cat-card">
+      <div class="cat-card-header">
+        <div class="cat-icon" style="background:rgba(247,194,108,0.15)">📝</div>
+        <div class="cat-title">Quote Approvals</div>
+        <div class="cat-count">3 tools <span class="badge gated">gated</span></div>
+      </div>
+      <div class="tool-list">
+        <div class="tool-row">
+          <div class="tool-name yellow">get_pending_quote_approvals</div>
+          <div class="tool-desc">Lists quotes in the approval queue for the current merchant approver</div>
+        </div>
+        <div class="tool-row">
+          <div class="tool-name yellow">approve_quote</div>
+          <div class="tool-desc">Approves a ProcessInstanceWorkitem via Salesforce REST /process/approvals/ with comments</div>
+        </div>
+        <div class="tool-row">
+          <div class="tool-name yellow">reject_quote</div>
+          <div class="tool-desc">Rejects a pending quote approval with mandatory reason string</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Staged Writes -->
+    <div class="cat-card">
+      <div class="cat-card-header">
+        <div class="cat-icon" style="background:rgba(247,194,108,0.15)">🔐</div>
+        <div class="cat-title">Change Management</div>
+        <div class="cat-count">3 tools</div>
+      </div>
+      <div class="tool-list">
+        <div class="tool-row">
+          <div class="tool-name yellow">get_staged_changes</div>
+          <div class="tool-desc">Lists all pending staged changes awaiting host approval for this session</div>
+        </div>
+        <div class="tool-row">
+          <div class="tool-name yellow">apply_change</div>
+          <div class="tool-desc">Applies a host-approved staged change to the live system (caps enforced in code)</div>
+        </div>
+        <div class="tool-row">
+          <div class="tool-name yellow">discard_change</div>
+          <div class="tool-desc">Discards a pending staged change without applying it</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Presentation -->
+    <div class="cat-card">
+      <div class="cat-card-header">
+        <div class="cat-icon" style="background:rgba(247,194,108,0.15)">🖥️</div>
+        <div class="cat-title">Presentation (UI)</div>
+        <div class="cat-count">3 tools</div>
+      </div>
+      <div class="tool-list">
+        <div class="tool-row">
+          <div class="tool-name yellow">show_metrics_chart</div>
+          <div class="tool-desc">Renders a time-series or bar chart card in the merchant portal</div>
+        </div>
+        <div class="tool-row">
+          <div class="tool-name yellow">show_change_preview</div>
+          <div class="tool-desc">Renders a diff-style preview card for a staged change before host approval</div>
+        </div>
+        <div class="tool-row">
+          <div class="tool-name yellow">show_inventory_table</div>
+          <div class="tool-desc">Renders a sortable inventory table with stock levels and alert flags</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Analysis Delegate -->
+    <div class="cat-card">
+      <div class="cat-card-header">
+        <div class="cat-icon" style="background:rgba(247,194,108,0.15)">🤖</div>
+        <div class="cat-title">Analysis Delegate</div>
+        <div class="cat-count">sub-agent</div>
+      </div>
+      <div class="tool-list">
+        <div class="tool-row">
+          <div class="tool-name yellow">MerchantAnalysisDelegate</div>
+          <div class="tool-desc">Separate model invocation for deep analysis: trend identification, root-cause, demand forecasting. Results returned as structured insights to the main agent.</div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /cat-grid -->
+
+  <!-- Skills -->
+  <div class="skills-section">
+    <h3>Merchant Skills (5) — operator conversation flows</h3>
+    <div class="skill-grid">
+      <div class="skill-card">
+        <div class="skill-name yellow">performance-insights</div>
+        <div class="skill-desc">Revenue dashboards, conversion funnels, cohort analysis, and actionable growth recommendations</div>
+      </div>
+      <div class="skill-card">
+        <div class="skill-name yellow">pricing-promotions</div>
+        <div class="skill-desc">Competitive pricing adjustments, volume tiers, promotional campaigns, and discount strategy</div>
+      </div>
+      <div class="skill-card">
+        <div class="skill-name yellow">inventory-operations</div>
+        <div class="skill-desc">Stock monitoring, reorder recommendations, backorder policies, and warehouse allocation</div>
+      </div>
+      <div class="skill-card">
+        <div class="skill-name yellow">catalog-listings</div>
+        <div class="skill-desc">Catalog health, listing quality, new product onboarding, and category organisation</div>
+      </div>
+      <div class="skill-card">
+        <div class="skill-name yellow">marketing-campaigns</div>
+        <div class="skill-desc">Campaign planning, budget allocation, performance tracking, and A/B testing proposals</div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /panel-merchant -->
+
+
+<!-- ══════════════════════════════════════
+     PANEL: Plugin
+══════════════════════════════════════ -->
+<div id="panel-plugin" class="panel">
+
+  <div class="role-header">
+    <h2 style="color:var(--plugin)">Commerce Builder Plugin</h2>
+    <p>A Claude Code plugin that gives developers skills and commands to scaffold, extend, evaluate, and review commerce agents within their own repos.</p>
+  </div>
+
+  <div class="summary-bar">
+    <div class="stat"><div class="stat-num purple">6</div><div class="stat-label">Skills</div></div>
+    <div class="stat"><div class="stat-num purple">4</div><div class="stat-label">Commands</div></div>
+  </div>
+
+  <div class="section-title">Plugin Skills</div>
+  <div class="cat-grid">
+
+    <div class="cat-card">
+      <div class="cat-card-header">
+        <div class="cat-icon" style="background:rgba(232,121,249,0.15)">🏗️</div>
+        <div class="cat-title">commerce-architecture</div>
+      </div>
+      <div class="tool-list">
+        <div class="tool-row">
+          <div class="tool-desc">Design patterns for two-role agents: StorefrontBackend ABC, tool registry, fencing, memory, prompt assembly. Use when designing or reviewing the overall agent structure.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="cat-card">
+      <div class="cat-card-header">
+        <div class="cat-icon" style="background:rgba(232,121,249,0.15)">🖼️</div>
+        <div class="cat-title">commerce-ui-tools</div>
+      </div>
+      <div class="tool-list">
+        <div class="tool-row">
+          <div class="tool-desc">PresentationExtension patterns: writing UI tools, validating tool outputs server-side, streaming <code>ui</code>/<code>ui_partial</code> SSE events, and registering new card types.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="cat-card">
+      <div class="cat-card-header">
+        <div class="cat-icon" style="background:rgba(232,121,249,0.15)">🛡️</div>
+        <div class="cat-title">commerce-trust-safety</div>
+      </div>
+      <div class="tool-list">
+        <div class="tool-row">
+          <div class="tool-desc">Gates, fencing, and provenance rules: quantity caps, checkout charges-nothing contract, staged-write approval, third-party content fencing, merchant write safety.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="cat-card">
+      <div class="cat-card-header">
+        <div class="cat-icon" style="background:rgba(232,121,249,0.15)">⚡</div>
+        <div class="cat-title">commerce-prompt-caching</div>
+      </div>
+      <div class="tool-list">
+        <div class="tool-row">
+          <div class="tool-desc">Static-vs-dynamic prompt design: breakpoint placement, fenced block structure, cache TTL mechanics, reducing per-turn token cost for multi-turn sessions.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="cat-card">
+      <div class="cat-card-header">
+        <div class="cat-icon" style="background:rgba(232,121,249,0.15)">📊</div>
+        <div class="cat-title">commerce-merchant-operations</div>
+      </div>
+      <div class="tool-list">
+        <div class="tool-row">
+          <div class="tool-desc">Merchant-specific patterns: staged-write protocol, analysis delegate, changes.py, analysis.py, approval-gated writes, and how to extend the merchant backend.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="cat-card">
+      <div class="cat-card-header">
+        <div class="cat-icon" style="background:rgba(232,121,249,0.15)">🧪</div>
+        <div class="cat-title">commerce-evals</div>
+      </div>
+      <div class="tool-list">
+        <div class="tool-row">
+          <div class="tool-desc">Writing evaluation harnesses: tool-call trace assertions, golden-path scripts, regression fixtures, and running the shared test suites in tests/ against a custom backend.</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <hr class="divider" />
+
+  <div class="section-title">Slash Commands</div>
+  <div class="cmd-grid">
+    <div class="cmd-card">
+      <div class="cmd-icon">🚀</div>
+      <div>
+        <div class="cmd-name">/scaffold-commerce-agent</div>
+        <div class="cmd-desc">Generates the full directory structure for a new commerce agent vertical: backend stub, API server, storefront-web, merchant-web, data fixtures, and env templates. Accepts a vertical name and optional feature flags.</div>
+      </div>
+    </div>
+    <div class="cmd-card">
+      <div class="cmd-icon">➕</div>
+      <div>
+        <div class="cmd-name">/add-commerce-flow</div>
+        <div class="cmd-desc">Adds a new skill or tool category to an existing commerce agent: creates the skill SKILL.md, registers the tool in the tool registry, adds backend method stubs, and wires the presentation extension.</div>
+      </div>
+    </div>
+    <div class="cmd-card">
+      <div class="cmd-icon">📐</div>
+      <div>
+        <div class="cmd-name">/author-commerce-evals</div>
+        <div class="cmd-desc">Generates evaluation fixtures and golden-path test scripts for one or more tools or skills: produces pytest parametrize tables and trace-assertion helpers.</div>
+      </div>
+    </div>
+    <div class="cmd-card">
+      <div class="cmd-icon">🔍</div>
+      <div>
+        <div class="cmd-name">/review-commerce-agent</div>
+        <div class="cmd-desc">Audits an existing commerce agent implementation against the design rules in CLAUDE.md: checks fencing, provenance gates, static/dynamic prompt split, tool description quality, and eval coverage.</div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /panel-plugin -->
+
+
+<div style="padding:16px 48px; border-top:1px solid var(--border); font-size:11px; color:var(--muted); display:flex; justify-content:space-between; margin-top:24px;">
+  <span>Commerce Agents — Features Reference</span>
+  <span>shopping-agent · merchant-agent · plugins/commerce-builder</span>
+</div>
+
+<script>
+function showPanel(name, el) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('panel-' + name).classList.add('active');
+  el.classList.add('active');
+}
+</script>
+</body>
+</html>

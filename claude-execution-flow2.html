@@ -1,0 +1,869 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Claude Execution Flow — Scripts & Code Paths</title>
+<style>
+  :root {
+    --bg: #0b0d12;
+    --surface: #13161e;
+    --surface2: #181c26;
+    --border: #252b3a;
+    --text: #dde1ec;
+    --muted: #6a728a;
+    --accent: #cc785c;
+    --blue: #5b8dee;
+    --green: #4caf7d;
+    --purple: #9b7fe8;
+    --orange: #e8934a;
+    --teal: #38b2ac;
+    --red: #e05c5c;
+    --yellow: #d4b44a;
+    --pink: #d06090;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+    font-size: 13px;
+    padding: 28px 16px 48px;
+  }
+
+  h1 { text-align: center; font-size: 21px; font-weight: 700; margin-bottom: 4px; }
+  .subtitle { text-align: center; color: var(--muted); font-size: 12px; margin-bottom: 8px; }
+
+  .prompt-banner {
+    background: #151929;
+    border: 1px solid #2e3655;
+    border-radius: 10px;
+    padding: 12px 22px;
+    text-align: center;
+    max-width: 960px;
+    margin: 0 auto 32px;
+  }
+  .prompt-banner .lbl { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin-bottom: 6px; }
+  .prompt-banner .txt { font-size: 16px; font-weight: 600; color: #fff; font-style: italic; }
+  .prompt-banner .txt span { color: var(--accent); }
+
+  /* ── OUTER WRAPPER ── */
+  .flow { max-width: 960px; margin: 0 auto; }
+
+  /* ── STEP BLOCK ── */
+  .step {
+    display: grid;
+    grid-template-columns: 260px 1fr;
+    gap: 0;
+    margin-bottom: 0;
+    position: relative;
+  }
+
+  /* left lane */
+  .step-left {
+    border-right: 2px solid var(--border);
+    padding: 0 20px 0 0;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    padding-bottom: 28px;
+  }
+
+  /* right lane */
+  .step-right {
+    padding: 0 0 28px 24px;
+  }
+
+  /* step number dot on divider */
+  .step-dot {
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 800;
+    position: absolute;
+    left: 244px;
+    top: 0;
+    z-index: 2;
+  }
+
+  /* ── FILE PILL ── */
+  .file-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #0e1118;
+    border: 1px solid #252b38;
+    border-radius: 6px;
+    padding: 5px 10px;
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    color: #8898b8;
+    margin-bottom: 5px;
+    text-align: right;
+    max-width: 240px;
+  }
+  .file-pill .fn { color: #c8d8f0; font-weight: 600; }
+  .file-pill .ln { color: #4a5a78; font-size: 10px; }
+  .file-pill .arrow { color: var(--orange); font-size: 10px; }
+
+  .file-pill.py  { border-left: 3px solid var(--blue); }
+  .file-pill.js  { border-left: 3px solid var(--yellow); }
+  .file-pill.lwc { border-left: 3px solid var(--accent); }
+  .file-pill.sf  { border-left: 3px solid var(--teal); }
+  .file-pill.api { border-left: 3px solid var(--purple); }
+  .file-pill.ext { border-left: 3px solid var(--pink); }
+
+  .files-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--muted);
+    margin-bottom: 8px;
+    text-align: right;
+  }
+
+  /* ── RIGHT CARD ── */
+  .step-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+  }
+  .step-card-title {
+    font-size: 13px; font-weight: 700;
+    margin-bottom: 10px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .step-card-body { font-size: 12px; color: #8898b8; line-height: 1.7; }
+
+  /* ── CODE SNIPPET ── */
+  .snippet {
+    background: #0a0c10;
+    border: 1px solid #1e2230;
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    margin-top: 10px;
+    line-height: 1.7;
+    overflow-x: auto;
+  }
+  .s-comment { color: #3a4a5a; }
+  .s-kw   { color: #9b7fe8; }
+  .s-fn   { color: #5b8dee; }
+  .s-str  { color: #7ec88a; }
+  .s-cls  { color: #e8c84a; }
+  .s-arg  { color: #e8934a; }
+  .s-ret  { color: #cc785c; }
+  .s-var  { color: #c8d8f0; }
+  .s-num  { color: #d4b44a; }
+  .s-path { color: #5b8dee; font-style: italic; }
+
+  /* ── FLOW ARROW ── */
+  .flow-arrow {
+    display: flex;
+    align-items: center;
+    padding: 0 0 0 24px;
+    margin-bottom: 0;
+  }
+  .flow-arrow-line {
+    width: 2px;
+    height: 24px;
+    margin-left: -2px;
+    flex-shrink: 0;
+  }
+
+  /* ── DATA FLOW ROW ── */
+  .data-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+    font-size: 11px;
+  }
+  .data-tag {
+    background: #0e1220;
+    border: 1px solid #1e2840;
+    border-radius: 4px;
+    padding: 3px 8px;
+    color: #6080a0;
+    font-family: monospace;
+    font-size: 10px;
+    flex-shrink: 0;
+  }
+  .data-val { color: #8ab8d8; }
+
+  /* ── SECTION DIVIDER ── */
+  .sec-div {
+    display: flex; align-items: center; gap: 12px;
+    margin: 24px 0 18px;
+    font-size: 10px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 1.5px; color: var(--muted);
+  }
+  .sec-div::before, .sec-div::after { content:''; flex:1; height:1px; background: var(--border); }
+
+  /* ── INLINE TAGS ── */
+  .tag {
+    display: inline-block;
+    border-radius: 4px;
+    padding: 2px 7px;
+    font-size: 10px; font-weight: 700;
+    letter-spacing: 0.3px;
+    vertical-align: middle;
+  }
+  .tag-blue   { background:#0e1a2e; border:1px solid #1e3a5e; color:var(--blue); }
+  .tag-orange { background:#1e1208; border:1px solid #3e2e10; color:var(--orange); }
+  .tag-green  { background:#0a1a0a; border:1px solid #1a3a1a; color:var(--green); }
+  .tag-purple { background:#150e28; border:1px solid #2e1e50; color:var(--purple); }
+  .tag-teal   { background:#081414; border:1px solid #143030; color:var(--teal); }
+  .tag-pink   { background:#1a0818; border:1px solid #3a1430; color:var(--pink); }
+  .tag-yellow { background:#1a1408; border:1px solid #3a3010; color:var(--yellow); }
+
+  /* ── CALL CHAIN ── */
+  .chain {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 10px;
+  }
+  .chain-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: 11px;
+  }
+  .chain-item .ci-arrow { color: var(--muted); min-width: 14px; }
+  .chain-item .ci-file { color: #7090c0; font-family: monospace; }
+  .chain-item .ci-fn { color: #c8d8f0; font-family: monospace; font-weight: 600; }
+  .chain-item .ci-note { color: #5a6a7a; font-style: italic; }
+
+  /* ── LEGEND ── */
+  .legend {
+    max-width: 960px;
+    margin: 36px auto 0;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 20px;
+    display: flex; flex-wrap: wrap; gap: 16px; justify-content: center;
+  }
+  .legend-item { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--muted); }
+  .legend-bar { width: 3px; height: 16px; border-radius: 2px; flex-shrink: 0; }
+
+  .indent { margin-left: 16px; }
+  .mono { font-family: 'Courier New', monospace; }
+</style>
+</head>
+<body>
+
+<h1>Claude Execution Flow — Scripts &amp; Code Paths</h1>
+<p class="subtitle">Every file, function, and line involved when Claude processes "Find laptop under $1,300 with 16GB RAM and add to cart"</p>
+
+<div class="prompt-banner">
+  <div class="lbl">User Prompt (from Salesforce LWC)</div>
+  <div class="txt">"<span>Find laptop under $1,300</span> with <span>16 GB RAM</span> and <span>add to cart</span>"</div>
+</div>
+
+<div class="flow">
+
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<div class="sec-div">Phase 1 — HTTP Request &amp; Session</div>
+
+<!-- ── STEP 1 ── -->
+<div class="step">
+  <div class="step-dot" style="background:#1e2a3e; border:2px solid var(--blue); color:var(--blue);">1</div>
+  <div class="step-left">
+    <div class="files-label">Scripts Called</div>
+    <div class="file-pill lwc">
+      <span>salesforceStorefront.js</span>
+      <span class="ln">:766</span>
+    </div>
+    <div class="file-pill lwc">
+      <span class="fn">_startTurn()</span>
+      <span class="ln">:756</span>
+    </div>
+  </div>
+  <div class="step-right">
+    <div class="step-card">
+      <div class="step-card-title" style="color:var(--accent);">
+        🌐 LWC sends POST /api/chat
+      </div>
+      <div class="step-card-body">
+        User message hits the LWC composer. <span class="mono" style="color:#c8b870">_submit()</span> → <span class="mono" style="color:#c8b870">_startTurn()</span> opens an SSE fetch stream.
+      </div>
+      <div class="snippet">
+<span class="s-comment">// embed/lwc/salesforceStorefront/salesforceStorefront.js:766</span>
+<span class="s-kw">const</span> <span class="s-var">fetchOpts</span> = {
+  method: <span class="s-str">'POST'</span>,
+  headers: <span class="s-fn">this._hdrs</span>(<span class="s-fn">this._sessionHdrs</span>()),  <span class="s-comment">// X-Session-Id</span>
+  body: <span class="s-cls">JSON</span>.<span class="s-fn">stringify</span>({ message: <span class="s-var">text</span> }),
+};
+<span class="s-kw">let</span> <span class="s-var">res</span> = <span class="s-kw">await</span> <span class="s-fn">fetch</span>(<span class="s-fn">this._url</span>(<span class="s-str">'chat'</span>), <span class="s-var">fetchOpts</span>);
+      </div>
+      <div class="data-row">
+        <div class="data-tag">POST</div>
+        <div class="data-val">https://&lt;railway&gt;.up.railway.app/api/chat</div>
+      </div>
+      <div class="data-row">
+        <div class="data-tag">Header</div>
+        <div class="data-val">X-Session-Id: abc123xyz…</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── STEP 2 ── -->
+<div class="step">
+  <div class="step-dot" style="background:#1a1428; border:2px solid var(--purple); color:var(--purple);">2</div>
+  <div class="step-left">
+    <div class="files-label">Scripts Called</div>
+    <div class="file-pill py">
+      <span>storefront.py</span>
+      <span class="ln">:208</span>
+    </div>
+    <div class="file-pill py">
+      <span class="fn">sessions.py</span>
+      <span class="ln">:161,176</span>
+    </div>
+    <div class="file-pill py">
+      <span class="fn">main.py</span>
+      <span class="ln">:56-63</span>
+    </div>
+  </div>
+  <div class="step-right">
+    <div class="step-card">
+      <div class="step-card-title" style="color:var(--purple);">
+        🔀 FastAPI Route → Session Resolution
+      </div>
+      <div class="step-card-body">
+        FastAPI routes the request. The <span class="mono" style="color:#bf9ff8">session_dependency</span> extracts <span class="mono" style="color:#e8c84a">X-Session-Id</span>, looks up the <span class="mono" style="color:#bf9ff8">SessionRecord</span> from the in-memory store, and injects it as <span class="mono" style="color:#c8d8f0">record</span>.
+      </div>
+      <div class="snippet">
+<span class="s-comment"># examples/demo_common/storefront.py:208</span>
+<span class="s-kw">async def</span> <span class="s-fn">chat</span>(<span class="s-arg">request</span>: ChatRequest, <span class="s-arg">record</span>: CurrentSession) → StreamingResponse:
+    <span class="s-kw">return</span> <span class="s-fn">stream_turn</span>(host, agent, record, request.message)
+
+<span class="s-comment"># examples/demo_common/sessions.py:176</span>
+<span class="s-var">record</span> = <span class="s-var">store</span>.<span class="s-fn">require</span>(<span class="s-var">session_id</span>)  <span class="s-comment"># loads state + transcript</span>
+      </div>
+      <div class="chain">
+        <div class="chain-item"><span class="ci-arrow">→</span><span class="ci-file">salesforce/api/main.py</span><span class="ci-fn">:56</span><span class="ci-note">&nbsp;— builds host, agent, backend</span></div>
+        <div class="chain-item"><span class="ci-arrow">→</span><span class="ci-file">demo_common/storefront.py</span><span class="ci-fn">:208</span><span class="ci-note">&nbsp;— chat() route handler</span></div>
+        <div class="chain-item"><span class="ci-arrow">→</span><span class="ci-file">demo_common/sessions.py</span><span class="ci-fn">:176</span><span class="ci-note">&nbsp;— store.require(session_id)</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── STEP 3 ── -->
+<div class="step">
+  <div class="step-dot" style="background:#0e1820; border:2px solid var(--teal); color:var(--teal);">3</div>
+  <div class="step-left">
+    <div class="files-label">Scripts Called</div>
+    <div class="file-pill py">
+      <span>host.py</span>
+      <span class="ln">:171,178</span>
+    </div>
+    <div class="file-pill py">
+      <span class="fn">streaming.py</span>
+      <span class="ln">:164</span>
+    </div>
+  </div>
+  <div class="step-right">
+    <div class="step-card">
+      <div class="step-card-title" style="color:var(--teal);">
+        📡 stream_turn() → StreamingResponse
+      </div>
+      <div class="step-card-body">
+        <span class="mono" style="color:#38b2ac">stream_turn()</span> opens an async generator. Each <span class="mono" style="color:#38b2ac">AgentEvent</span> yielded by the agent loop is immediately serialized to an SSE frame via <span class="mono" style="color:#38b2ac">to_sse()</span> and flushed to the LWC.
+      </div>
+      <div class="snippet">
+<span class="s-comment"># examples/demo_common/host.py:186-212</span>
+<span class="s-kw">async for</span> <span class="s-var">event</span> <span class="s-kw">in</span> <span class="s-var">agent</span>.<span class="s-fn">stream_turn</span>(<span class="s-var">record</span>.messages, <span class="s-var">session</span>, <span class="s-var">record</span>.state):
+    <span class="s-kw">yield</span> <span class="s-fn">to_sse</span>(<span class="s-var">event</span>)   <span class="s-comment"># commerce_common/streaming.py:164</span>
+
+<span class="s-comment"># Returns FastAPI StreamingResponse (text/event-stream)</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<div class="sec-div">Phase 2 — Context Assembly &amp; First Inference</div>
+
+<!-- ── STEP 4 ── -->
+<div class="step">
+  <div class="step-dot" style="background:#0e1428; border:2px solid var(--blue); color:var(--blue);">4</div>
+  <div class="step-left">
+    <div class="files-label">Scripts Called</div>
+    <div class="file-pill py">
+      <span>orchestrator.py</span>
+      <span class="ln">:121</span>
+    </div>
+    <div class="file-pill py">
+      <span class="fn">prompt.py</span>
+      <span class="ln">:180+</span>
+    </div>
+    <div class="file-pill py">
+      <span class="fn">executor.py</span>
+      <span class="ln">:66</span>
+    </div>
+    <div class="file-pill py">
+      <span class="fn">enrichment.py</span>
+      <span class="ln">:130+</span>
+    </div>
+  </div>
+  <div class="step-right">
+    <div class="step-card">
+      <div class="step-card-title" style="color:var(--blue);">
+        🧠 ShoppingAgent.stream_turn() — Context Assembly
+      </div>
+      <div class="step-card-body">
+        <span class="mono" style="color:#5b8dee">orchestrator.py</span> is the agentic loop. It builds the full Messages API request: system prompt (from <span class="mono" style="color:#5b8dee">prompt.py</span>), enriched session fence (from <span class="mono" style="color:#5b8dee">enrichment.py</span>), tools array (from <span class="mono" style="color:#5b8dee">executor.py</span>'s <span class="mono" style="color:#e8c84a">_tools</span> dict), and the conversation messages.
+      </div>
+      <div class="snippet">
+<span class="s-comment"># shopping-agent/runtime-messages-api/shopping_agent_runtime/orchestrator.py:121</span>
+<span class="s-kw">async def</span> <span class="s-fn">stream_turn</span>(<span class="s-arg">self</span>, messages, session, state) → AsyncIterator[AgentEvent]:
+    executor = <span class="s-cls">ShoppingToolExecutor</span>(self.backend, session, state, self.config)
+    <span class="s-comment"># prompt.py builds system prompt + fenced data block</span>
+    <span class="s-comment"># enrichment.py injects cart, orders, memory facts</span>
+    <span class="s-comment"># executor._tools → 14 Anthropic tool dicts</span>
+      </div>
+      <div class="chain">
+        <div class="chain-item"><span class="ci-arrow">→</span><span class="ci-file">shopping_agent/prompt.py</span><span class="ci-fn">:build_system_prompt()</span><span class="ci-note">&nbsp;— static system text</span></div>
+        <div class="chain-item"><span class="ci-arrow">→</span><span class="ci-file">shopping_agent/enrichment.py</span><span class="ci-fn">:enrich_turn()</span><span class="ci-note">&nbsp;— fenced cart/orders/memory</span></div>
+        <div class="chain-item"><span class="ci-arrow">→</span><span class="ci-file">shopping_agent/executor.py</span><span class="ci-fn">:ShoppingToolExecutor._tools</span><span class="ci-note">&nbsp;— 14 tool dicts</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── STEP 5 ── -->
+<div class="step">
+  <div class="step-dot" style="background:#160e28; border:2px solid var(--purple); color:var(--purple);">5</div>
+  <div class="step-left">
+    <div class="files-label">Scripts Called</div>
+    <div class="file-pill ext">
+      <span>Anthropic API</span>
+    </div>
+    <div class="file-pill py">
+      <span>orchestrator.py</span>
+      <span class="ln">:210,228</span>
+    </div>
+  </div>
+  <div class="step-right">
+    <div class="step-card">
+      <div class="step-card-title" style="color:var(--purple);">
+        ⚡ Inference #1 — Claude API call (streaming)
+      </div>
+      <div class="step-card-body">
+        <span class="mono" style="color:#bf9ff8">orchestrator.py</span> calls <span class="mono" style="color:#bf9ff8">client.messages.stream()</span> on the Anthropic SDK. Claude parses the prompt, identifies two sub-tasks, and returns a <span class="mono" style="color:#e8c84a">tool_use</span> block for <span class="mono" style="color:#e8934a">search_products</span>.
+      </div>
+      <div class="snippet">
+<span class="s-comment"># orchestrator.py:193 — EagerDispatcher starts tool execution</span>
+<span class="s-comment"># as soon as the tool_use block closes in the stream</span>
+dispatcher = <span class="s-cls">EagerDispatcher</span>(executor.<span class="s-fn">execute</span>, eager=<span class="s-kw">True</span>)
+
+<span class="s-comment"># stop_reason == "tool_use" → continue agentic loop</span>
+tool_uses = [block <span class="s-kw">for</span> block <span class="s-kw">in</span> final.content <span class="s-kw">if</span> block.type == <span class="s-str">"tool_use"</span>]
+<span class="s-comment"># → [ToolUseBlock(name="search_products", input={q:"laptop",...})]</span>
+      </div>
+      <div class="data-row">
+        <div class="data-tag">tool_use</div>
+        <div class="data-val">search_products · q="laptop" · max_price=1300 · filters.ram="16GB"</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<div class="sec-div">Phase 3 — Tool Call #1: search_products</div>
+
+<!-- ── STEP 6 ── -->
+<div class="step">
+  <div class="step-dot" style="background:#1a1208; border:2px solid var(--orange); color:var(--orange);">6</div>
+  <div class="step-left">
+    <div class="files-label">Scripts Called</div>
+    <div class="file-pill py">
+      <span>execution.py</span>
+      <span class="ln">:214</span>
+    </div>
+    <div class="file-pill py">
+      <span>executor.py</span>
+      <span class="ln">:123,163</span>
+    </div>
+    <div class="file-pill py">
+      <span>registry.py</span>
+      <span class="ln">:~40</span>
+    </div>
+  </div>
+  <div class="step-right">
+    <div class="step-card">
+      <div class="step-card-title" style="color:var(--orange);">
+        🔧 Tool Dispatch → _search_products()
+      </div>
+      <div class="step-card-body">
+        <span class="mono" style="color:#e8934a">BaseToolExecutor.execute()</span> looks up <span class="mono" style="color:#e8934a">"search_products"</span> in the <span class="mono" style="color:#e8c84a">_tools</span> dict and calls <span class="mono" style="color:#e8934a">_search_products()</span>. The tool definition (description + input schema) lives in <span class="mono" style="color:#e8934a">registry.py</span>.
+      </div>
+      <div class="snippet">
+<span class="s-comment"># commerce_common/execution.py:214 → BaseToolExecutor.execute()</span>
+<span class="s-kw">async def</span> <span class="s-fn">execute</span>(<span class="s-arg">name</span>, tool_input) → ToolOutcome:
+    handler = <span class="s-fn">self._handlers</span>[<span class="s-arg">name</span>]  <span class="s-comment"># dict lookup</span>
+    <span class="s-kw">return await</span> <span class="s-fn">handler</span>(<span class="s-arg">tool_input</span>)
+
+<span class="s-comment"># shopping_agent/executor.py:123,163</span>
+<span class="s-str">"search_products"</span>: <span class="s-fn">self._search_products</span>  <span class="s-comment"># registered at init</span>
+
+<span class="s-kw">async def</span> <span class="s-fn">_search_products</span>(<span class="s-arg">self</span>, tool_input):
+    <span class="s-var">products</span> = <span class="s-kw">await self</span>._backend.<span class="s-fn">search_products</span>(session, query, filters, limit)
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── STEP 7 ── -->
+<div class="step">
+  <div class="step-dot" style="background:#081408; border:2px solid var(--green); color:var(--green);">7</div>
+  <div class="step-left">
+    <div class="files-label">Scripts Called</div>
+    <div class="file-pill sf">
+      <span>sf_oms_backend.py</span>
+      <span class="ln">:search_products</span>
+    </div>
+    <div class="file-pill sf">
+      <span class="fn">_soql()</span>
+      <span class="ln">:542</span>
+    </div>
+    <div class="file-pill ext">
+      <span>Salesforce SOQL API</span>
+    </div>
+  </div>
+  <div class="step-right">
+    <div class="step-card">
+      <div class="step-card-title" style="color:var(--green);">
+        🗄️ SalesforceOMSBackend.search_products() → SOQL
+      </div>
+      <div class="step-card-body">
+        Queries <span class="mono" style="color:#4caf7d">Product2</span> + <span class="mono" style="color:#4caf7d">PricebookEntry</span> in Salesforce via SOQL. Filters by price ≤ 1300 and attributes. Results are serialized to <span class="mono" style="color:#4caf7d">Listing</span> objects and returned.
+      </div>
+      <div class="snippet">
+<span class="s-comment"># examples/salesforce/api/sf_oms_backend.py</span>
+<span class="s-kw">async def</span> <span class="s-fn">_soql</span>(<span class="s-arg">self</span>, query):
+    headers = <span class="s-kw">await self</span>.<span class="s-fn">_token_headers</span>()  <span class="s-comment"># OAuth2 client_credentials</span>
+    url = <span class="s-str">f"{self._base}/services/data/v62.0/query?q={query}"</span>
+    resp = <span class="s-kw">await</span> client.<span class="s-fn">get</span>(url, headers=headers)
+    <span class="s-kw">return</span> resp.<span class="s-fn">json</span>()[<span class="s-str">"records"</span>]
+      </div>
+      <div class="data-row">
+        <div class="data-tag">Result</div>
+        <div class="data-val">6 Listing objects → ProBook Elite 15 ($1,299), WorkStation Pro 14 ($1,249)…</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── STEP 8 ── -->
+<div class="step">
+  <div class="step-dot" style="background:#14101e; border:2px solid var(--purple); color:var(--purple);">8</div>
+  <div class="step-left">
+    <div class="files-label">Scripts Called</div>
+    <div class="file-pill py">
+      <span>executor.py</span>
+      <span class="ln">:163–190</span>
+    </div>
+    <div class="file-pill py">
+      <span>serialization.py</span>
+      <span class="ln">:compact_product</span>
+    </div>
+    <div class="file-pill py">
+      <span>gates.py</span>
+      <span class="ln">:check_provenance</span>
+    </div>
+  </div>
+  <div class="step-right">
+    <div class="step-card">
+      <div class="step-card-title" style="color:var(--purple);">
+        📝 Result Serialized → Provenance Registered
+      </div>
+      <div class="step-card-body">
+        Products are serialized to compact JSON via <span class="mono" style="color:#bf9ff8">serialization.compact_product()</span> and returned as a <span class="mono" style="color:#bf9ff8">ToolOutcome</span>. Product IDs are written into <span class="mono" style="color:#bf9ff8">state.shown_product_ids</span> — the provenance registry that gates later cart writes.
+      </div>
+      <div class="snippet">
+<span class="s-comment"># executor.py:163 — _search_products()</span>
+<span class="s-kw">for</span> p <span class="s-kw">in</span> products:
+    state.shown_product_ids.<span class="s-fn">add</span>(p.listing_id)   <span class="s-comment"># gates.py reads this</span>
+<span class="s-kw">return</span> <span class="s-fn">self._fenced</span>(<span class="s-fn">search_result_text</span>(products))
+
+<span class="s-comment"># tool_result fed back to Claude in next messages[] turn</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<div class="sec-div">Phase 4 — Inference #2 &amp; add_to_cart</div>
+
+<!-- ── STEP 9 ── -->
+<div class="step">
+  <div class="step-dot" style="background:#160e28; border:2px solid var(--purple); color:var(--purple);">9</div>
+  <div class="step-left">
+    <div class="files-label">Scripts Called</div>
+    <div class="file-pill ext">
+      <span>Anthropic API</span>
+    </div>
+    <div class="file-pill py">
+      <span>orchestrator.py</span>
+      <span class="ln">:228–249</span>
+    </div>
+  </div>
+  <div class="step-right">
+    <div class="step-card">
+      <div class="step-card-title" style="color:var(--purple);">
+        ⚡ Inference #2 — Claude selects ProBook Elite 15
+      </div>
+      <div class="step-card-body">
+        Search results injected as <span class="mono" style="color:#bf9ff8">tool_result</span> message. Claude evaluates all 6 products, selects ProBook Elite 15 (best fit for both constraints), and returns a new <span class="mono" style="color:#e8c84a">tool_use</span> block for <span class="mono" style="color:#e8934a">add_to_cart</span>.
+      </div>
+      <div class="snippet">
+<span class="s-comment"># orchestrator.py — round 2 of agentic loop</span>
+messages.<span class="s-fn">append</span>({ <span class="s-comment"># tool_result from search</span>
+  role: <span class="s-str">"user"</span>,
+  content: [{ type: <span class="s-str">"tool_result"</span>, tool_use_id: ..., content: <span class="s-str">"[ProBook Elite 15 …]"</span>}]
+})
+<span class="s-comment"># → Claude returns tool_use: add_to_cart(product_id="01tXX…", quantity=1)</span>
+      </div>
+      <div class="data-row">
+        <div class="data-tag">tool_use</div>
+        <div class="data-val">add_to_cart · product_id="01tXXXXXXXXX" · quantity=1</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── STEP 10 ── -->
+<div class="step">
+  <div class="step-dot" style="background:#0a1410; border:2px solid var(--teal); color:var(--teal);">10</div>
+  <div class="step-left">
+    <div class="files-label">Scripts Called</div>
+    <div class="file-pill py">
+      <span>executor.py</span>
+      <span class="ln">:193–210</span>
+    </div>
+    <div class="file-pill py">
+      <span class="fn">gates.py</span>
+      <span class="ln">:102–130</span>
+    </div>
+  </div>
+  <div class="step-right">
+    <div class="step-card">
+      <div class="step-card-title" style="color:var(--teal);">
+        🔒 executor._add_to_cart() → gated_add_to_cart()
+      </div>
+      <div class="step-card-body">
+        <span class="mono" style="color:#38b2ac">executor.py:_add_to_cart()</span> delegates to <span class="mono" style="color:#38b2ac">gates.gated_add_to_cart()</span>. Four checks run before any write: provenance, options, quantity limit, cart capacity. All pass → acquires per-session cart lock.
+      </div>
+      <div class="snippet">
+<span class="s-comment"># shopping_agent/executor.py:193</span>
+<span class="s-kw">async def</span> <span class="s-fn">_add_to_cart</span>(<span class="s-arg">self</span>, tool_input) → ToolOutcome:
+    <span class="s-kw">return await</span> <span class="s-fn">gated_add_to_cart</span>(
+        backend=<span class="s-fn">self._backend</span>, session=<span class="s-fn">self._session</span>,
+        state=<span class="s-fn">self._state</span>, product_id=..., quantity=<span class="s-num">1</span>,
+    )
+
+<span class="s-comment"># shopping_agent/gates.py:102</span>
+<span class="s-kw">async with</span> <span class="s-fn">_cart_lock</span>(session):   <span class="s-comment"># per-session asyncio.Lock</span>
+    current = <span class="s-kw">await</span> backend.<span class="s-fn">get_cart</span>(session)
+    <span class="s-comment"># provenance / options / quantity / capacity checks …</span>
+    cart = <span class="s-kw">await</span> backend.<span class="s-fn">add_to_cart</span>(session, product_id, allowed)
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── STEP 11 ── -->
+<div class="step">
+  <div class="step-dot" style="background:#081408; border:2px solid var(--green); color:var(--green);">11</div>
+  <div class="step-left">
+    <div class="files-label">Scripts Called</div>
+    <div class="file-pill sf">
+      <span>sf_oms_backend.py</span>
+      <span class="ln">:1441</span>
+    </div>
+    <div class="file-pill sf">
+      <span class="fn">_b2b_request()</span>
+      <span class="ln">:620</span>
+    </div>
+    <div class="file-pill sf">
+      <span class="fn">_add_to_cart_direct()</span>
+      <span class="ln">:1392</span>
+    </div>
+    <div class="file-pill ext">
+      <span>Salesforce B2B API</span>
+    </div>
+  </div>
+  <div class="step-right">
+    <div class="step-card">
+      <div class="step-card-title" style="color:var(--green);">
+        🛒 SalesforceOMSBackend.add_to_cart() → Salesforce B2B REST
+      </div>
+      <div class="step-card-body">
+        <span class="mono" style="color:#4caf7d">_b2b_request()</span> POSTs to the B2B Commerce cart-items endpoint. If the product isn't in the search index (404), it falls back to <span class="mono" style="color:#4caf7d">_add_to_cart_direct()</span> which inserts a <span class="mono" style="color:#e8c84a">CartItem</span> SObject directly. After write, calls <span class="mono" style="color:#4caf7d">get_cart()</span> to read back the confirmed state.
+      </div>
+      <div class="snippet">
+<span class="s-comment"># sf_oms_backend.py:1460</span>
+endpoint = <span class="s-str">f"/commerce/webstores/{webstore_id}/carts/{cart_id}/cart-items"</span>
+<span class="s-kw">await</span> <span class="s-fn">self._b2b_request</span>(<span class="s-str">"POST"</span>, endpoint,
+    params={<span class="s-str">"effectiveAccountId"</span>: account_id},
+    json={<span class="s-str">"productId"</span>: product_id, <span class="s-str">"quantity"</span>: <span class="s-str">"1"</span>, <span class="s-str">"type"</span>: <span class="s-str">"Product"</span>}
+)
+<span class="s-kw">return await</span> <span class="s-fn">self.get_cart</span>(session)   <span class="s-comment"># reads back confirmed cart</span>
+      </div>
+      <div class="data-row">
+        <div class="data-tag">HTTP 201</div>
+        <div class="data-val">WebCart updated · CartItem created in Salesforce org</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<div class="sec-div">Phase 5 — Cart Event &amp; SSE Stream Back to LWC</div>
+
+<!-- ── STEP 12 ── -->
+<div class="step">
+  <div class="step-dot" style="background:#0a1a0a; border:2px solid var(--green); color:var(--green);">12</div>
+  <div class="step-left">
+    <div class="files-label">Scripts Called</div>
+    <div class="file-pill py">
+      <span>gates.py</span>
+      <span class="ln">:98–129</span>
+    </div>
+    <div class="file-pill py">
+      <span>serialization.py</span>
+      <span class="ln">:131</span>
+    </div>
+    <div class="file-pill py">
+      <span>streaming.py</span>
+      <span class="ln">:106</span>
+    </div>
+  </div>
+  <div class="step-right">
+    <div class="step-card">
+      <div class="step-card-title" style="color:var(--green);">
+        📦 cart_payload() → AgentEvent.cart_update()
+      </div>
+      <div class="step-card-body">
+        <span class="mono" style="color:#4caf7d">gates._written()</span> calls <span class="mono" style="color:#4caf7d">serialization.cart_payload(cart)</span> to produce the JSON dict, wraps it in <span class="mono" style="color:#4caf7d">AgentEvent.cart_update()</span>, and returns it as part of the <span class="mono" style="color:#4caf7d">ToolOutcome.events</span>. The orchestrator yields this event immediately; <span class="mono" style="color:#38b2ac">host.stream_turn()</span> converts it via <span class="mono" style="color:#38b2ac">to_sse()</span>.
+      </div>
+      <div class="snippet">
+<span class="s-comment"># shopping_agent/gates.py:98</span>
+<span class="s-kw">def</span> <span class="s-fn">_written</span>(<span class="s-arg">text</span>, <span class="s-arg">cart</span>) → ToolOutcome:
+    <span class="s-kw">return</span> <span class="s-cls">ToolOutcome</span>(text, [<span class="s-cls">AgentEvent</span>.<span class="s-fn">cart_update</span>(<span class="s-fn">cart_payload</span>(cart))])
+
+<span class="s-comment"># commerce_common/streaming.py:106</span>
+<span class="s-kw">def</span> <span class="s-fn">cart_update</span>(<span class="s-arg">cls</span>, <span class="s-arg">cart</span>) → AgentEvent:
+    <span class="s-kw">return</span> <span class="s-fn">cls</span>(type=<span class="s-str">"cart_update"</span>, data={<span class="s-str">"cart"</span>: cart})
+
+<span class="s-comment"># SSE frame → LWC receives: event:cart_update \n data:{...}</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── STEP 13 ── -->
+<div class="step">
+  <div class="step-dot" style="background:#160e28; border:2px solid var(--purple); color:var(--purple);">13</div>
+  <div class="step-left">
+    <div class="files-label">Scripts Called</div>
+    <div class="file-pill ext">
+      <span>Anthropic API</span>
+    </div>
+    <div class="file-pill py">
+      <span>orchestrator.py</span>
+      <span class="ln">:265–277</span>
+    </div>
+    <div class="file-pill py">
+      <span>streaming.py</span>
+      <span class="ln">:125,137</span>
+    </div>
+  </div>
+  <div class="step-right">
+    <div class="step-card">
+      <div class="step-card-title" style="color:var(--purple);">
+        ⚡ Inference #3 — Final Response + turn_complete
+      </div>
+      <div class="step-card-body">
+        Cart tool result fed back. Claude composes its final text — no more tool calls. <span class="mono" style="color:#bf9ff8">text_delta</span> events stream back character-by-character. <span class="mono" style="color:#bf9ff8">suggestions</span> event generated by enrichment. Finally, <span class="mono" style="color:#bf9ff8">AgentEvent.turn_complete()</span> closes the stream.
+      </div>
+      <div class="snippet">
+<span class="s-comment"># orchestrator.py:277 — after stop_reason == "end_turn"</span>
+<span class="s-kw">yield</span> <span class="s-cls">AgentEvent</span>.<span class="s-fn">turn_complete</span>(stop_reason, usage, elapsed_ms, cleared)
+<span class="s-comment"># → SSE: event:turn_complete  data:{...}</span>
+
+<span class="s-comment"># host.py then saves session back to store</span>
+store.<span class="s-fn">save</span>(record)   <span class="s-comment"># sessions.py:102</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── STEP 14 ── -->
+<div class="step" style="margin-bottom:0">
+  <div class="step-dot" style="background:#1a1408; border:2px solid var(--yellow); color:var(--yellow);">14</div>
+  <div class="step-left">
+    <div class="files-label">Scripts Called</div>
+    <div class="file-pill lwc">
+      <span>salesforceStorefront.js</span>
+      <span class="ln">:827,592</span>
+    </div>
+    <div class="file-pill lwc">
+      <span class="fn">_handleEvent()</span>
+      <span class="ln">:827</span>
+    </div>
+  </div>
+  <div class="step-right">
+    <div class="step-card">
+      <div class="step-card-title" style="color:var(--yellow);">
+        🖥️ LWC handles SSE events → UI updated
+      </div>
+      <div class="step-card-body">
+        <span class="mono" style="color:#d4b44a">_readStream()</span> parses each SSE frame. <span class="mono" style="color:#d4b44a">_handleEvent()</span> dispatches by event type. <span class="mono" style="color:#d4b44a">cart_update</span> → sets <span class="mono" style="color:#d4b44a">this._cart</span> immediately (cart badge updates). <span class="mono" style="color:#d4b44a">text_delta</span> → appends to transcript. When the Cart tab is opened, <span class="mono" style="color:#d4b44a">handleViewCart()</span> calls <span class="mono" style="color:#d4b44a">_loadCart()</span> for a fresh server read. <span class="tag tag-green">BUG FIXED</span>
+      </div>
+      <div class="snippet">
+<span class="s-comment">// salesforceStorefront.js:851 — cart_update event</span>
+} <span class="s-kw">else if</span> (t === <span class="s-str">'cart_update'</span>) {
+    <span class="s-kw">const</span> <span class="s-var">cart</span> = ev.data?.cart ?? ev.cart;
+    <span class="s-kw">if</span> (cart &amp;&amp; cart.items !== <span class="s-kw">undefined</span>) <span class="s-fn">this._cart</span> = cart;  <span class="s-comment">// ← badge updates</span>
+}
+
+<span class="s-comment">// salesforceStorefront.js:592 — Cart tab opened (fixed)</span>
+<span class="s-fn">handleViewCart</span>() { <span class="s-fn">this._activeView</span> = <span class="s-str">'cart'</span>; <span class="s-fn">this._loadCart</span>(); }
+<span class="s-comment">// _loadCart() → GET /api/cart → sf_oms_backend.get_cart() → fresh SF read</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+</div><!-- /flow -->
+
+<!-- LEGEND -->
+<div class="legend">
+  <div class="legend-item"><div class="legend-bar" style="background:var(--accent)"></div>LWC (Lightning Web Component)</div>
+  <div class="legend-item"><div class="legend-bar" style="background:var(--blue)"></div>Python core (shopping_agent/)</div>
+  <div class="legend-item"><div class="legend-bar" style="background:var(--teal)"></div>commerce_common / host</div>
+  <div class="legend-item"><div class="legend-bar" style="background:var(--green)"></div>Salesforce backend (sf_oms_backend.py)</div>
+  <div class="legend-item"><div class="legend-bar" style="background:var(--pink)"></div>External API (Anthropic / Salesforce org)</div>
+  <div class="legend-item"><div class="legend-bar" style="background:var(--yellow)"></div>LWC SSE event handling</div>
+</div>
+
+<div style="text-align:center; margin-top:24px; font-size:11px; color:#3a4060;">
+  Files involved: <strong style="color:#5b8dee">10</strong> &nbsp;·&nbsp;
+  Functions traced: <strong style="color:var(--orange)">18</strong> &nbsp;·&nbsp;
+  External API calls: <strong style="color:var(--pink)">4</strong> (Claude API × 3 · Salesforce B2B REST × 1) &nbsp;·&nbsp;
+  SOQL queries: <strong style="color:var(--green)">3+</strong>
+</div>
+
+</body>
+</html>

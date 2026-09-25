@@ -61,3 +61,8 @@
     buildCommand = "cd examples/salesforce/merchant-web && npm install && npm run build"
   [services.deploy]
     startCommand = "node examples/salesforce/merchant-web/.next/standalone/server.js"
+
+[[services]]
+  name = "merchant-web-v2"
+  [services.build]
+    dockerfilePath = "Dockerfile.merchant-web"

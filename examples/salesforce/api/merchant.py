@@ -101,6 +101,7 @@ class _SFCCAdapter:
             body: dict[str, Any] = {
                 "query": {"text_query": {"fields": ["id", "name"], "search_phrase": query}},
                 "count": limit,
+                "expand": ["prices"],
             }
             if filters and isinstance(filters, ListingFilters) and filters.category:
                 body["query"] = {"filtered_query": {"query": body["query"],
@@ -117,7 +118,7 @@ class _SFCCAdapter:
                     listing_id=rep.get("id", h.get("product_id", "")),
                     title=rep.get("name", ""),
                     status="active" if rep.get("online", True) else "inactive",
-                    price=price,
+                    price=price or 0.0,
                     currency=self._sfcc._currency,
                     category=rep.get("primary_category_id"),
                 ))

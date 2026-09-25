@@ -90,10 +90,6 @@ class SFCCBusinessManagerBackend(MerchantBackend):
         self._token_expiry: float = 0.0
         self._lock = asyncio.Lock()
 
-    @property
-    def store_name(self) -> str:
-        return self._site_id
-
     # ── Auth ──────────────────────────────────────────────────────────────────
 
     async def _get_token(self) -> str:

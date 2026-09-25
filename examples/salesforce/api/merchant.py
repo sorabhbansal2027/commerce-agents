@@ -25,7 +25,8 @@ def _build_merchant_backend() -> MerchantBackend:
 
 
 def create_merchant_router(backend: MerchantBackend, memory_store: MemoryStore) -> APIRouter:
-    config = build_merchant_config(backend.store_name)
+    store_name = getattr(backend, "store_name", os.environ.get("SFCC_SITE_ID", "DreamHaus"))
+    config = build_merchant_config(store_name)
     agent = MerchantAgent(
         backend=backend,
         skills_dir=REPO_ROOT / "merchant-agent" / "skills",

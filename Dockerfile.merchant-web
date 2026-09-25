@@ -16,14 +16,20 @@ COPY examples/salesforce/merchant-web      ./examples/salesforce/merchant-web
 
 WORKDIR /app/examples/salesforce/merchant-web
 RUN npm install
+
+# npm creates a symlink for file: deps; turbopack can't follow symlinks to raw
+# TypeScript in Docker. Replace the symlink with actual files so transpilePackages
+# can pick up index.ts directly.
+RUN rm -rf node_modules/web-shared && \
+    cp -r /app/examples/web-shared node_modules/web-shared
+
 RUN npm run build
 
 # ── Stage 2: serve ────────────────────────────────────────────────────────────
 FROM node:20-slim
 WORKDIR /app
 
-# Keep web-shared at the same absolute path the symlink (or copy) in
-# node_modules points at, so Next.js can resolve it at startup.
+# Keep web-shared at the same path so runtime imports resolve.
 COPY --from=builder /app/examples/web-shared                        ./examples/web-shared
 COPY --from=builder /app/examples/salesforce/merchant-web/.next     ./.next
 COPY --from=builder /app/examples/salesforce/merchant-web/node_modules ./node_modules

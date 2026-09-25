@@ -538,6 +538,23 @@ _DEMO_HTML = """<!DOCTYPE html>
                 box-shadow: 0 3px 10px rgba(79,70,229,.25); }
   .oc-new-btn:hover { opacity: .9; transform: translateY(-1px); }
 
+  /* ── Order error view ── */
+  .oe-body { flex: 1; display: flex; flex-direction: column; align-items: center;
+             justify-content: center; padding: 28px 20px; gap: 14px; }
+  .oe-icon { font-size: 46px; }
+  .oe-title { font-size: 16px; font-weight: 800; color: var(--danger); }
+  .oe-msg { font-size: 12.5px; color: var(--ink2); text-align: center; line-height: 1.5; }
+  .oe-footer { border-top: 1px solid var(--line); padding: 14px 16px; flex-shrink: 0;
+               display: flex; gap: 8px; }
+  .oe-retry-btn { flex: 1; padding: 11px; background: var(--brand); color: #fff;
+                  border: none; border-radius: 11px; font-size: 13px; font-weight: 700;
+                  cursor: pointer; transition: opacity .15s; }
+  .oe-retry-btn:hover { opacity: .88; }
+  .oe-cart-btn { flex: 1; padding: 11px; background: var(--bg); color: var(--ink);
+                 border: 1px solid var(--line); border-radius: 11px; font-size: 13px;
+                 font-weight: 600; cursor: pointer; transition: background .15s; }
+  .oe-cart-btn:hover { background: var(--line); }
+
   /* ── Login overlay ── */
   #login-overlay { position:fixed; inset:0; z-index:999;
                    background:linear-gradient(135deg,#4f46e5 0%,#7c3aed 100%);
@@ -811,6 +828,22 @@ function showCheckoutForm() {
   orderConfirm.style.display = "none";
 }
 
+function showOrderError(message) {
+  orderConfirm.innerHTML = `
+    <div class="oe-body">
+      <div class="oe-icon">&#x26A0;&#xFE0F;</div>
+      <div class="oe-title">Order Failed</div>
+      <div class="oe-msg">${esc(message)}</div>
+    </div>
+    <div class="oe-footer">
+      <button class="oe-retry-btn" onclick="showCheckoutForm()">&#8592;&ensp;Try Again</button>
+      <button class="oe-cart-btn" onclick="showCartView()">Edit Cart</button>
+    </div>`;
+  cartView.style.display     = "none";
+  checkoutView.style.display = "none";
+  orderConfirm.style.display = "flex";
+}
+
 function showOrderConfirmation(itemsSnap, total, payment, name, sfOrderId) {
   const payLabel  = payment === "purchase_order" ? "Purchase Order" : "Credit Card";
   const itemsHtml = itemsSnap.map(v => `
@@ -1005,14 +1038,25 @@ async function placeOrder() {
     const data = await res.json();
     removeTyping();
     logTools(data.tool_calls);
-    addAgentMsg(data.reply);
-    // Pass real Salesforce order number if the place_order tool succeeded
-    const sfOrderId = data.order?.order_id || "";
-    showOrderConfirmation(itemsSnap, total, payment, name, sfOrderId);
-    Object.keys(cart).forEach(k => delete cart[k]);
+    const sfOrderId = data.order?.order_id || data.order?.order_number || "";
+    const orderOk   = data.order && (data.order.status === "placed" || sfOrderId);
+    if (orderOk) {
+      // Success — show confirmation panel and clear cart; suppress verbose agent text.
+      showOrderConfirmation(itemsSnap, total, payment, name, sfOrderId);
+      Object.keys(cart).forEach(k => delete cart[k]);
+      renderCart();
+    } else {
+      // Extract the first error detail line from the agent reply for the cart panel.
+      const errLine = (data.reply || "")
+        .split("\\n").find(l => l.toLowerCase().includes("error") || l.toLowerCase().includes("failed") || l.toLowerCase().includes("detail"))
+        || "Order could not be placed. Please try again.";
+      showOrderError(errLine.replace(/^[>*#\s]+/, "").trim());
+      btn.disabled = false;
+      btn.innerHTML = "&#x2713;&ensp;Place Order";
+    }
   } catch(e) {
     removeTyping();
-    addAgentMsg("Sorry, there was an issue placing your order. Please try again.");
+    showOrderError("Network error — please try again.");
     btn.disabled = false;
     btn.innerHTML = "&#x2713;&ensp;Place Order";
   } finally { setBusy(false); }

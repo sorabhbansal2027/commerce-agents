@@ -9,8 +9,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 export const api = new AgentApi(API_URL, "/api/merchant");
 
 export const UNREACHABLE =
-  "Couldn't reach the retail API on port 8000. Start it with " +
-  "`uvicorn retail.api.main:app --app-dir examples --port 8000` and try again.";
+  "Couldn't reach the merchant API. Make sure NEXT_PUBLIC_API_URL points to the running merchant-api service.";
 
 export function fetchOverview(): Promise<OverviewResponse | null> {
   return api.get<OverviewResponse>("/overview");

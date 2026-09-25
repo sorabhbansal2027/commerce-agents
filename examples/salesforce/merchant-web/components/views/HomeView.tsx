@@ -188,8 +188,9 @@ export default function HomeView({
       <>
         <PageHeader title={title} subtitle={today} />
         <Notice>
-          The merchant API on port 8000 isn&apos;t reachable. Start it with{" "}
-          <code className="rounded bg-(--well) px-1 font-mono text-[13px]">uvicorn retail.api.main:app --app-dir examples --port 8000</code> and reload.
+          Couldn&apos;t reach the merchant API. Make sure{" "}
+          <code className="rounded bg-(--well) px-1 font-mono text-[13px]">NEXT_PUBLIC_API_URL</code>{" "}
+          points to the running merchant-api service and reload.
         </Notice>
       </>
     );

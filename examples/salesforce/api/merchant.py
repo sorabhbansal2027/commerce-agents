@@ -100,8 +100,8 @@ class _SFCCAdapter:
             # short_description is not queryable on this SFCC instance
             body: dict[str, Any] = {
                 "query": {"text_query": {"fields": ["id", "name"], "search_phrase": query}},
+                "select": "(**)",
                 "count": limit,
-                "expand": ["prices"],
             }
             if filters and isinstance(filters, ListingFilters) and filters.category:
                 body["query"] = {"filtered_query": {"query": body["query"],
@@ -111,16 +111,18 @@ class _SFCCAdapter:
             hits = (data or {}).get("hits", [])
             listings = []
             for h in hits:
-                rep = h.get("represented_product", h)
-                prices = rep.get("prices", {})
-                price = next(iter(prices.values()), None) if prices else None
+                # name is a localized dict {"default": "..."} in org-level response
+                raw_name = h.get("name", "")
+                title = raw_name.get("default", "") if isinstance(raw_name, dict) else raw_name
+                prices = h.get("prices", {})
+                price = next(iter(prices.values()), 0.0) if prices else 0.0
                 listings.append(Listing(
-                    listing_id=rep.get("id", h.get("product_id", "")),
-                    title=rep.get("name", ""),
-                    status="active" if rep.get("online", True) else "inactive",
-                    price=price or 0.0,
+                    listing_id=h.get("id", ""),
+                    title=title,
+                    status="active" if h.get("online_flag", {}).get("default", True) else "inactive",
+                    price=float(price) if price else 0.0,
                     currency=self._sfcc._currency,
-                    category=rep.get("primary_category_id"),
+                    category=h.get("primary_category_id"),
                 ))
             return listings
         except (httpx.HTTPStatusError, httpx.ConnectError) as exc:

@@ -322,17 +322,80 @@ async def chat(request: Request) -> JSONResponse:
     })
 
 
+@app.post("/api/cart/add")
+async def cart_add_item(request: Request) -> JSONResponse:
+    """Add a single product to the buyer's SF WebCart.
+
+    Body: {product_id, quantity, title, unit_price}
+    Returns {cart_id, cart_item_id, product_id, quantity}
+    """
+    body = await request.json()
+    payload = {
+        "product_id":         body.get("product_id", ""),
+        "quantity":           body.get("quantity", 1),
+        "title":              body.get("title", ""),
+        "unit_price":         body.get("unit_price", 0),
+        "buyer_user_id":      _session.get("sf_user_id", ""),
+        "buyer_account_id":   _session.get("sf_account_id", ""),
+        "buyer_session_id":   _session.get("sf_session_id", ""),
+        "buyer_instance_url": _session.get("sf_instance_url", ""),
+    }
+    async with httpx.AsyncClient(timeout=30) as client:
+        r = await client.post(f"{UCP_BASE}/ucp/cart/items", json=payload)
+    return JSONResponse(r.json(), status_code=r.status_code)
+
+
+@app.delete("/api/cart/items/{cart_item_id}")
+async def cart_remove_item(cart_item_id: str, request: Request) -> JSONResponse:
+    """Remove a cart item from the buyer's SF WebCart.
+
+    Body: {cart_id}
+    """
+    body = await request.json()
+    payload = {
+        "cart_id":            body.get("cart_id", ""),
+        "buyer_user_id":      _session.get("sf_user_id", ""),
+        "buyer_account_id":   _session.get("sf_account_id", ""),
+        "buyer_session_id":   _session.get("sf_session_id", ""),
+        "buyer_instance_url": _session.get("sf_instance_url", ""),
+    }
+    async with httpx.AsyncClient(timeout=30) as client:
+        r = await client.request("DELETE", f"{UCP_BASE}/ucp/cart/items/{cart_item_id}", json=payload)
+    return JSONResponse(r.json(), status_code=r.status_code)
+
+
+@app.patch("/api/cart/items/{cart_item_id}")
+async def cart_update_item(cart_item_id: str, request: Request) -> JSONResponse:
+    """Update cart item quantity in the buyer's SF WebCart.
+
+    Body: {cart_id, quantity}
+    """
+    body = await request.json()
+    payload = {
+        "cart_id":            body.get("cart_id", ""),
+        "quantity":           body.get("quantity", 1),
+        "buyer_user_id":      _session.get("sf_user_id", ""),
+        "buyer_account_id":   _session.get("sf_account_id", ""),
+        "buyer_session_id":   _session.get("sf_session_id", ""),
+        "buyer_instance_url": _session.get("sf_instance_url", ""),
+    }
+    async with httpx.AsyncClient(timeout=30) as client:
+        r = await client.patch(f"{UCP_BASE}/ucp/cart/items/{cart_item_id}", json=payload)
+    return JSONResponse(r.json(), status_code=r.status_code)
+
+
 @app.post("/api/checkout/session")
 async def checkout_create_session(request: Request) -> JSONResponse:
     """Create an SF B2B checkout session from the current JS cart items.
 
-    Body: {line_items: [...]}
+    Body: {line_items: [...], existing_cart_id: "0a2..." (optional)}
     Returns {checkout_session_id, cart_id, delivery_group_id, ...}
     """
     body = await request.json()
     payload = {
         "line_items": body.get("line_items", []),
         "payment_handler": body.get("payment_handler", "purchase_order"),
+        "existing_cart_id":   body.get("existing_cart_id", ""),
         "buyer_user_id":      _session.get("sf_user_id", ""),
         "buyer_account_id":   _session.get("sf_account_id", ""),
         "buyer_session_id":   _session.get("sf_session_id", ""),
@@ -974,18 +1037,53 @@ const checkoutView = document.getElementById("checkout-view");
 const orderConfirm = document.getElementById("order-confirm");
 
 // ── Cart state ──────────────────────────────────────────────────────────────
+// cart[product_id] = { title, price, image_url, qty, sfCartItemId }
 const cart = {};
+let sfCartId = "";   // Salesforce WebCart ID synced on first add-to-cart
 
-function cartAddItem(p) {
-  if (cart[p.product_id]) { cart[p.product_id].qty++; }
-  else { cart[p.product_id] = { title: p.title, price: p.price, image_url: p.image_url, qty: 1 }; }
+function cartAddItem(p, sfCartItemId) {
+  if (cart[p.product_id]) {
+    cart[p.product_id].qty++;
+    // sfCartItemId not updated here — SF PATCH is called separately by cartAction
+  } else {
+    cart[p.product_id] = {
+      title: p.title, price: p.price, image_url: p.image_url,
+      qty: 1, sfCartItemId: sfCartItemId || ""
+    };
+  }
   renderCart();
 }
 
-function cartRemove(pid) { delete cart[pid]; renderCart(); }
-function cartSetQty(pid, qty) {
+async function cartRemove(pid) {
+  const item = cart[pid];
+  if (!item) return;
+  delete cart[pid];
+  renderCart();
+  // Sync removal to Salesforce in background (non-blocking)
+  if (item.sfCartItemId && sfCartId) {
+    fetch(`/api/cart/items/${item.sfCartItemId}`, {
+      method: "DELETE",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({cart_id: sfCartId}),
+    }).catch(e => console.warn("SF cart remove failed:", e));
+  }
+}
+
+async function cartSetQty(pid, qty) {
   if (qty < 1) { cartRemove(pid); return; }
-  if (cart[pid]) { cart[pid].qty = qty; renderCart(); }
+  const item = cart[pid];
+  if (!item) return;
+  const oldQty = item.qty;
+  item.qty = qty;
+  renderCart();
+  // Sync quantity update to Salesforce in background (non-blocking)
+  if (item.sfCartItemId && sfCartId) {
+    fetch(`/api/cart/items/${item.sfCartItemId}`, {
+      method: "PATCH",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({cart_id: sfCartId, quantity: qty}),
+    }).catch(e => console.warn("SF cart update failed:", e));
+  }
 }
 
 function esc(s) { return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/"/g,"&quot;"); }
@@ -1136,6 +1234,7 @@ function showOrderConfirmation(itemsSnap, total, payment, name, sfOrderId) {
 
 function startNewOrder() {
   Object.keys(cart).forEach(k => delete cart[k]);
+  sfCartId = "";
   renderCart();
   showCartView();
 }
@@ -1239,12 +1338,41 @@ function addProductCards(products) {
   messages.scrollTop = messages.scrollHeight;
 }
 
-function cartAction(productId, btn) {
+async function cartAction(productId, btn) {
   const p = JSON.parse(btn.dataset.product || "{}");
-  cartAddItem(p);
-  btn.innerHTML = "&#x2713;&ensp;Added";
   btn.disabled = true;
-  btn.style.background = "var(--ok)";
+  btn.innerHTML = "&#8987;&ensp;Adding…";
+
+  try {
+    const res = await fetch("/api/cart/add", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({
+        product_id: p.product_id,
+        quantity: 1,
+        title: p.title,
+        unit_price: p.price || 0,
+      }),
+    });
+    const data = await res.json();
+    if (res.ok) {
+      if (data.cart_id) sfCartId = data.cart_id;
+      cartAddItem(p, data.cart_item_id || "");
+      btn.innerHTML = "&#x2713;&ensp;Added";
+      btn.style.background = "var(--ok)";
+    } else {
+      // SF API failed — still add to JS cart so UX isn't broken
+      console.warn("SF cart add failed:", data.error);
+      cartAddItem(p, "");
+      btn.innerHTML = "&#x2713;&ensp;Added";
+      btn.style.background = "var(--ok)";
+    }
+  } catch(e) {
+    console.warn("SF cart add error:", e);
+    cartAddItem(p, "");
+    btn.innerHTML = "&#x2713;&ensp;Added";
+    btn.style.background = "var(--ok)";
+  }
 }
 
 // ── Place order ─────────────────────────────────────────────────────────────
@@ -1299,12 +1427,16 @@ async function placeOrder() {
   showTyping();
 
   try {
-    // ── Step 1: Create SF checkout session (cart + items + POST /checkouts) ──
+    // ── Step 1: Create SF checkout session (reuse existing SF cart if items were added via SF API) ──
     _setCoStatus("Creating checkout session…");
     btn.innerHTML = "Step 1/3…";
     const sessRes = await fetch("/api/checkout/session", {
       method: "POST", headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({line_items: lineItems, payment_handler: payment}),
+      body: JSON.stringify({
+        line_items: lineItems,
+        payment_handler: payment,
+        existing_cart_id: sfCartId || "",  // skip re-adding items if cart is already synced
+      }),
     });
     const sessData = await sessRes.json();
     if (!sessRes.ok) throw new Error(sessData.error || "Checkout session failed");

@@ -356,6 +356,166 @@ def build_ucp_router(backend: Any) -> APIRouter:
                 })
         return placed_items, first_error
 
+    @router.post("/ucp/cart/items", status_code=201, summary="Add item to SF B2B WebCart")
+    async def ucp_cart_add_item(request: Request) -> Response:
+        """Add a single product to the buyer's active Salesforce WebCart.
+
+        Creates the cart if none exists. Returns ``{cart_id, cart_item_id, product_id, quantity}``.
+
+        Request body::
+
+            {
+              "product_id": "01t...",
+              "quantity": 1,
+              "title": "...",
+              "unit_price": 0,
+              "buyer_user_id": "005...",
+              "buyer_account_id": "001..."
+            }
+        """
+        if not hasattr(backend, "_b2b_request") or not hasattr(backend, "_ensure_webstore_id"):
+            return Response(status_code=501,
+                content=json.dumps({"error": "Backend does not support B2B cart."}),
+                media_type="application/json")
+        body = await request.json()
+        product_id = body.get("product_id", "")
+        quantity = max(1, int(body.get("quantity", 1)))
+        if not product_id:
+            return Response(status_code=400,
+                content=json.dumps({"error": "product_id is required."}),
+                media_type="application/json")
+        try:
+            buyer_uid, account_id, eff_params, buyer_auth_kwargs, req_params = (
+                await _resolve_buyer_params(body)
+            )
+            webstore_id = await backend._ensure_webstore_id()
+            cart_id, currency = await _get_or_create_cart(
+                backend, webstore_id, account_id, buyer_auth_kwargs, req_params
+            )
+            resp = await backend._b2b_request(
+                "POST",
+                f"/commerce/webstores/{webstore_id}/carts/{cart_id}/cart-items",
+                **buyer_auth_kwargs, params=req_params,
+                json={"productId": product_id, "quantity": quantity, "type": "Product"},
+            )
+            cart_item = resp.get("cartItem", resp)
+            cart_item_id = (
+                cart_item.get("cartItemId") or cart_item.get("id") or cart_item.get("Id", "")
+            )
+            return Response(
+                content=json.dumps({
+                    "cart_id": cart_id,
+                    "cart_item_id": cart_item_id,
+                    "product_id": product_id,
+                    "quantity": quantity,
+                    "title": body.get("title", ""),
+                    "unit_price": float(body.get("unit_price", 0)),
+                    "currency": currency,
+                }),
+                media_type="application/json", status_code=201,
+            )
+        except ValueError as exc:
+            return Response(status_code=400,
+                content=json.dumps({"error": str(exc)}), media_type="application/json")
+        except Exception as exc:
+            _log.exception("ucp_cart_add_item failed")
+            return Response(status_code=500,
+                content=json.dumps({"error": f"Add to cart failed: {exc}"}),
+                media_type="application/json")
+
+    @router.delete("/ucp/cart/items/{cart_item_id}", status_code=200,
+                   summary="Remove item from SF B2B WebCart")
+    async def ucp_cart_remove_item(cart_item_id: str, request: Request) -> Response:
+        """Remove a cart item from the buyer's Salesforce WebCart.
+
+        Request body::
+
+            {
+              "cart_id": "0a2...",
+              "buyer_user_id": "005...",
+              "buyer_account_id": "001..."
+            }
+        """
+        if not hasattr(backend, "_b2b_request") or not hasattr(backend, "_ensure_webstore_id"):
+            return Response(status_code=501,
+                content=json.dumps({"error": "Backend does not support B2B cart."}),
+                media_type="application/json")
+        body = await request.json()
+        cart_id = body.get("cart_id", "")
+        if not cart_id:
+            return Response(status_code=400,
+                content=json.dumps({"error": "cart_id is required."}),
+                media_type="application/json")
+        try:
+            buyer_uid, account_id, eff_params, buyer_auth_kwargs, req_params = (
+                await _resolve_buyer_params(body)
+            )
+            webstore_id = await backend._ensure_webstore_id()
+            await backend._b2b_request(
+                "DELETE",
+                f"/commerce/webstores/{webstore_id}/carts/{cart_id}/cart-items/{cart_item_id}",
+                **buyer_auth_kwargs, params=req_params,
+            )
+            return Response(content=json.dumps({"ok": True, "cart_item_id": cart_item_id}),
+                media_type="application/json")
+        except ValueError as exc:
+            return Response(status_code=400,
+                content=json.dumps({"error": str(exc)}), media_type="application/json")
+        except Exception as exc:
+            _log.warning("ucp_cart_remove_item failed: %s", exc)
+            return Response(status_code=500,
+                content=json.dumps({"error": f"Remove from cart failed: {exc}"}),
+                media_type="application/json")
+
+    @router.patch("/ucp/cart/items/{cart_item_id}", status_code=200,
+                  summary="Update cart item quantity in SF B2B WebCart")
+    async def ucp_cart_update_item(cart_item_id: str, request: Request) -> Response:
+        """Update the quantity of a cart item in the buyer's Salesforce WebCart.
+
+        Request body::
+
+            {
+              "cart_id": "0a2...",
+              "quantity": 2,
+              "buyer_user_id": "005...",
+              "buyer_account_id": "001..."
+            }
+        """
+        if not hasattr(backend, "_b2b_request") or not hasattr(backend, "_ensure_webstore_id"):
+            return Response(status_code=501,
+                content=json.dumps({"error": "Backend does not support B2B cart."}),
+                media_type="application/json")
+        body = await request.json()
+        cart_id = body.get("cart_id", "")
+        quantity = max(1, int(body.get("quantity", 1)))
+        if not cart_id:
+            return Response(status_code=400,
+                content=json.dumps({"error": "cart_id is required."}),
+                media_type="application/json")
+        try:
+            buyer_uid, account_id, eff_params, buyer_auth_kwargs, req_params = (
+                await _resolve_buyer_params(body)
+            )
+            webstore_id = await backend._ensure_webstore_id()
+            await backend._b2b_request(
+                "PATCH",
+                f"/commerce/webstores/{webstore_id}/carts/{cart_id}/cart-items/{cart_item_id}",
+                **buyer_auth_kwargs, params=req_params,
+                json={"quantity": quantity},
+            )
+            return Response(
+                content=json.dumps({"ok": True, "cart_item_id": cart_item_id, "quantity": quantity}),
+                media_type="application/json",
+            )
+        except ValueError as exc:
+            return Response(status_code=400,
+                content=json.dumps({"error": str(exc)}), media_type="application/json")
+        except Exception as exc:
+            _log.warning("ucp_cart_update_item failed: %s", exc)
+            return Response(status_code=500,
+                content=json.dumps({"error": f"Update cart failed: {exc}"}),
+                media_type="application/json")
+
     @router.post("/ucp/checkout-sessions", status_code=201, summary="Create B2B checkout session")
     async def ucp_create_checkout_session(request: Request) -> Response:
         """Create Salesforce WebCart with line items and initiate a B2B checkout session.
@@ -368,7 +528,8 @@ def build_ucp_router(backend: Any) -> APIRouter:
               "buyer_user_id": "005...",
               "buyer_account_id": "001...",
               "buyer_session_id": "",
-              "buyer_instance_url": ""
+              "buyer_instance_url": "",
+              "existing_cart_id": ""    // optional — skip cart creation if cart already has items
             }
 
         Returns ``{checkout_session_id, cart_id, delivery_group_id, ...}`` for use in
@@ -382,28 +543,46 @@ def build_ucp_router(backend: Any) -> APIRouter:
             )
         body = await request.json()
         line_items = body.get("line_items", [])
+        existing_cart_id = (body.get("existing_cart_id") or "").strip()
         try:
             buyer_uid, account_id, eff_params, buyer_auth_kwargs, req_params = (
                 await _resolve_buyer_params(body)
             )
             webstore_id = await backend._ensure_webstore_id()
-            cart_id, currency = await _get_or_create_cart(
-                backend, webstore_id, account_id, buyer_auth_kwargs, req_params
-            )
-            if not cart_id:
-                return Response(status_code=500,
-                    content=json.dumps({"error": "Could not locate or create a B2B cart."}),
-                    media_type="application/json")
 
-            placed_items, first_error = await _add_items_to_cart(
-                backend, webstore_id, cart_id, line_items, buyer_auth_kwargs, req_params, currency
-            )
-            if not placed_items:
-                err = "No items could be added to the cart."
-                if first_error:
-                    err += f" Detail: {first_error}"
-                return Response(status_code=500,
-                    content=json.dumps({"error": err}), media_type="application/json")
+            if existing_cart_id:
+                # Cart was already populated via /ucp/cart/items — skip creation & item add.
+                cart_id = existing_cart_id
+                currency = "USD"
+                placed_items = [
+                    {
+                        "product_id": it.get("product_id", ""),
+                        "title": it.get("title", ""),
+                        "quantity": int(it.get("quantity", 1)),
+                        "unit_price": float(it.get("unit_price", 0)),
+                        "line_total": round(float(it.get("unit_price", 0)) * int(it.get("quantity", 1)), 2),
+                        "currency": "USD",
+                    }
+                    for it in line_items
+                ]
+            else:
+                cart_id, currency = await _get_or_create_cart(
+                    backend, webstore_id, account_id, buyer_auth_kwargs, req_params
+                )
+                if not cart_id:
+                    return Response(status_code=500,
+                        content=json.dumps({"error": "Could not locate or create a B2B cart."}),
+                        media_type="application/json")
+
+                placed_items, first_error = await _add_items_to_cart(
+                    backend, webstore_id, cart_id, line_items, buyer_auth_kwargs, req_params, currency
+                )
+                if not placed_items:
+                    err = "No items could be added to the cart."
+                    if first_error:
+                        err += f" Detail: {first_error}"
+                    return Response(status_code=500,
+                        content=json.dumps({"error": err}), media_type="application/json")
 
             # POST /checkouts to initiate the B2B checkout session.
             checkout_body: dict = {"cartReference": {"id": cart_id}}

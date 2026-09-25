@@ -1,42 +1,39 @@
-# Two-stage build: compile Next.js merchant portal then serve it.
+# Two-stage build: compile Next.js merchant portal (standalone) then serve it.
 #
 # Required env vars at runtime (set in Railway dashboard):
 #   NEXT_PUBLIC_API_URL   https://<merchant-api>.up.railway.app
 #
-# PORT is injected by Railway; Next.js reads it automatically.
+# PORT is injected by Railway; Next.js standalone server.js reads it automatically.
 
 # ── Stage 1: build ────────────────────────────────────────────────────────────
 FROM node:20-slim AS builder
 WORKDIR /app
 
-# Mirror the local repo layout so that the file:../../web-shared reference in
-# merchant-web/package.json resolves to /app/examples/web-shared at install time.
+# Mirror the repo layout so file:../../web-shared resolves at install time.
 COPY examples/web-shared                   ./examples/web-shared
 COPY examples/salesforce/merchant-web      ./examples/salesforce/merchant-web
 
 WORKDIR /app/examples/salesforce/merchant-web
 RUN npm install
 
-# npm creates a symlink for file: deps; turbopack can't follow symlinks to raw
-# TypeScript in Docker. Replace the symlink with actual files so transpilePackages
-# can pick up index.ts directly.
-RUN rm -rf node_modules/web-shared && \
-    cp -r /app/examples/web-shared node_modules/web-shared
-
+# turbopack (Next.js 16 production bundler) sees the npm symlink for web-shared
+# and resolves CSS/TS through transpilePackages — no manual copy needed after the
+# CSS imports were changed from ../../../web-shared/... to bare "web-shared/..." paths.
 RUN npm run build
 
-# ── Stage 2: serve ────────────────────────────────────────────────────────────
+# ── Stage 2: serve (standalone — minimal footprint, no full node_modules copy) ─
 FROM node:20-slim
 WORKDIR /app
 
-# Keep web-shared at the same path so runtime imports resolve.
-COPY --from=builder /app/examples/web-shared                        ./examples/web-shared
-COPY --from=builder /app/examples/salesforce/merchant-web/.next     ./.next
-COPY --from=builder /app/examples/salesforce/merchant-web/node_modules ./node_modules
-COPY --from=builder /app/examples/salesforce/merchant-web/package.json ./package.json
-COPY --from=builder /app/examples/salesforce/merchant-web/next.config.ts ./next.config.ts
+# Standalone output: server.js + traced node_modules only (~10× smaller than full deps)
+COPY --from=builder /app/examples/salesforce/merchant-web/.next/standalone ./
+COPY --from=builder /app/examples/salesforce/merchant-web/.next/static     ./.next/static
+
+# public/ is optional (no static assets in this app)
+# COPY --from=builder /app/examples/salesforce/merchant-web/public ./public
 
 ENV NODE_ENV=production
 EXPOSE 3105
 
-CMD ["node_modules/.bin/next", "start"]
+# standalone server.js reads PORT from env; Railway injects it automatically.
+CMD ["node", "server.js"]

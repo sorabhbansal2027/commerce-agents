@@ -25,6 +25,7 @@ Env vars:
 
 from __future__ import annotations
 
+import asyncio
 import importlib.util as _ilu
 import logging
 import os
@@ -153,11 +154,15 @@ async def _fetch_html_from_mcp() -> str:
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     global _product_grid_html
     try:
-        _product_grid_html = await _fetch_html_from_mcp()
+        _product_grid_html = await asyncio.wait_for(_fetch_html_from_mcp(), timeout=8.0)
         print(f"[MCP] Loaded product-grid HTML from {STOREFRONT_MCP_URL}")
     except Exception as exc:
-        _product_grid_html = _PRODUCT_GRID_DISK.read_text()
-        print(f"[MCP] Fallback to disk ({exc})")
+        print(f"[MCP] Fallback to disk ({type(exc).__name__}: {exc})")
+        try:
+            _product_grid_html = _PRODUCT_GRID_DISK.read_text()
+        except Exception as disk_exc:
+            _product_grid_html = "<p>Product grid unavailable</p>"
+            print(f"[MCP] Disk fallback also failed: {disk_exc}")
     yield
 
 

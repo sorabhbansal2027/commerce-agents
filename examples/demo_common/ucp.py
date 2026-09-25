@@ -770,6 +770,69 @@ def build_ucp_router(backend: Any) -> APIRouter:
                 media_type="application/json",
             )
 
+    # ── Buyer identity lookup ──────────────────────────────────────────────────
+
+    @router.get("/ucp/buyer-lookup", summary="Resolve Salesforce username to UserId + AccountId")
+    async def ucp_buyer_lookup(username: str = "", request: Request = None) -> Response:
+        """Look up a Salesforce buyer by username using admin credentials.
+
+        Uses the backend's admin token (client_credentials) so the caller does not
+        need its own Salesforce credentials — useful when the UI server and the UCP
+        backend run with different service accounts.
+
+        Query param: ``username`` — Salesforce Username (e.g. user@org.sandbox)
+        Returns: ``{user_id, account_id, display_name, email}``
+        """
+        if not username:
+            return Response(status_code=400,
+                content=json.dumps({"error": "username query param is required."}),
+                media_type="application/json")
+        if not hasattr(backend, "_token_headers") or not hasattr(backend, "_base"):
+            return Response(status_code=501,
+                content=json.dumps({"error": "Backend does not support admin token lookup."}),
+                media_type="application/json")
+        try:
+            import urllib.parse as _up
+            headers = await backend._token_headers()
+            base = backend._base.rstrip("/")
+            search_text = username.split("@")[0] if "@" in username else username
+            params = _up.urlencode({
+                "q": search_text,
+                "sobject": "User",
+                "User.fields": "Id,Name,Email,AccountId",
+                "User.where": f"Username='{username}' AND IsActive=true",
+            })
+            import httpx as _httpx
+            async with _httpx.AsyncClient(timeout=15) as client:
+                r = await client.get(
+                    f"{base}/services/data/v62.0/parameterizedSearch?{params}",
+                    headers=headers,
+                )
+                if r.status_code != 200:
+                    return Response(status_code=502,
+                        content=json.dumps({"error": f"SOSL lookup failed: {r.status_code}"}),
+                        media_type="application/json")
+                records = r.json().get("searchRecords", [])
+            if not records:
+                return Response(status_code=404,
+                    content=json.dumps({"error": f"No active Salesforce user found for '{username}'"}),
+                    media_type="application/json")
+            u = records[0]
+            return Response(
+                content=json.dumps({
+                    "user_id":      u.get("Id", ""),
+                    "account_id":   u.get("AccountId") or "",
+                    "display_name": u.get("Name") or username,
+                    "email":        u.get("Email") or username,
+                }),
+                media_type="application/json",
+            )
+        except Exception as exc:
+            _log.warning("ucp_buyer_lookup failed: %s", exc)
+            return Response(status_code=502,
+                content=json.dumps({"error": f"Buyer lookup failed: {exc}"}),
+                media_type="application/json")
+
     # ── Active cart fetch ──────────────────────────────────────────────────────
 
     @router.get("/ucp/cart", summary="Fetch buyer's active cart from Salesforce")

@@ -194,54 +194,36 @@ def _gemini_error_message(exc: Exception) -> str:
 
 
 async def _sf_resolve_buyer(username: str) -> dict:
-    """Resolve a Salesforce username to UserId + AccountId using admin client credentials.
+    """Resolve a Salesforce username to UserId + AccountId via the UCP backend.
+
+    Proxies to GET /ucp/buyer-lookup so the UI server does not need its own SF
+    credentials — the UCP backend uses its admin token for the SOSL lookup.
 
     Community Plus users cannot authenticate via SOAP Partner API or OAuth2
     password grant — they use Experience Cloud. The server-side agent uses admin
     credentials to identify the buyer, then passes effectiveAccountId on B2B
     Commerce API calls.
     """
-    sf_url = os.environ.get("SF_INSTANCE_URL", "").rstrip("/")
-    client_id = os.environ.get("SF_CLIENT_ID", "")
-    client_secret = os.environ.get("SF_CLIENT_SECRET", "")
-    if not (sf_url and client_id and client_secret):
-        raise ValueError("SF_INSTANCE_URL / SF_CLIENT_ID / SF_CLIENT_SECRET not configured on server")
-
-    async with httpx.AsyncClient(timeout=15) as client:
-        tok_resp = await client.post(
-            f"{sf_url}/services/oauth2/token",
-            data={"grant_type": "client_credentials", "client_id": client_id, "client_secret": client_secret},
-        )
-        tok_resp.raise_for_status()
-        token = tok_resp.json()["access_token"]
-
-        # Use Salesforce parameterized search (SOSL) to locate the buyer.
-        # q must be text (not an email address with @) — use the local part.
-        # WHERE clause ensures we get the exact Username match.
-        import urllib.parse as _up
-        search_text = username.split("@")[0] if "@" in username else username
-        params = _up.urlencode({
-            "q": search_text,
-            "sobject": "User",
-            "User.fields": "Id,Name,Email,AccountId",
-            "User.where": f"Username='{username}' AND IsActive=true",
-        })
-        r = await client.get(
-            f"{sf_url}/services/data/v62.0/parameterizedSearch?{params}",
-            headers={"Authorization": f"Bearer {token}"},
-        )
-        if r.status_code != 200:
-            raise ValueError(f"User lookup failed: {r.status_code}")
-        records = r.json().get("searchRecords", [])
-        if not records:
-            raise ValueError(f"No active Salesforce user found for '{username}'")
-        u = records[0]
-        return {
-            "user_id": u.get("Id", ""),
-            "account_id": u.get("AccountId") or "",
-            "display_name": u.get("Name") or username,
-            "email": u.get("Email") or username,
-        }
+    import urllib.parse as _up
+    lookup_url = f"{UCP_BASE}/ucp/buyer-lookup?{_up.urlencode({'username': username})}"
+    async with httpx.AsyncClient(timeout=20) as client:
+        r = await client.get(lookup_url)
+    if r.status_code == 404:
+        data = r.json()
+        raise ValueError(data.get("error", f"No active Salesforce user found for '{username}'"))
+    if r.status_code == 400:
+        data = r.json()
+        raise ValueError(data.get("error", "Bad request to buyer lookup"))
+    if not r.is_success:
+        data = r.json() if r.content else {}
+        raise RuntimeError(f"Buyer lookup failed ({r.status_code}): {data.get('error', r.text[:200])}")
+    u = r.json()
+    return {
+        "user_id":      u.get("user_id", ""),
+        "account_id":   u.get("account_id") or "",
+        "display_name": u.get("display_name") or username,
+        "email":        u.get("email") or username,
+    }
 
 
 @app.post("/api/login")
@@ -259,7 +241,7 @@ async def login(request: Request) -> JSONResponse:
         return JSONResponse({"ok": False, "error": str(exc)}, status_code=401)
     except Exception as exc:
         _log.warning("SF buyer resolve error: %s", exc)
-        return JSONResponse({"ok": False, "error": f"Salesforce error: {exc}"}, status_code=502)
+        return JSONResponse({"ok": False, "error": "Could not reach Salesforce — check SF env vars."}, status_code=502)
 
     _session["name"]           = (body.get("name") or "").strip() or sf["display_name"]
     _session["email"]          = sf["email"]

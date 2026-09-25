@@ -259,7 +259,7 @@ async def login(request: Request) -> JSONResponse:
         return JSONResponse({"ok": False, "error": str(exc)}, status_code=401)
     except Exception as exc:
         _log.warning("SF buyer resolve error: %s", exc)
-        return JSONResponse({"ok": False, "error": "Could not reach Salesforce — check SF env vars."}, status_code=502)
+        return JSONResponse({"ok": False, "error": f"Salesforce error: {exc}"}, status_code=502)
 
     _session["name"]           = (body.get("name") or "").strip() or sf["display_name"]
     _session["email"]          = sf["email"]

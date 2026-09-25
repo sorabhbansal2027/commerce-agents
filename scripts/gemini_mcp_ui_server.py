@@ -98,12 +98,19 @@ class TrackedAgent(GeminiUCPAgent):
         super().__init__(*args, **kwargs)
         self.last_products: list = []
         self.last_tool_calls: list = []
+        self.last_order: dict = {}
 
     def _call_ucp(self, fn_name: str, args: dict) -> dict:
         result = super()._call_ucp(fn_name, args)
         self.last_tool_calls.append({"tool": fn_name, "args": args})
         if fn_name == "search_products":
-            self.last_products = result.get("products", [])
+            products = result.get("products", [])
+            if products:
+                self.last_products = products
+        elif fn_name == "get_product" and result.get("product_id"):
+            self.last_products = [result]
+        elif fn_name == "place_order" and result.get("status") == "placed":
+            self.last_order = result
         return result
 
 
@@ -148,6 +155,7 @@ async def chat(request: Request) -> JSONResponse:
     agent = get_agent()
     agent.last_products = []
     agent.last_tool_calls = []
+    agent.last_order = {}
     try:
         reply = agent.send(body.get("message", ""))
     except Exception as exc:
@@ -156,6 +164,7 @@ async def chat(request: Request) -> JSONResponse:
         "reply": reply,
         "products": agent.last_products,
         "tool_calls": agent.last_tool_calls,
+        "order": agent.last_order,
     })
 
 
@@ -697,7 +706,7 @@ function showCheckoutForm() {
   orderConfirm.style.display = "none";
 }
 
-function showOrderConfirmation(itemsSnap, total, payment, name) {
+function showOrderConfirmation(itemsSnap, total, payment, name, sfOrderId) {
   const payLabel  = payment === "purchase_order" ? "Purchase Order" : "Credit Card";
   const itemsHtml = itemsSnap.map(v => `
     <div class="oc-item">
@@ -706,16 +715,24 @@ function showOrderConfirmation(itemsSnap, total, payment, name) {
       <span class="oc-item-price">$${(v.price*v.qty).toFixed(2)}</span>
     </div>`).join("");
 
+  const orderNumHtml = sfOrderId
+    ? `<div class="oc-meta-row">
+         <span class="oc-meta-label">Order #</span>
+         <span class="oc-meta-val" style="font-family:monospace;font-size:11px">${esc(sfOrderId)}</span>
+       </div>`
+    : "";
+
   orderConfirm.innerHTML = `
     <div class="oc-body">
       <div class="oc-icon">&#x2705;</div>
       <div class="oc-title">Order Confirmed!</div>
-      <div class="oc-sub">${name ? "Thank you, " + esc(name) + "!" : "Your order has been placed successfully."}</div>
+      <div class="oc-sub">${name ? "Thank you, " + esc(name) + "!" : "Your order has been placed in Salesforce."}</div>
       <div class="oc-items-card">
         <div class="oc-items-hdr">Order Items</div>
         ${itemsHtml}
       </div>
       <div class="oc-meta">
+        ${orderNumHtml}
         <div class="oc-meta-row">
           <span class="oc-meta-label">Payment</span>
           <span class="oc-meta-val">${payLabel}</span>
@@ -869,9 +886,14 @@ async function placeOrder() {
   setBusy(true);
   showTyping();
 
-  let apiMsg = `Confirm and place this order now (no further confirmation needed): ${summary}. Total: $${total.toFixed(2)}. Payment: ${payment}.`;
-  if (name)  apiMsg += ` Customer name: ${name}.`;
-  if (email) apiMsg += ` Email: ${email}.`;
+  // Build a structured message the agent can parse into a place_order tool call.
+  const lineItemsJson = JSON.stringify(items.map(([pid, v]) => ({
+    product_id: pid, quantity: v.qty, title: v.title, unit_price: v.price
+  })));
+  let apiMsg = `Place this B2B order immediately via the place_order tool (no further confirmation needed). ` +
+    `Line items: ${lineItemsJson}. Payment: ${payment}. Total: $${total.toFixed(2)}.`;
+  if (name)  apiMsg += ` Buyer name: ${name}.`;
+  if (email) apiMsg += ` Buyer email: ${email}.`;
 
   try {
     const res  = await fetch("/api/chat", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({message:apiMsg}) });
@@ -879,7 +901,9 @@ async function placeOrder() {
     removeTyping();
     logTools(data.tool_calls);
     addAgentMsg(data.reply);
-    showOrderConfirmation(itemsSnap, total, payment, name);
+    // Pass real Salesforce order number if the place_order tool succeeded
+    const sfOrderId = data.order?.order_id || "";
+    showOrderConfirmation(itemsSnap, total, payment, name, sfOrderId);
     Object.keys(cart).forEach(k => delete cart[k]);
   } catch(e) {
     removeTyping();

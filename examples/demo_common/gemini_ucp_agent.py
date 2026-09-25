@@ -192,10 +192,10 @@ class GeminiUCPAgent:
                 r.raise_for_status()
                 return r.json()
 
-            elif fn_name == "create_checkout_session":
+            elif fn_name == "place_order":
                 body: dict[str, Any] = {
                     "line_items": args.get("line_items", []),
-                    "payment_handler": args.get("payment_handler", "credit_card"),
+                    "payment_handler": args.get("payment_handler", "purchase_order"),
                 }
                 if args.get("buyer_name") or args.get("buyer_email"):
                     body["buyer"] = {
@@ -206,7 +206,9 @@ class GeminiUCPAgent:
                         }.items()
                         if v
                     }
-                r = self._http.post(f"{self.base}/ucp/checkout-sessions", json=body)
+                if args.get("po_number"):
+                    body["po_number"] = args["po_number"]
+                r = self._http.post(f"{self.base}/ucp/orders", json=body)
                 r.raise_for_status()
                 return r.json()
 
@@ -242,12 +244,13 @@ class GeminiUCPAgent:
         return (
             f"You are a shopping assistant for {biz.get('name', 'this store')}. "
             f"{biz.get('description', '')} "
-            f"Available payment methods: {payment_ids or 'credit_card'}. "
+            f"Available payment methods: {payment_ids or 'purchase_order, credit_card'}. "
             f"{cart_note} "
             f"{checkout_note} "
             f"{hints} "
             f"{_get_agent_hints()} "
-            "When creating a checkout session, always confirm the items and total with the user first. "
+            "When the user confirms an order, call place_order immediately — "
+            "do not ask for further confirmation. "
             "Format prices as currency. Keep responses concise and helpful."
         )
 
@@ -316,37 +319,49 @@ class GeminiUCPAgent:
                 )
             )
 
-        # ── Checkout ───────────────────────────────────────────────────
+        # ── Order placement via B2B Commerce checkout API ──────────────
         if caps.get("checkout", {}).get("supported"):
             payment_ids = [p["id"] for p in self.manifest.get("payment_handlers", [])]
             ph_desc = (
-                f"Payment handler to use. Options: {', '.join(payment_ids)}."
+                f"Payment method. Options: {', '.join(payment_ids)}."
                 if payment_ids
-                else "Payment handler identifier."
+                else "Payment method identifier (purchase_order or credit_card)."
             )
             tools.append(
                 gtypes.Tool(
                     function_declarations=[
                         gtypes.FunctionDeclaration(
-                            name="create_checkout_session",
+                            name="place_order",
                             description=(
-                                "Create a pending checkout session from a list of products. "
-                                "No payment is charged — this is a confirmation pending buyer approval. "
-                                "Always confirm items and total with the user before calling this."
+                                "Place a real B2B order via the Salesforce B2B Commerce checkout API. "
+                                "Call this when the user has confirmed they want to place the order. "
+                                "This initiates checkout, sets payment details, and submits the order — "
+                                "no storefront interaction required."
                             ),
                             parameters={
                                 "type": "object",
                                 "properties": {
                                     "line_items": {
                                         "type": "array",
-                                        "description": "Products to purchase",
+                                        "description": "Products to order",
                                         "items": {
                                             "type": "object",
                                             "properties": {
-                                                "product_id": {"type": "string"},
+                                                "product_id": {
+                                                    "type": "string",
+                                                    "description": "Salesforce Product2 ID",
+                                                },
                                                 "quantity": {
                                                     "type": "integer",
-                                                    "description": "Quantity (default 1)",
+                                                    "description": "Quantity to order (default 1)",
+                                                },
+                                                "title": {
+                                                    "type": "string",
+                                                    "description": "Product title (for the order confirmation)",
+                                                },
+                                                "unit_price": {
+                                                    "type": "number",
+                                                    "description": "Unit price in the store currency",
                                                 },
                                             },
                                             "required": ["product_id"],
@@ -363,6 +378,10 @@ class GeminiUCPAgent:
                                     "buyer_email": {
                                         "type": "string",
                                         "description": "Buyer's email address",
+                                    },
+                                    "po_number": {
+                                        "type": "string",
+                                        "description": "Purchase order number (for purchase_order payments)",
                                     },
                                 },
                                 "required": ["line_items"],

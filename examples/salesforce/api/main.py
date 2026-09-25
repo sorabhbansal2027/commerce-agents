@@ -15,6 +15,7 @@ import logging
 from commerce_common.memory import InMemoryMemoryStore
 from demo_common import (
     REPO_ROOT,
+    CartAddRequest,
     MemorySeeder,
     build_anthropic_client,
     build_storefront_host,
@@ -64,6 +65,15 @@ app = host.app
 app.include_router(create_merchant_router(backend, InMemoryMemoryStore()), prefix="/api/merchant")
 app.include_router(build_ucp_router(backend))  # UCP manifest at /.well-known/ucp
 app.mount("/products", StaticFiles(directory=PRODUCT_IMAGES_DIR, check_dir=False), name="products")
+
+
+@app.post("/api/cart/add")
+async def cart_add(request: CartAddRequest, record: host.CurrentSession) -> dict:
+    return await host.direct_add(
+        record,
+        request,
+        note="Customer tapped the add-to-cart button on {title} ({product_id}), quantity {quantity}.",
+    )
 
 
 @app.post("/api/reload-products")

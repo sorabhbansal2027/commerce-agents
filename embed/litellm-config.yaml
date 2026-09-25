@@ -18,27 +18,26 @@
 model_list:
 
   # Shopping agent main model (ShoppingAgentConfig.model default: "claude-sonnet-5")
-  # Verify this ID is enabled: AWS Console → Bedrock → Model access → us-east-1
   - model_name: claude-sonnet-5
     litellm_params:
-      model: bedrock/us.anthropic.claude-sonnet-4-5-20250929-v1:0
-      aws_region_name: us-east-1
+      model: gemini/gemini-2.5-flash
+      api_key: os.environ/GEMINI_API_KEY
 
   # Merchant agent main model (MerchantAgentConfig.model default: "claude-opus-5")
   - model_name: claude-opus-5
     litellm_params:
-      model: bedrock/us.anthropic.claude-sonnet-4-5-20250929-v1:0
-      aws_region_name: us-east-1
+      model: gemini/gemini-2.5-pro
+      api_key: os.environ/GEMINI_API_KEY
 
   # Memory extraction model (DEFAULT_MEMORY_MODEL: "claude-haiku-4-5-20251001")
   - model_name: claude-haiku-4-5-20251001
     litellm_params:
-      model: bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0
-      aws_region_name: us-east-1
+      model: gemini/gemini-2.5-flash
+      api_key: os.environ/GEMINI_API_KEY
 
 general_settings:
   # The FastAPI container sets ANTHROPIC_API_KEY=sk-litellm-key to satisfy the SDK's
-  # key check; LiteLLM validates against this master key before forwarding to Bedrock.
+  # key check; LiteLLM validates against this master key before forwarding to Gemini.
   master_key: sk-litellm-key
-  # Drop streaming keep-alives that confuse some proxies
+  # Drop Anthropic-specific params Gemini doesn't support
   drop_params: true

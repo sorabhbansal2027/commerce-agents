@@ -59,7 +59,29 @@ class _SFCCAdapter:
 
     async def get_inventory_alerts(self, session: MerchantSessionContext) -> list:
         try:
-            return await self._sfcc.get_inventory_alerts(session)
+            from merchant_agent import InventoryAlert
+            # inventory_lists is a global resource — must call with site=False
+            data = await self._sfcc._request(
+                "GET",
+                f"inventory_lists/{self._sfcc._inv_list}/product_inventory_records"
+                "?select=(**),availability&count=200",
+                site=False,
+            )
+            records = (data or {}).get("data", [])
+            alerts = []
+            for r in records:
+                ats = r.get("ats", r.get("allocation", 0)) or 0
+                if ats <= 5:
+                    alerts.append(
+                        InventoryAlert(
+                            listing_id=r.get("id", ""),
+                            title=r.get("id", ""),
+                            alert_kind="low_stock",
+                            stock=int(ats),
+                            threshold=5,
+                        )
+                    )
+            return alerts
         except (httpx.HTTPStatusError, httpx.ConnectError) as exc:
             log.warning("SFCC inventory OCAPI unavailable (%s)", exc)
             return []

@@ -286,6 +286,13 @@ async def login(request: Request) -> JSONResponse:
     return JSONResponse({"ok": True, "session": {k: v for k, v in _session.items() if k != "sf_session_id"}})
 
 
+@app.get("/api/server-ip")
+async def server_ip() -> JSONResponse:
+    async with httpx.AsyncClient(timeout=5) as client:
+        r = await client.get("https://api.ipify.org?format=json")
+        return JSONResponse(r.json())
+
+
 @app.get("/api/session")
 async def get_session_ep() -> JSONResponse:
     return JSONResponse(_session)

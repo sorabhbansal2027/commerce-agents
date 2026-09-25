@@ -35,7 +35,8 @@ class _SFCCAdapter:
 
     @property
     def store_name(self) -> str:
-        return self._sfcc._site_id
+        # _site_id is "-" (org-level) when SFCC_SITE_ID=-; use display name instead
+        return os.environ.get("SFCC_DISPLAY_SITE_ID", "DreamHaus")
 
     @property
     def products(self) -> dict:
@@ -60,12 +61,12 @@ class _SFCCAdapter:
     async def get_inventory_alerts(self, session: MerchantSessionContext) -> list:
         try:
             from merchant_agent import InventoryAlert
-            # inventory_lists is a global resource — must call with site=False
+            # Use org-level access (/s/-/) with correct selector — no trailing field after (**)
             data = await self._sfcc._request(
                 "GET",
                 f"inventory_lists/{self._sfcc._inv_list}/product_inventory_records"
-                "?select=(**),availability&count=200",
-                site=False,
+                "?select=(**)",
+                site=True,
             )
             records = (data or {}).get("data", [])
             alerts = []

@@ -214,6 +214,10 @@ class GeminiUCPAgent:
                     body["buyer_session_id"] = args["buyer_session_id"]
                 if args.get("buyer_instance_url"):
                     body["buyer_instance_url"] = args["buyer_instance_url"]
+                if args.get("shipping_address"):
+                    body["shipping_address"] = args["shipping_address"]
+                if args.get("billing_address"):
+                    body["billing_address"] = args["billing_address"]
                 r = self._http.post(f"{self.base}/ucp/orders", json=body)
                 r.raise_for_status()
                 return r.json()
@@ -388,6 +392,30 @@ class GeminiUCPAgent:
                                     "po_number": {
                                         "type": "string",
                                         "description": "Purchase order number (for purchase_order payments)",
+                                    },
+                                    "shipping_address": {
+                                        "type": "object",
+                                        "description": "Shipping delivery address for the order",
+                                        "properties": {
+                                            "name":       {"type": "string"},
+                                            "street":     {"type": "string"},
+                                            "city":       {"type": "string"},
+                                            "state":      {"type": "string"},
+                                            "postalCode": {"type": "string"},
+                                            "country":    {"type": "string"},
+                                        },
+                                    },
+                                    "billing_address": {
+                                        "type": "object",
+                                        "description": "Billing address (defaults to shipping_address when omitted)",
+                                        "properties": {
+                                            "name":       {"type": "string"},
+                                            "street":     {"type": "string"},
+                                            "city":       {"type": "string"},
+                                            "state":      {"type": "string"},
+                                            "postalCode": {"type": "string"},
+                                            "country":    {"type": "string"},
+                                        },
                                     },
                                 },
                                 "required": ["line_items"],

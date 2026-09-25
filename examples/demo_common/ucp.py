@@ -255,81 +255,341 @@ def build_ucp_router(backend: Any) -> APIRouter:
 
     # ── Checkout session ───────────────────────────────────────────────────
 
-    @router.post("/ucp/checkout-sessions", status_code=201, summary="UCP checkout session")
+    async def _resolve_buyer_params(body: dict) -> tuple[str, str, dict, dict, dict]:
+        """Return (buyer_uid, account_id, eff_params, buyer_auth_kwargs, req_params).
+
+        Raises ValueError with a user-friendly message when required fields are missing.
+        """
+        buyer_uid = body.get("buyer_user_id") or _SF_BUYER_USER_ID
+        if not buyer_uid:
+            raise ValueError(
+                "No buyer user ID. Log in via Salesforce first or set SF_BUYER_USER_ID."
+            )
+        account_id = body.get("buyer_account_id") or ""
+        if not account_id and hasattr(backend, "_account_id_for_user"):
+            account_id = (await backend._account_id_for_user(buyer_uid)) or ""
+        if not account_id:
+            raise ValueError(
+                f"No buyer account found for user {buyer_uid}. "
+                "The user must be an active B2B Commerce portal user."
+            )
+        eff_params = {"effectiveAccountId": account_id}
+        buyer_session_id = (body.get("buyer_session_id") or "").strip()
+        buyer_instance_url = (body.get("buyer_instance_url") or "").strip()
+        buyer_auth_kwargs: dict = {}
+        if buyer_session_id:
+            buyer_auth_kwargs = {
+                "auth_token": buyer_session_id,
+                **({"instance_url": buyer_instance_url} if buyer_instance_url else {}),
+            }
+        req_params = {} if buyer_session_id else eff_params
+        return buyer_uid, account_id, eff_params, buyer_auth_kwargs, req_params
+
+    async def _get_or_create_cart(
+        backend: Any, webstore_id: str, account_id: str, buyer_auth_kwargs: dict, req_params: dict
+    ) -> tuple[str, str]:
+        """Return (cart_id, currency) for the buyer's active cart, creating one if needed."""
+        all_open_rows = await backend._soql(
+            f"SELECT Id, Status, CurrencyIsoCode FROM WebCart "
+            f"WHERE AccountId = '{account_id}' AND WebStoreId = '{webstore_id}' "
+            f"AND Status IN ('Active', 'Checkout') "
+            f"ORDER BY LastModifiedDate DESC LIMIT 10"
+        )
+        active_rows = [r for r in all_open_rows if r.get("Status") == "Active"]
+        checkout_rows = [r for r in all_open_rows if r.get("Status") == "Checkout"]
+
+        if active_rows:
+            return active_rows[0]["Id"], active_rows[0].get("CurrencyIsoCode", "USD")
+
+        for old in checkout_rows:
+            with contextlib.suppress(Exception):
+                await backend._b2b_request(
+                    "PATCH", f"/sobjects/WebCart/{old['Id']}",
+                    **buyer_auth_kwargs, json={"Status": "Closed"},
+                )
+        new_cart = await backend._b2b_request(
+            "POST", f"/commerce/webstores/{webstore_id}/carts",
+            **buyer_auth_kwargs, params=req_params, json={},
+        )
+        cart_id = new_cart.get("cartId") or new_cart.get("id") or new_cart.get("Id", "")
+        currency = new_cart.get("currencyIsoCode", "USD")
+        return cart_id, currency
+
+    async def _add_items_to_cart(
+        backend: Any, webstore_id: str, cart_id: str,
+        line_items: list, buyer_auth_kwargs: dict, req_params: dict, currency: str,
+    ) -> tuple[list, str]:
+        """Add line_items to cart_id. Returns (placed_items, first_error)."""
+        placed_items: list[dict] = []
+        first_error = ""
+        for item in line_items:
+            pid = item.get("product_id", "")
+            qty = max(1, int(item.get("quantity", 1)))
+            if not pid:
+                continue
+            added = False
+            try:
+                await backend._b2b_request(
+                    "POST",
+                    f"/commerce/webstores/{webstore_id}/carts/{cart_id}/cart-items",
+                    **buyer_auth_kwargs,
+                    params=req_params,
+                    json={"productId": pid, "quantity": qty, "type": "Product"},
+                )
+                added = True
+            except Exception as item_exc:
+                if not first_error:
+                    first_error = str(item_exc)
+                try:
+                    await backend._add_to_cart_direct(cart_id, pid, qty)
+                    added = True
+                except Exception:
+                    pass
+            if added:
+                placed_items.append({
+                    "product_id": pid,
+                    "title": item.get("title", pid),
+                    "quantity": qty,
+                    "unit_price": float(item.get("unit_price", 0)),
+                    "line_total": round(float(item.get("unit_price", 0)) * qty, 2),
+                    "currency": currency,
+                })
+        return placed_items, first_error
+
+    @router.post("/ucp/checkout-sessions", status_code=201, summary="Create B2B checkout session")
     async def ucp_create_checkout_session(request: Request) -> Response:
-        """Create a UCP checkout session from a list of line items.
+        """Create Salesforce WebCart with line items and initiate a B2B checkout session.
 
         Request body::
 
             {
-              "line_items": [{"product_id": "...", "quantity": 1}],
-              "buyer": {"name": "...", "email": "..."},
-              "payment_handler": "credit_card"
+              "line_items": [{"product_id": "...", "quantity": 1, "title": "...", "unit_price": 0}],
+              "payment_handler": "purchase_order",
+              "buyer_user_id": "005...",
+              "buyer_account_id": "001...",
+              "buyer_session_id": "",
+              "buyer_instance_url": ""
             }
 
-        Returns a pending checkout session. No charge is made here.
+        Returns ``{checkout_session_id, cart_id, delivery_group_id, ...}`` for use in
+        subsequent PATCH (address) and place-order steps.
         """
+        if not hasattr(backend, "_b2b_request") or not hasattr(backend, "_ensure_webstore_id"):
+            return Response(
+                status_code=501,
+                content=json.dumps({"error": "Backend does not support B2B checkout."}),
+                media_type="application/json",
+            )
         body = await request.json()
         line_items = body.get("line_items", [])
-        session_id = f"ucp-{uuid.uuid4().hex[:12]}"
+        try:
+            buyer_uid, account_id, eff_params, buyer_auth_kwargs, req_params = (
+                await _resolve_buyer_params(body)
+            )
+            webstore_id = await backend._ensure_webstore_id()
+            cart_id, currency = await _get_or_create_cart(
+                backend, webstore_id, account_id, buyer_auth_kwargs, req_params
+            )
+            if not cart_id:
+                return Response(status_code=500,
+                    content=json.dumps({"error": "Could not locate or create a B2B cart."}),
+                    media_type="application/json")
 
-        total = 0.0
-        items_out = []
-        for item in line_items:
-            p = backend.product(item.get("product_id", ""))
-            if p is not None:
-                price = float(p.price or 0)
-                qty = max(1, int(item.get("quantity", 1)))
-                total += price * qty
-                items_out.append(
-                    {
-                        "product_id": p.product_id
-                        if hasattr(p, "product_id")
-                        else getattr(p, "listing_id", ""),
-                        "title": p.title,
-                        "quantity": qty,
-                        "unit_price": price,
-                        "line_total": round(price * qty, 2),
-                        "currency": getattr(p, "currency", "USD"),
-                    }
-                )
+            placed_items, first_error = await _add_items_to_cart(
+                backend, webstore_id, cart_id, line_items, buyer_auth_kwargs, req_params, currency
+            )
+            if not placed_items:
+                err = "No items could be added to the cart."
+                if first_error:
+                    err += f" Detail: {first_error}"
+                return Response(status_code=500,
+                    content=json.dumps({"error": err}), media_type="application/json")
 
-        payload = {
-            "checkout_session_id": session_id,
-            "status": "pending",
-            "line_items": items_out,
-            "subtotal": round(total, 2),
-            "currency": "USD",
-            "payment_handler": body.get("payment_handler", "credit_card"),
-            "buyer": body.get("buyer", {}),
-            "agent_note": (
-                "This UCP checkout session is pending buyer confirmation. "
-                "No payment has been charged. The buyer must complete checkout "
-                "through the storefront UI or agent."
-            ),
-        }
-        return Response(
-            content=json.dumps(payload),
-            media_type="application/json",
-            status_code=201,
-        )
+            # POST /checkouts to initiate the B2B checkout session.
+            checkout_body: dict = {"cartReference": {"id": cart_id}}
+            if not buyer_auth_kwargs and account_id:
+                checkout_body["effectiveAccountId"] = account_id
+            checkout_resp = await backend._b2b_request(
+                "POST", f"/commerce/webstores/{webstore_id}/checkouts",
+                **buyer_auth_kwargs, json=checkout_body,
+            )
+            checkout_id = (
+                checkout_resp.get("checkoutId")
+                or checkout_resp.get("cartId")
+                or cart_id
+            )
+            # Extract the delivery group ID so the caller can include it in the
+            # address PATCH without an extra round-trip.
+            dg_records = checkout_resp.get("deliveryGroups", {}).get("records", [])
+            delivery_group_id = dg_records[0].get("id", "") if dg_records else ""
+
+            subtotal = round(sum(i["line_total"] for i in placed_items), 2)
+            return Response(
+                content=json.dumps({
+                    "checkout_session_id": checkout_id,
+                    "cart_id": cart_id,
+                    "delivery_group_id": delivery_group_id,
+                    "status": "pending",
+                    "line_items": placed_items,
+                    "subtotal": subtotal,
+                    "currency": currency,
+                    "payment_handler": body.get("payment_handler", "purchase_order"),
+                }),
+                media_type="application/json",
+                status_code=201,
+            )
+        except ValueError as exc:
+            return Response(status_code=400,
+                content=json.dumps({"error": str(exc)}), media_type="application/json")
+        except Exception:
+            _log.exception("ucp_create_checkout_session failed")
+            return Response(status_code=500,
+                content=json.dumps({"error": "Checkout session creation failed."}),
+                media_type="application/json")
+
+    @router.patch("/ucp/checkout-sessions/{session_id}", summary="Set address on checkout session")
+    async def ucp_update_checkout_session(session_id: str, request: Request) -> Response:
+        """Set shipping address, billing address, and payment details on a checkout session.
+
+        Request body::
+
+            {
+              "shipping_address": {"name": "...", "street": "...", "city": "...",
+                                   "state": "...", "postalCode": "...", "country": "US"},
+              "billing_address": {"name": "...", ...},   // defaults to shipping_address
+              "po_number": "PO-12345",
+              "delivery_group_id": "0lb...",
+              "buyer_account_id": "001...",
+              "buyer_session_id": ""
+            }
+        """
+        if not hasattr(backend, "_b2b_request") or not hasattr(backend, "_ensure_webstore_id"):
+            return Response(status_code=501,
+                content=json.dumps({"error": "Backend does not support B2B checkout."}),
+                media_type="application/json")
+        body = await request.json()
+        shipping_address: dict = body.get("shipping_address") or {}
+        billing_address: dict = body.get("billing_address") or shipping_address
+        po_number: str = body.get("po_number", "")
+        delivery_group_id: str = body.get("delivery_group_id", "")
+        account_id: str = body.get("buyer_account_id", "")
+        buyer_session_id: str = (body.get("buyer_session_id") or "").strip()
+        buyer_instance_url: str = (body.get("buyer_instance_url") or "").strip()
+
+        buyer_auth_kwargs: dict = {}
+        if buyer_session_id:
+            buyer_auth_kwargs = {
+                "auth_token": buyer_session_id,
+                **({"instance_url": buyer_instance_url} if buyer_instance_url else {}),
+            }
+        req_params: dict = {} if buyer_session_id else ({"effectiveAccountId": account_id} if account_id else {})
+
+        try:
+            webstore_id = await backend._ensure_webstore_id()
+            patch_body: dict[str, Any] = {}
+            if po_number:
+                patch_body["poNumber"] = po_number
+            # Set shipping address on the delivery group.
+            if shipping_address and delivery_group_id:
+                patch_body["deliveryGroups"] = {
+                    "records": [{"id": delivery_group_id, "deliveryAddress": shipping_address}]
+                }
+            # Set billing address on the payment method.
+            if billing_address:
+                patch_body["paymentMethod"] = {"billingAddress": billing_address}
+            if not patch_body:
+                return Response(content=json.dumps({"ok": True, "note": "Nothing to patch."}),
+                    media_type="application/json")
+            await backend._b2b_request(
+                "PATCH", f"/commerce/webstores/{webstore_id}/checkouts/{session_id}",
+                **buyer_auth_kwargs, params=req_params, json=patch_body,
+            )
+            return Response(content=json.dumps({"ok": True, "checkout_session_id": session_id}),
+                media_type="application/json")
+        except Exception as exc:
+            _log.warning("ucp_update_checkout_session failed: %s", exc)
+            return Response(status_code=500,
+                content=json.dumps({"error": f"Address update failed: {exc}"}),
+                media_type="application/json")
+
+    @router.post("/ucp/checkout-sessions/{session_id}/place-order", status_code=201,
+                 summary="Place order from checkout session")
+    async def ucp_place_order_from_session(session_id: str, request: Request) -> Response:
+        """Place a B2B Commerce order from an existing checkout session.
+
+        Request body::
+
+            {
+              "buyer_user_id": "005...",
+              "buyer_account_id": "001...",
+              "buyer_session_id": "",
+              "buyer_instance_url": ""
+            }
+
+        Returns the placed order details.
+        """
+        if not hasattr(backend, "_b2b_request") or not hasattr(backend, "_ensure_webstore_id"):
+            return Response(status_code=501,
+                content=json.dumps({"error": "Backend does not support B2B checkout."}),
+                media_type="application/json")
+        body = await request.json()
+        try:
+            buyer_uid, account_id, eff_params, buyer_auth_kwargs, req_params = (
+                await _resolve_buyer_params(body)
+            )
+            webstore_id = await backend._ensure_webstore_id()
+            place_resp = await backend._b2b_request(
+                "POST",
+                f"/commerce/webstores/{webstore_id}/checkouts/{session_id}/actions/place-order",
+                **buyer_auth_kwargs, params=req_params, json={},
+            )
+            sf_order_id = (
+                place_resp.get("orderId") or place_resp.get("orderSummaryId")
+                or place_resp.get("id") or ""
+            )
+            order_number = (
+                place_resp.get("orderNumber") or place_resp.get("orderReferenceNumber")
+                or sf_order_id
+            )
+            return Response(
+                content=json.dumps({
+                    "order_id": order_number,
+                    "salesforce_order_id": sf_order_id,
+                    "status": "placed",
+                    "checkout_session_id": session_id,
+                }),
+                media_type="application/json",
+                status_code=201,
+            )
+        except ValueError as exc:
+            return Response(status_code=400,
+                content=json.dumps({"error": str(exc)}), media_type="application/json")
+        except Exception as exc:
+            _log.exception("ucp_place_order_from_session failed")
+            return Response(status_code=500,
+                content=json.dumps({"error": f"Place order failed: {exc}"}),
+                media_type="application/json")
 
     @router.get("/ucp/checkout-sessions/{session_id}", summary="UCP checkout session status")
     async def ucp_get_checkout_session(session_id: str, request: Request) -> Response:
-        """Retrieve a checkout session status by ID."""
-        return Response(
-            content=json.dumps(
-                {
-                    "checkout_session_id": session_id,
-                    "status": "pending",
-                    "note": (
-                        "Reference implementation: session state is not persisted. "
-                        "Integrate with your order management system for live status."
-                    ),
-                }
-            ),
-            media_type="application/json",
-        )
+        """Retrieve checkout session status. Proxies to SF B2B checkout resource."""
+        if not hasattr(backend, "_b2b_request") or not hasattr(backend, "_ensure_webstore_id"):
+            return Response(
+                content=json.dumps({"checkout_session_id": session_id, "status": "pending"}),
+                media_type="application/json",
+            )
+        try:
+            webstore_id = await backend._ensure_webstore_id()
+            data = await backend._b2b_request(
+                "GET", f"/commerce/webstores/{webstore_id}/checkouts/{session_id}",
+            )
+            data["checkout_session_id"] = session_id
+            return Response(content=json.dumps(data), media_type="application/json")
+        except Exception:
+            return Response(
+                content=json.dumps({"checkout_session_id": session_id, "status": "unknown"}),
+                media_type="application/json",
+            )
 
     # ── Active cart fetch ──────────────────────────────────────────────────────
 
@@ -393,221 +653,90 @@ def build_ucp_router(backend: Any) -> APIRouter:
         line_items = body.get("line_items", [])
         payment_handler = body.get("payment_handler", "purchase_order")
         buyer = body.get("buyer", {})
-
-        # buyer_user_id comes from the logged-in user's Salesforce session (preferred);
-        # fall back to the env var for backwards-compat / local dev
-        buyer_uid = body.get("buyer_user_id") or _SF_BUYER_USER_ID
-        buyer_session_id   = (body.get("buyer_session_id")   or "").strip()
-        buyer_instance_url = (body.get("buyer_instance_url") or "").strip()
-        if not buyer_uid:
-            return Response(
-                status_code=501,
-                content=json.dumps(
-                    {
-                        "error": "No buyer user ID available. Log in via Salesforce first, "
-                        "or set SF_BUYER_USER_ID on this service."
-                    }
-                ),
-                media_type="application/json",
-            )
+        shipping_address: dict = body.get("shipping_address") or {}
+        billing_address: dict = body.get("billing_address") or shipping_address
 
         if not hasattr(backend, "_b2b_request") or not hasattr(backend, "_ensure_webstore_id"):
             return Response(
                 status_code=501,
-                content=json.dumps(
-                    {"error": "Backend does not support direct B2B order placement."}
-                ),
+                content=json.dumps({"error": "Backend does not support direct B2B order placement."}),
                 media_type="application/json",
             )
 
         try:
+            buyer_uid, account_id, eff_params, buyer_auth_kwargs, req_params = (
+                await _resolve_buyer_params(body)
+            )
             webstore_id = await backend._ensure_webstore_id()
-            # Prefer account_id supplied at login (from buyer/login response) to
-            # avoid an extra SOQL round-trip on every order.
-            account_id = body.get("buyer_account_id") or await backend._account_id_for_user(
-                buyer_uid
+
+            # ── 1. Find or create an Active cart ────────────────────────────────
+            cart_id, currency = await _get_or_create_cart(
+                backend, webstore_id, account_id, buyer_auth_kwargs, req_params
             )
-
-            # effectiveAccountId is required for all B2B headless cart operations.
-            # Without it the integration user's context is used, which creates a cart
-            # the buyer can't see and that SOQL by OwnerId will never find.
-            if not account_id:
-                return Response(
-                    status_code=501,
-                    content=json.dumps(
-                        {
-                            "error": f"No buyer account found for user {buyer_uid}. "
-                            "The signed-in user must be an active B2B Commerce portal "
-                            "user with an associated Account."
-                        }
-                    ),
-                    media_type="application/json",
-                )
-            eff_params = {"effectiveAccountId": account_id}
-
-            # When the buyer logged in via SOAP we have their session token and can
-            # call B2B Commerce APIs directly as that user — no effectiveAccountId needed.
-            # Fall back to admin client-credentials + effectiveAccountId when no session.
-            buyer_auth_kwargs: dict = {}
-            if buyer_session_id:
-                buyer_auth_kwargs = {
-                    "auth_token": buyer_session_id,
-                    **({"instance_url": buyer_instance_url} if buyer_instance_url else {}),
-                }
-            req_params = {} if buyer_session_id else eff_params
-
-            # ── 1. Find or create an Active cart for this account ───────────────
-            # Primary: look up by AccountId (OwnerId may differ for portal users).
-            # If only Checkout-status carts exist they block new cart creation, so
-            # close them first before creating a fresh one.
-            cart_id = ""
-            currency = "USD"
-            all_open_rows = await backend._soql(
-                f"SELECT Id, Status, CurrencyIsoCode FROM WebCart "
-                f"WHERE AccountId = '{account_id}' AND WebStoreId = '{webstore_id}' "
-                f"AND Status IN ('Active', 'Checkout') "
-                f"ORDER BY LastModifiedDate DESC LIMIT 10"
-            )
-            active_rows = [r for r in all_open_rows if r.get("Status") == "Active"]
-            checkout_rows = [r for r in all_open_rows if r.get("Status") == "Checkout"]
-
-            if active_rows:
-                cart_id = active_rows[0]["Id"]
-                currency = active_rows[0].get("CurrencyIsoCode", "USD")
-            else:
-                # Close any stuck Checkout-status carts so we can create a fresh one.
-                for old in checkout_rows:
-                    with contextlib.suppress(Exception):
-                        await backend._b2b_request(
-                            "PATCH",
-                            f"/sobjects/WebCart/{old['Id']}",
-                            **buyer_auth_kwargs,
-                            json={"Status": "Closed"},
-                        )
-                # Create a new cart for the buyer account.
-                new_cart = await backend._b2b_request(
-                    "POST",
-                    f"/commerce/webstores/{webstore_id}/carts",
-                    **buyer_auth_kwargs,
-                    params=req_params,
-                    json={},
-                )
-                cart_id = new_cart.get("cartId") or new_cart.get("id") or new_cart.get("Id", "")
-                currency = new_cart.get("currencyIsoCode", "USD")
-
             if not cart_id:
-                return Response(
-                    status_code=500,
+                return Response(status_code=500,
                     content=json.dumps({"error": "Could not locate or create a B2B cart."}),
-                    media_type="application/json",
-                )
+                    media_type="application/json")
 
-            # ── 2. Add each item to the cart ────────────────────────────────────
-            # B2B Commerce cart-items API requires quantity as an integer and the
-            # "type" field.  Direct CartItem insert is used as fallback for products
-            # not yet in the search index (returns NOT_FOUND, not 400).
-            placed_items: list[dict] = []
-            first_item_error: str = ""
-            for item in line_items:
-                pid = item.get("product_id", "")
-                qty = max(1, int(item.get("quantity", 1)))
-                if not pid:
-                    continue
-                added = False
-                try:
-                    await backend._b2b_request(
-                        "POST",
-                        f"/commerce/webstores/{webstore_id}/carts/{cart_id}/cart-items",
-                        **buyer_auth_kwargs,
-                        params=req_params,
-                        json={"productId": pid, "quantity": qty, "type": "Product"},
-                    )
-                    added = True
-                except Exception as item_exc:
-                    if not first_item_error:
-                        first_item_error = str(item_exc)
-                    try:
-                        await backend._add_to_cart_direct(cart_id, pid, qty)
-                        added = True
-                    except Exception:
-                        pass
-                if added:
-                    placed_items.append(
-                        {
-                            "product_id": pid,
-                            "title": item.get("title", pid),
-                            "quantity": qty,
-                            "unit_price": float(item.get("unit_price", 0)),
-                            "line_total": round(float(item.get("unit_price", 0)) * qty, 2),
-                            "currency": currency,
-                        }
-                    )
-
+            # ── 2. Add items to the cart ─────────────────────────────────────────
+            placed_items, first_item_error = await _add_items_to_cart(
+                backend, webstore_id, cart_id, line_items, buyer_auth_kwargs, req_params, currency
+            )
             if not placed_items:
                 error_msg = "No items could be added to the cart."
                 if first_item_error:
                     error_msg += f" Detail: {first_item_error}"
-                return Response(
-                    status_code=500,
-                    content=json.dumps({"error": error_msg}),
-                    media_type="application/json",
-                )
+                return Response(status_code=500,
+                    content=json.dumps({"error": error_msg}), media_type="application/json")
 
-            # ── 3. Initiate checkout via B2B Commerce checkout API ───────────────
-            # POST /checkouts is the canonical B2B Commerce Checkout API endpoint.
-            # effectiveAccountId goes in the body (not query param) for this call.
+            # ── 3. Initiate B2B checkout session ─────────────────────────────────
             po_number = body.get("po_number", "")
             checkout_body: dict = {"cartReference": {"id": cart_id}}
-            if not buyer_session_id and account_id:
+            if not buyer_auth_kwargs and account_id:
                 checkout_body["effectiveAccountId"] = account_id
             checkout_resp = await backend._b2b_request(
-                "POST",
-                f"/commerce/webstores/{webstore_id}/checkouts",
-                **buyer_auth_kwargs,
-                json=checkout_body,
+                "POST", f"/commerce/webstores/{webstore_id}/checkouts",
+                **buyer_auth_kwargs, json=checkout_body,
             )
             checkout_id: str = (
                 checkout_resp.get("checkoutId")
                 or checkout_resp.get("cartId")
                 or cart_id
             )
+            dg_records = checkout_resp.get("deliveryGroups", {}).get("records", [])
+            delivery_group_id = dg_records[0].get("id", "") if dg_records else ""
 
-            # ── 4. Set payment details on the checkout ────────────────────────────
-            # PATCH the checkout to record the payment method and optional PO number.
+            # ── 4. Set payment details, shipping and billing address ──────────────
             patch_body: dict[str, Any] = {}
-            if payment_handler == "purchase_order" and po_number:
+            if po_number:
                 patch_body["poNumber"] = po_number
+            if shipping_address and delivery_group_id:
+                patch_body["deliveryGroups"] = {
+                    "records": [{"id": delivery_group_id, "deliveryAddress": shipping_address}]
+                }
+            if billing_address:
+                patch_body["paymentMethod"] = {"billingAddress": billing_address}
             if patch_body:
                 try:
                     await backend._b2b_request(
-                        "PATCH",
-                        f"/commerce/webstores/{webstore_id}/checkouts/{checkout_id}",
-                        **buyer_auth_kwargs,
-                        params=req_params,
-                        json=patch_body,
+                        "PATCH", f"/commerce/webstores/{webstore_id}/checkouts/{checkout_id}",
+                        **buyer_auth_kwargs, params=req_params, json=patch_body,
                     )
                 except Exception as patch_exc:
                     _log.warning("Checkout PATCH failed (continuing): %s", patch_exc)
 
-            # ── 5. Place the order via B2B Commerce place-order action ─────────────
-            # POST .../checkouts/{checkoutId}/actions/place-order submits the order,
-            # closes the cart, and returns the Salesforce Order record details.
+            # ── 5. Place the order ────────────────────────────────────────────────
             place_resp = await backend._b2b_request(
                 "POST",
                 f"/commerce/webstores/{webstore_id}/checkouts/{checkout_id}/actions/place-order",
-                **buyer_auth_kwargs,
-                params=req_params,
-                json={},
+                **buyer_auth_kwargs, params=req_params, json={},
             )
             sf_order_id: str = (
-                place_resp.get("orderId")
-                or place_resp.get("orderSummaryId")
-                or place_resp.get("id")
-                or ""
+                place_resp.get("orderId") or place_resp.get("orderSummaryId")
+                or place_resp.get("id") or ""
             )
             order_number: str = (
-                place_resp.get("orderNumber")
-                or place_resp.get("orderReferenceNumber")
+                place_resp.get("orderNumber") or place_resp.get("orderReferenceNumber")
                 or sf_order_id
             )
 
@@ -622,11 +751,13 @@ def build_ucp_router(backend: Any) -> APIRouter:
                 "payment_handler": payment_handler,
                 "po_number": po_number or None,
                 "buyer": buyer,
+                "shipping_address": shipping_address or None,
             }
-            return Response(
-                content=json.dumps(payload), status_code=201, media_type="application/json"
-            )
+            return Response(content=json.dumps(payload), status_code=201, media_type="application/json")
 
+        except ValueError as exc:
+            return Response(status_code=400,
+                content=json.dumps({"error": str(exc)}), media_type="application/json")
         except Exception as exc:
             _log.exception("ucp_place_b2b_order failed")
             return Response(

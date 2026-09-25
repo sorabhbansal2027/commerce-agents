@@ -124,6 +124,8 @@ class TrackedAgent(GeminiUCPAgent):
         self.buyer_account_id: str = ""
         self.buyer_session_id: str = ""
         self.buyer_instance_url: str = ""
+        self.shipping_address: dict = {}
+        self.billing_address: dict = {}
 
     def _call_ucp(self, fn_name: str, args: dict) -> dict:
         if fn_name == "place_order":
@@ -136,6 +138,11 @@ class TrackedAgent(GeminiUCPAgent):
                 extra["buyer_session_id"] = self.buyer_session_id
             if self.buyer_instance_url:
                 extra["buyer_instance_url"] = self.buyer_instance_url
+            # Inject address data captured by the checkout form.
+            if self.shipping_address and "shipping_address" not in args:
+                extra["shipping_address"] = self.shipping_address
+            if self.billing_address and "billing_address" not in args:
+                extra["billing_address"] = self.billing_address
             if extra:
                 args = {**args, **extra}
         result = super()._call_ucp(fn_name, args)
@@ -297,6 +304,12 @@ async def chat(request: Request) -> JSONResponse:
     agent.buyer_account_id   = _session.get("sf_account_id",   "")
     agent.buyer_session_id   = _session.get("sf_session_id",   "")
     agent.buyer_instance_url = _session.get("sf_instance_url", "")
+    # Accept address data captured in the checkout form so the agent
+    # can include it in the place_order tool call automatically.
+    if body.get("shipping_address"):
+        agent.shipping_address = body["shipping_address"]
+    if body.get("billing_address"):
+        agent.billing_address = body["billing_address"]
     try:
         reply = agent.send(body.get("message", ""))
     except Exception as exc:
@@ -307,6 +320,66 @@ async def chat(request: Request) -> JSONResponse:
         "tool_calls": agent.last_tool_calls,
         "order": agent.last_order,
     })
+
+
+@app.post("/api/checkout/session")
+async def checkout_create_session(request: Request) -> JSONResponse:
+    """Create an SF B2B checkout session from the current JS cart items.
+
+    Body: {line_items: [...]}
+    Returns {checkout_session_id, cart_id, delivery_group_id, ...}
+    """
+    body = await request.json()
+    payload = {
+        "line_items": body.get("line_items", []),
+        "payment_handler": body.get("payment_handler", "purchase_order"),
+        "buyer_user_id":      _session.get("sf_user_id", ""),
+        "buyer_account_id":   _session.get("sf_account_id", ""),
+        "buyer_session_id":   _session.get("sf_session_id", ""),
+        "buyer_instance_url": _session.get("sf_instance_url", ""),
+    }
+    async with httpx.AsyncClient(timeout=30) as client:
+        r = await client.post(f"{UCP_BASE}/ucp/checkout-sessions", json=payload)
+    return JSONResponse(r.json(), status_code=r.status_code)
+
+
+@app.patch("/api/checkout/session/{session_id}")
+async def checkout_set_address(session_id: str, request: Request) -> JSONResponse:
+    """Set shipping/billing address on an SF B2B checkout session.
+
+    Body: {shipping_address, billing_address, po_number, delivery_group_id}
+    """
+    body = await request.json()
+    payload = {
+        "shipping_address":  body.get("shipping_address") or {},
+        "billing_address":   body.get("billing_address") or {},
+        "po_number":         body.get("po_number", ""),
+        "delivery_group_id": body.get("delivery_group_id", ""),
+        "buyer_account_id":  _session.get("sf_account_id", ""),
+        "buyer_session_id":  _session.get("sf_session_id", ""),
+        "buyer_instance_url": _session.get("sf_instance_url", ""),
+    }
+    async with httpx.AsyncClient(timeout=30) as client:
+        r = await client.patch(
+            f"{UCP_BASE}/ucp/checkout-sessions/{session_id}", json=payload
+        )
+    return JSONResponse(r.json(), status_code=r.status_code)
+
+
+@app.post("/api/checkout/session/{session_id}/place-order")
+async def checkout_place_order(session_id: str, request: Request) -> JSONResponse:
+    """Place a B2B Commerce order from an existing SF checkout session."""
+    payload = {
+        "buyer_user_id":      _session.get("sf_user_id", ""),
+        "buyer_account_id":   _session.get("sf_account_id", ""),
+        "buyer_session_id":   _session.get("sf_session_id", ""),
+        "buyer_instance_url": _session.get("sf_instance_url", ""),
+    }
+    async with httpx.AsyncClient(timeout=30) as client:
+        r = await client.post(
+            f"{UCP_BASE}/ucp/checkout-sessions/{session_id}/place-order", json=payload
+        )
+    return JSONResponse(r.json(), status_code=r.status_code)
 
 
 @app.post("/api/cart")
@@ -575,15 +648,19 @@ _DEMO_HTML = """<!DOCTYPE html>
   .co-item-price { font-weight: 700; color: var(--ink); }
 
   .co-fields { flex: 1; overflow-y: auto; padding: 8px 16px 12px;
-               display: flex; flex-direction: column; gap: 12px; }
+               display: flex; flex-direction: column; gap: 8px; }
+  .co-section-label { font-size: 10px; font-weight: 700; text-transform: uppercase;
+                      letter-spacing: .06em; color: var(--ink3); padding: 4px 0 2px; }
+  .co-field { display: flex; flex-direction: column; }
   .co-field label { font-size: 11px; font-weight: 700; color: var(--ink2);
-                    display: block; margin-bottom: 5px;
+                    display: block; margin-bottom: 4px;
                     text-transform: uppercase; letter-spacing: .04em; }
   .co-field input, .co-field select {
-    width: 100%; padding: 10px 12px; border: 1.5px solid var(--line);
-    border-radius: 10px; font-size: 13.5px; outline: none; background: var(--bg);
-    transition: border-color .15s, background .15s; color: var(--ink); }
+    width: 100%; padding: 8px 10px; border: 1.5px solid var(--line);
+    border-radius: 8px; font-size: 13px; outline: none; background: var(--bg);
+    transition: border-color .15s, background .15s; color: var(--ink); box-sizing:border-box; }
   .co-field input:focus, .co-field select:focus { border-color: var(--brand); background: var(--card); }
+  .co-field input::placeholder { color: var(--ink3); }
 
   .co-footer { border-top: 1px solid var(--line); padding: 14px 16px; flex-shrink: 0; }
   .co-total-row { display: flex; justify-content: space-between; align-items: center;
@@ -796,23 +873,76 @@ _DEMO_HTML = """<!DOCTYPE html>
         <span class="co-hdr-title">Checkout</span>
       </div>
       <div class="co-order-summary" id="co-order-summary"></div>
-      <div class="co-fields">
+      <div class="co-fields" style="overflow-y:auto;max-height:calc(100vh - 280px)">
+        <!-- Buyer info -->
+        <div class="co-section-label">Contact</div>
         <div class="co-field">
-          <label>Name <span style="text-transform:none;letter-spacing:0;font-weight:400">(optional)</span></label>
-          <input id="co-name" type="text" placeholder="Your name" autocomplete="name"/>
+          <input id="co-name" type="text" placeholder="Full name" autocomplete="name"/>
         </div>
         <div class="co-field">
-          <label>Email <span style="text-transform:none;letter-spacing:0;font-weight:400">(optional)</span></label>
-          <input id="co-email" type="email" placeholder="you@example.com" autocomplete="email"/>
+          <input id="co-email" type="email" placeholder="Email address" autocomplete="email"/>
+        </div>
+
+        <!-- Shipping address -->
+        <div class="co-section-label" style="margin-top:10px">Shipping Address</div>
+        <div class="co-field">
+          <input id="co-ship-street" type="text" placeholder="Street address" autocomplete="street-address" required/>
+        </div>
+        <div style="display:flex;gap:6px">
+          <div class="co-field" style="flex:1">
+            <input id="co-ship-city" type="text" placeholder="City" autocomplete="address-level2" required/>
+          </div>
+          <div class="co-field" style="width:60px">
+            <input id="co-ship-state" type="text" placeholder="State" autocomplete="address-level1"/>
+          </div>
+          <div class="co-field" style="width:90px">
+            <input id="co-ship-zip" type="text" placeholder="ZIP" autocomplete="postal-code" required/>
+          </div>
         </div>
         <div class="co-field">
-          <label>Payment Method</label>
+          <input id="co-ship-country" type="text" placeholder="Country" autocomplete="country" value="US"/>
+        </div>
+
+        <!-- Billing address toggle -->
+        <div class="co-section-label" style="margin-top:10px">Billing Address</div>
+        <div class="co-field" style="flex-direction:row;align-items:center;gap:8px;padding:4px 0">
+          <input type="checkbox" id="co-bill-same" checked style="width:auto;margin:0"
+                 onchange="document.getElementById('co-bill-fields').style.display=this.checked?'none':'block'"/>
+          <label for="co-bill-same" style="font-size:12px;font-weight:400;color:var(--ink2);margin:0;text-transform:none;letter-spacing:0">Same as shipping</label>
+        </div>
+        <div id="co-bill-fields" style="display:none">
+          <div class="co-field">
+            <input id="co-bill-street" type="text" placeholder="Street address" autocomplete="billing street-address"/>
+          </div>
+          <div style="display:flex;gap:6px">
+            <div class="co-field" style="flex:1">
+              <input id="co-bill-city" type="text" placeholder="City" autocomplete="billing address-level2"/>
+            </div>
+            <div class="co-field" style="width:60px">
+              <input id="co-bill-state" type="text" placeholder="State" autocomplete="billing address-level1"/>
+            </div>
+            <div class="co-field" style="width:90px">
+              <input id="co-bill-zip" type="text" placeholder="ZIP" autocomplete="billing postal-code"/>
+            </div>
+          </div>
+          <div class="co-field">
+            <input id="co-bill-country" type="text" placeholder="Country" autocomplete="billing country" value="US"/>
+          </div>
+        </div>
+
+        <!-- Payment -->
+        <div class="co-section-label" style="margin-top:10px">Payment</div>
+        <div class="co-field">
           <select id="co-payment">
             <option value="purchase_order">&#x1F4CB; Purchase Order</option>
             <option value="credit_card">&#x1F4B3; Credit Card</option>
           </select>
         </div>
+        <div class="co-field" id="co-po-field">
+          <input id="co-po-number" type="text" placeholder="PO number (optional)"/>
+        </div>
       </div>
+      <div id="co-status-msg" style="display:none;font-size:11px;color:var(--ink2);padding:4px 12px;text-align:center"></div>
       <div class="co-footer">
         <div class="co-total-row">
           <span class="co-total-label">Order total</span>
@@ -912,7 +1042,6 @@ function showCheckoutForm() {
   if (!items.length) return;
   const total = items.reduce((s,[,v]) => s + v.price * v.qty, 0);
 
-  // Render order summary with thumbnails
   document.getElementById("co-order-summary").innerHTML = items.map(([,item]) => {
     const img = item.image_url
       ? `<img class="co-item-thumb" src="${esc(item.image_url)}" alt="" onerror="this.style.background='#e5e7eb'">`
@@ -925,6 +1054,19 @@ function showCheckoutForm() {
   }).join("");
 
   document.getElementById("co-total-display").textContent = "$" + total.toFixed(2);
+  _setCoStatus("");
+  const placeBtn = document.getElementById("place-order-btn");
+  if (placeBtn) { placeBtn.disabled = false; placeBtn.innerHTML = "&#x2713;&ensp;Place Order"; }
+
+  // Show/hide PO number field based on payment selection
+  const payEl = document.getElementById("co-payment");
+  const poField = document.getElementById("co-po-field");
+  if (payEl && poField) {
+    const updatePoField = () => { poField.style.display = payEl.value === "purchase_order" ? "" : "none"; };
+    updatePoField();
+    payEl.onchange = updatePoField;
+  }
+
   cartView.style.display     = "none";
   checkoutView.style.display = "flex";
   orderConfirm.style.display = "none";
@@ -1106,59 +1248,112 @@ function cartAction(productId, btn) {
 }
 
 // ── Place order ─────────────────────────────────────────────────────────────
+function _collectAddress(prefix) {
+  const street  = document.getElementById(`co-${prefix}-street`)?.value.trim() || "";
+  const city    = document.getElementById(`co-${prefix}-city`)?.value.trim()   || "";
+  const state   = document.getElementById(`co-${prefix}-state`)?.value.trim()  || "";
+  const zip     = document.getElementById(`co-${prefix}-zip`)?.value.trim()    || "";
+  const country = document.getElementById(`co-${prefix}-country`)?.value.trim() || "US";
+  const name    = document.getElementById("co-name")?.value.trim() || "";
+  if (!street && !city) return null;
+  return { name, street, city, state, postalCode: zip, country };
+}
+
+function _setCoStatus(msg, isErr) {
+  const el = document.getElementById("co-status-msg");
+  if (!el) return;
+  el.textContent = msg;
+  el.style.color = isErr ? "var(--danger)" : "var(--ink2)";
+  el.style.display = msg ? "block" : "none";
+}
+
 async function placeOrder() {
   const items = Object.entries(cart);
   if (!items.length) return;
+
+  // Collect form data
+  const name    = document.getElementById("co-name").value.trim();
+  const email   = document.getElementById("co-email").value.trim();
+  const payment = document.getElementById("co-payment").value;
+  const poNum   = document.getElementById("co-po-number")?.value.trim() || "";
+  const shippingAddress = _collectAddress("ship");
+  const billingSame     = document.getElementById("co-bill-same")?.checked ?? true;
+  const billingAddress  = billingSame ? shippingAddress : _collectAddress("bill");
+
+  if (!shippingAddress) {
+    _setCoStatus("Please enter a shipping address.", true);
+    return;
+  }
+
   const btn = document.getElementById("place-order-btn");
   btn.disabled = true;
-  btn.innerHTML = "Placing order&#8230;";
 
-  const name      = document.getElementById("co-name").value.trim();
-  const email     = document.getElementById("co-email").value.trim();
-  const payment   = document.getElementById("co-payment").value;
   const payLabel  = payment === "purchase_order" ? "Purchase Order" : "Credit Card";
   const itemsSnap = items.map(([,v]) => ({...v}));
   const total     = items.reduce((s,[,v]) => s + v.price * v.qty, 0);
-  const summary   = items.map(([,v]) => `${v.title} (qty:${v.qty}, $${(v.price*v.qty).toFixed(2)})`).join("; ");
+  const lineItems = items.map(([pid, v]) => ({product_id: pid, quantity: v.qty, title: v.title, unit_price: v.price}));
 
   addUserMsg(`Place my order — ${items.length} item${items.length>1?"s":""}, $${total.toFixed(2)} via ${payLabel}`);
   showCartView();
   setBusy(true);
   showTyping();
 
-  // Build a structured message the agent can parse into a place_order tool call.
-  const lineItemsJson = JSON.stringify(items.map(([pid, v]) => ({
-    product_id: pid, quantity: v.qty, title: v.title, unit_price: v.price
-  })));
-  let apiMsg = `Place this B2B order immediately via the place_order tool (no further confirmation needed). ` +
-    `Line items: ${lineItemsJson}. Payment: ${payment}. Total: $${total.toFixed(2)}.`;
-  if (name)  apiMsg += ` Buyer name: ${name}.`;
-  if (email) apiMsg += ` Buyer email: ${email}.`;
-
   try {
-    const res  = await fetch("/api/chat", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({message:apiMsg}) });
-    const data = await res.json();
+    // ── Step 1: Create SF checkout session (cart + items + POST /checkouts) ──
+    _setCoStatus("Creating checkout session…");
+    btn.innerHTML = "Step 1/3…";
+    const sessRes = await fetch("/api/checkout/session", {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({line_items: lineItems, payment_handler: payment}),
+    });
+    const sessData = await sessRes.json();
+    if (!sessRes.ok) throw new Error(sessData.error || "Checkout session failed");
+    const sessionId      = sessData.checkout_session_id;
+    const deliveryGroupId = sessData.delivery_group_id || "";
+
+    // ── Step 2: Set shipping/billing address + PO number ─────────────────────
+    _setCoStatus("Setting delivery address…");
+    btn.innerHTML = "Step 2/3…";
+    const addrRes = await fetch(`/api/checkout/session/${sessionId}`, {
+      method: "PATCH", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({
+        shipping_address:  shippingAddress,
+        billing_address:   billingAddress,
+        po_number:         poNum,
+        delivery_group_id: deliveryGroupId,
+      }),
+    });
+    // Address PATCH failure is non-fatal — SF may still place the order.
+    if (!addrRes.ok) {
+      const addrErr = await addrRes.json().catch(() => ({}));
+      console.warn("Address PATCH warning:", addrErr.error || addrRes.status);
+    }
+
+    // ── Step 3: Place the order ───────────────────────────────────────────────
+    _setCoStatus("Placing order with Salesforce…");
+    btn.innerHTML = "Step 3/3…";
+    const orderRes = await fetch(`/api/checkout/session/${sessionId}/place-order`, {
+      method: "POST", headers: {"Content-Type": "application/json"}, body: "{}",
+    });
+    const orderData = await orderRes.json();
     removeTyping();
-    logTools(data.tool_calls);
-    const sfOrderId = data.order?.order_id || data.order?.order_number || "";
-    const orderOk   = data.order && (data.order.status === "placed" || sfOrderId);
-    if (orderOk) {
-      // Success — show confirmation panel and clear cart; suppress verbose agent text.
+    _setCoStatus("");
+
+    if (orderRes.ok && (orderData.status === "placed" || orderData.order_id)) {
+      const sfOrderId = orderData.order_id || orderData.salesforce_order_id || sessionId;
       showOrderConfirmation(itemsSnap, total, payment, name, sfOrderId);
       Object.keys(cart).forEach(k => delete cart[k]);
       renderCart();
     } else {
-      // Extract the first error detail line from the agent reply for the cart panel.
-      const errLine = (data.reply || "")
-        .split("\\n").find(l => l.toLowerCase().includes("error") || l.toLowerCase().includes("failed") || l.toLowerCase().includes("detail"))
-        || "Order could not be placed. Please try again.";
-      showOrderError(errLine.replace(/^[>*#\s]+/, "").trim());
+      const errMsg = orderData.error || "Order could not be placed. Please try again.";
+      showOrderError(errMsg);
       btn.disabled = false;
       btn.innerHTML = "&#x2713;&ensp;Place Order";
     }
   } catch(e) {
     removeTyping();
-    showOrderError("Network error — please try again.");
+    _setCoStatus("");
+    showOrderError(e.message || "Network error — please try again.");
     btn.disabled = false;
     btn.innerHTML = "&#x2713;&ensp;Place Order";
   } finally { setBusy(false); }

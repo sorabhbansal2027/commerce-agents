@@ -252,65 +252,54 @@ def _gemini_error_message(exc: Exception) -> str:
     return f"Gemini error: {msg[:120]}"
 
 
-async def _oauth_login(username: str, password: str) -> dict:
-    """Authenticate via Salesforce OAuth2 resource-owner password flow.
+async def _sf_resolve_buyer(username: str) -> dict:
+    """Resolve a Salesforce username to UserId + AccountId using admin client credentials.
 
-    Works for any user type (internal or Community Plus) when the request
-    originates from a trusted IP so no security token is required.
-    Returns user_id, account_id, display_name, email on success.
+    Community Plus users cannot authenticate via SOAP Partner API or OAuth2
+    password grant — they use Experience Cloud. The server-side agent uses admin
+    credentials to identify the buyer, then passes effectiveAccountId on B2B
+    Commerce API calls.
     """
     sf_url = os.environ.get("SF_INSTANCE_URL", "").rstrip("/")
     client_id = os.environ.get("SF_CLIENT_ID", "")
     client_secret = os.environ.get("SF_CLIENT_SECRET", "")
     if not (sf_url and client_id and client_secret):
-        raise ValueError("SF_INSTANCE_URL / SF_CLIENT_ID / SF_CLIENT_SECRET not configured")
+        raise ValueError("SF_INSTANCE_URL / SF_CLIENT_ID / SF_CLIENT_SECRET not configured on server")
 
     async with httpx.AsyncClient(timeout=15) as client:
         tok_resp = await client.post(
             f"{sf_url}/services/oauth2/token",
-            data={
-                "grant_type": "password",
-                "client_id": client_id,
-                "client_secret": client_secret,
-                "username": username,
-                "password": password,
-            },
+            data={"grant_type": "client_credentials", "client_id": client_id, "client_secret": client_secret},
         )
-        if tok_resp.status_code != 200:
-            err = tok_resp.json()
-            raise ValueError(err.get("error_description") or err.get("error") or "Authentication failed")
+        tok_resp.raise_for_status()
+        token = tok_resp.json()["access_token"]
 
-        tok = tok_resp.json()
-        access_token = tok["access_token"]
-        identity_url = tok.get("id", "")
-
-        # identity_url format: https://<instance>/id/<orgId>/<userId>
-        user_id = identity_url.split("/")[-1] if identity_url else ""
-
-        # Fetch user details from identity endpoint
-        id_resp = await client.get(identity_url, headers={"Authorization": f"Bearer {access_token}"})
-        id_data = id_resp.json() if id_resp.status_code == 200 else {}
-
-        display_name = id_data.get("display_name") or id_data.get("name") or username
-        email = id_data.get("email") or username
-
-        # Fetch AccountId via standard User sobject REST endpoint (no SOQL needed)
-        account_id = ""
-        if user_id:
-            user_resp = await client.get(
-                f"{sf_url}/services/data/v62.0/sobjects/User/{user_id}?fields=AccountId",
-                headers={"Authorization": f"Bearer {access_token}"},
-            )
-            if user_resp.status_code == 200:
-                account_id = user_resp.json().get("AccountId") or ""
-
+        # Use Salesforce parameterized search (SOSL) to locate the buyer.
+        # q must be text (not an email address with @) — use the local part.
+        # WHERE clause ensures we get the exact Username match.
+        import urllib.parse as _up
+        search_text = username.split("@")[0] if "@" in username else username
+        params = _up.urlencode({
+            "q": search_text,
+            "sobject": "User",
+            "User.fields": "Id,Name,Email,AccountId",
+            "User.where": f"Username='{username}' AND IsActive=true",
+        })
+        r = await client.get(
+            f"{sf_url}/services/data/v62.0/parameterizedSearch?{params}",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        if r.status_code != 200:
+            raise ValueError(f"User lookup failed: {r.status_code}")
+        records = r.json().get("searchRecords", [])
+        if not records:
+            raise ValueError(f"No active Salesforce user found for '{username}'")
+        u = records[0]
         return {
-            "user_id": user_id,
-            "account_id": account_id,
-            "display_name": display_name,
-            "email": email,
-            "session_id": access_token,
-            "instance_url": sf_url,
+            "user_id": u.get("Id", ""),
+            "account_id": u.get("AccountId") or "",
+            "display_name": u.get("Name") or username,
+            "email": u.get("Email") or username,
         }
 
 
@@ -322,23 +311,21 @@ async def login(request: Request) -> JSONResponse:
 
     if not username:
         return JSONResponse({"ok": False, "error": "Username is required."}, status_code=400)
-    if not password:
-        return JSONResponse({"ok": False, "error": "Password is required."}, status_code=400)
 
     try:
-        sf = await _oauth_login(username, password)
+        sf = await _sf_resolve_buyer(username)
     except ValueError as exc:
         return JSONResponse({"ok": False, "error": str(exc)}, status_code=401)
     except Exception as exc:
-        _log.warning("OAuth login error: %s", exc)
+        _log.warning("SF buyer resolve error: %s", exc)
         return JSONResponse({"ok": False, "error": "Could not reach Salesforce — check SF env vars."}, status_code=502)
 
     _session["name"]           = (body.get("name") or "").strip() or sf["display_name"]
     _session["email"]          = sf["email"]
     _session["sf_user_id"]     = sf["user_id"]
     _session["sf_account_id"]  = sf["account_id"]
-    _session["sf_session_id"]  = sf["session_id"]
-    _session["sf_instance_url"]= sf["instance_url"]
+    _session["sf_session_id"]  = ""
+    _session["sf_instance_url"]= ""
 
     return JSONResponse({"ok": True, "session": {k: v for k, v in _session.items() if k != "sf_session_id"}})
 

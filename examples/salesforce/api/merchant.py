@@ -2,15 +2,19 @@
 
 from __future__ import annotations
 
+import logging
 import os
 from typing import Any
 
+import httpx
 from fastapi import APIRouter
 
 from commerce_common.memory import MemoryStore
 from demo_common import REPO_ROOT, MerchantIdentity, build_anthropic_client, build_merchant_router
-from merchant_agent import ChangeLedger, MerchantBackend
+from merchant_agent import BusinessSnapshot, ChangeLedger, MerchantBackend, MerchantSessionContext
 from merchant_agent_runtime import MerchantAgent
+
+log = logging.getLogger(__name__)
 
 from .agent_config import build_merchant_config
 
@@ -42,6 +46,22 @@ class _SFCCAdapter:
 
     def recent_orders(self, n: int) -> list:
         return []
+
+    async def get_business_snapshot(
+        self, session: MerchantSessionContext, period: str | None = None
+    ) -> BusinessSnapshot:
+        try:
+            return await self._sfcc.get_business_snapshot(session, period)
+        except (httpx.HTTPStatusError, httpx.ConnectError) as exc:
+            log.warning("SFCC order_search unavailable (%s); returning empty snapshot", exc)
+            return BusinessSnapshot(store_name=self.store_name)
+
+    async def get_order_issues(self, session: MerchantSessionContext) -> list:
+        try:
+            return await self._sfcc.get_order_issues(session)
+        except (httpx.HTTPStatusError, httpx.ConnectError) as exc:
+            log.warning("SFCC order_search unavailable for order issues (%s)", exc)
+            return []
 
     def __getattr__(self, name: str) -> Any:
         return getattr(self._sfcc, name)

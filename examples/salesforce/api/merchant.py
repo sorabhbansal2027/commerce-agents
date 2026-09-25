@@ -96,7 +96,32 @@ class _SFCCAdapter:
 
     async def search_listings(self, session: MerchantSessionContext, query: str, filters: Any = None, limit: int = 8) -> list:
         try:
-            return await self._sfcc.search_listings(session, query, filters, limit)
+            from merchant_agent import Listing, ListingFilters
+            # short_description is not queryable on this SFCC instance
+            body: dict[str, Any] = {
+                "query": {"text_query": {"fields": ["id", "name"], "search_phrase": query}},
+                "count": limit,
+            }
+            if filters and isinstance(filters, ListingFilters) and filters.category:
+                body["query"] = {"filtered_query": {"query": body["query"],
+                    "filter": {"term_filter": {"field": "primary_category_id",
+                        "operator": "is", "values": [filters.category]}}}}
+            data = await self._sfcc._request("POST", "product_search", json=body)
+            hits = (data or {}).get("hits", [])
+            listings = []
+            for h in hits:
+                rep = h.get("represented_product", h)
+                prices = rep.get("prices", {})
+                price = next(iter(prices.values()), None) if prices else None
+                listings.append(Listing(
+                    listing_id=rep.get("id", h.get("product_id", "")),
+                    title=rep.get("name", ""),
+                    status="active" if rep.get("online", True) else "inactive",
+                    price=price,
+                    currency=self._sfcc._currency,
+                    category=rep.get("primary_category_id"),
+                ))
+            return listings
         except (httpx.HTTPStatusError, httpx.ConnectError) as exc:
             log.warning("SFCC product_search unavailable (%s)", exc)
             return []

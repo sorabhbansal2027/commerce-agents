@@ -26,15 +26,21 @@ Env vars:
 from __future__ import annotations
 
 import importlib.util as _ilu
+import logging
 import os
 import sys
+import time
+import urllib.parse
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import AsyncIterator
+from typing import Any, AsyncIterator
 
+import httpx
 import uvicorn
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
+
+_log = logging.getLogger(__name__)
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 _spec = _ilu.spec_from_file_location(
@@ -62,6 +68,61 @@ _product_grid_html: str = ""
 
 # Single-user demo session (name, email, resolved Salesforce User ID)
 _session: dict = {"name": "", "email": "", "sf_user_id": ""}
+
+# ── Salesforce auth (client credentials) ─────────────────────────────────────
+
+_SF_BASE = os.environ.get("SF_INSTANCE_URL", "").rstrip("/")
+_SF_CLIENT_ID = os.environ.get("SF_CLIENT_ID", "")
+_SF_CLIENT_SECRET = os.environ.get("SF_CLIENT_SECRET", "")
+_sf_token: str = ""
+_sf_token_expires: float = 0.0
+
+
+async def _sf_access_token() -> str:
+    """Return a valid Salesforce OAuth2 access token, refreshing when needed."""
+    global _sf_token, _sf_token_expires
+    if _sf_token and time.monotonic() < _sf_token_expires:
+        return _sf_token
+    if not all([_SF_BASE, _SF_CLIENT_ID, _SF_CLIENT_SECRET]):
+        raise RuntimeError("SF_INSTANCE_URL, SF_CLIENT_ID, SF_CLIENT_SECRET not configured")
+    async with httpx.AsyncClient(timeout=15) as client:
+        resp = await client.post(
+            f"{_SF_BASE}/services/oauth2/token",
+            data={
+                "grant_type": "client_credentials",
+                "client_id": _SF_CLIENT_ID,
+                "client_secret": _SF_CLIENT_SECRET,
+            },
+        )
+        resp.raise_for_status()
+        data = resp.json()
+    _sf_token = data["access_token"]
+    _sf_token_expires = time.monotonic() + data.get("expires_in", 3600) - 60
+    return _sf_token
+
+
+async def _sf_soql(query: str) -> list[dict[str, Any]]:
+    token = await _sf_access_token()
+    url = f"{_SF_BASE}/services/data/v62.0/query?q={urllib.parse.quote(query)}"
+    async with httpx.AsyncClient(timeout=15) as client:
+        resp = await client.get(url, headers={"Authorization": f"Bearer {token}"})
+        resp.raise_for_status()
+    return resp.json().get("records", [])
+
+
+async def _resolve_sf_user_id(email: str) -> str:
+    """Return the Salesforce User Id (005…) for a given email, or '' if not found."""
+    if not email:
+        return ""
+    try:
+        safe = email.replace("'", "\\'")
+        rows = await _sf_soql(
+            f"SELECT Id FROM User WHERE Email = '{safe}' AND IsActive = true LIMIT 1"
+        )
+        return rows[0]["Id"] if rows else ""
+    except Exception as exc:
+        _log.warning("SF user lookup failed for %s: %s", email, exc)
+        return ""
 
 
 async def _fetch_html_from_mcp() -> str:
@@ -160,13 +221,18 @@ def _gemini_error_message(exc: Exception) -> str:
 @app.post("/api/login")
 async def login(request: Request) -> JSONResponse:
     body = await request.json()
-    _session["name"] = (body.get("name") or "").strip()
+    _session["name"]  = (body.get("name")  or "").strip()
     _session["email"] = (body.get("email") or "").strip()
-    # Accept an explicit SF User ID from the request; fall back to the env var.
-    _session["sf_user_id"] = (
-        (body.get("sf_user_id") or "").strip()
-        or os.environ.get("SF_BUYER_USER_ID", "")
-    )
+    # Resolution priority:
+    # 1. Caller-supplied sf_user_id (direct embed / SSO scenarios)
+    # 2. SOQL lookup by email against the connected Salesforce org
+    # 3. SF_BUYER_USER_ID env var (static fallback for demos without email)
+    sf_uid = (body.get("sf_user_id") or "").strip()
+    if not sf_uid and _session["email"]:
+        sf_uid = await _resolve_sf_user_id(_session["email"])
+    if not sf_uid:
+        sf_uid = os.environ.get("SF_BUYER_USER_ID", "")
+    _session["sf_user_id"] = sf_uid
     return JSONResponse({"ok": True, "session": _session})
 
 

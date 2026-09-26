@@ -1,4 +1,4 @@
-# build: 2026-09-26a
+# build: 2026-09-26b
 # Gemini ADK storefront API — SFCC product search + in-memory cart + Gemini shopping agent.
 
 FROM python:3.11-slim

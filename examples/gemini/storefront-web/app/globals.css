@@ -4,8 +4,8 @@
  */
 
 @import "tailwindcss";
-@source "../../../web-shared";
-@import "../../../web-shared/base.css";
+@source "../node_modules/web-shared";
+@import "web-shared/base.css";
 
 /*
  * ACME retail design system: a cool off-white ground with white cards, navy ink and structure,

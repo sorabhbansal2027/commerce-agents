@@ -91,6 +91,18 @@
 #   ANTHROPIC_API_KEY=sk-litellm-key
 
 [[services]]
+  name = "gemini-storefront-api"
+  [services.build]
+    dockerfilePath = "Dockerfile.gemini-storefront-api"
+  [services.deploy]
+    startCommand = "uvicorn gemini.api.storefront_main:app --app-dir examples --host 0.0.0.0 --port 8000"
+
+[[services]]
+  name = "gemini-storefront-web"
+  [services.build]
+    dockerfilePath = "Dockerfile.gemini-storefront-web"
+
+[[services]]
   name = "vivacious-mercy"
   [services.build]
     dockerfilePath = "embed/Dockerfile.litellm"

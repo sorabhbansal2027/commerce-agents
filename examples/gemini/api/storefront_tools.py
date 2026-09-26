@@ -46,7 +46,10 @@ def _normalize_product(h: dict[str, Any]) -> dict[str, Any]:
     prices = h.get("prices", {})
     price = float(next(iter(prices.values()), 0.0) or 0.0)
     raw_desc = h.get("short_description", h.get("long_description", ""))
-    short_desc = raw_desc.get("default", "") if isinstance(raw_desc, dict) else raw_desc
+    if isinstance(raw_desc, dict):
+        short_desc = raw_desc.get("markup") or raw_desc.get("source") or raw_desc.get("default", "")
+    else:
+        short_desc = raw_desc or ""
     image = None
     image_groups = h.get("image_groups") or []
     for g in image_groups:
@@ -86,7 +89,7 @@ async def search_products(query: str = "", category: str = "", limit: int = 12) 
         base_q: dict[str, Any] = (
             {"match_all_query": {}}
             if not query
-            else {"text_query": {"fields": ["id", "name", "short_description"], "search_phrase": query}}
+            else {"text_query": {"fields": ["id", "name"], "search_phrase": query}}
         )
         body: dict[str, Any] = {"query": base_q, "select": "(**)", "count": max(1, min(limit, 24))}
         if category:

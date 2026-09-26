@@ -1,17 +1,16 @@
-"""Gemini ADK storefront API.
+"""Gemini ADK storefront API — wired to Salesforce B2B Commerce.
 
 Uvicorn target:
     uvicorn gemini.api.storefront_main:app --app-dir examples --port 8007
 
 Required env vars:
     GEMINI_API_KEY          Google AI Studio key  (or use GOOGLE_API_KEY)
-    SFCC_INSTANCE_URL       https://zzrl-008.dx.commercecloud.salesforce.com
-    SFCC_CLIENT_ID          OCAPI client ID
-    SFCC_CLIENT_SECRET      OCAPI client secret
-    SFCC_SITE_ID            Site ID (use - for org-level)
-    SFCC_DISPLAY_SITE_ID    Human-readable site name, e.g. DreamHaus
+    SF_INSTANCE_URL         https://<org>.sandbox.my.salesforce.com
+    SF_CLIENT_ID            Connected App consumer key
+    SF_CLIENT_SECRET        Connected App consumer secret
 
 Optional:
+    SF_STORE_NAME           Display name shown in UI (default: ACME B2B Store)
     GEMINI_MODEL            Model name (default: gemini-2.0-flash)
     CORS_ORIGINS            Comma-separated allowed origins
 """
@@ -31,7 +30,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from .storefront_agent import GeminiStorefrontAgent
-from .storefront_tools import _cart_payload, _carts, set_sfcc
+from .storefront_tools import _cart_payload, _carts, set_backend
 
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -45,9 +44,9 @@ _sessions: dict[str, dict[str, Any]] = {}
 _agent: GeminiStorefrontAgent | None = None
 
 
-def _build_sfcc() -> Any:
-    if not os.environ.get("SFCC_INSTANCE_URL"):
-        raise RuntimeError("SFCC_INSTANCE_URL is required")
+def _build_backend() -> Any:
+    if not os.environ.get("SF_INSTANCE_URL"):
+        raise RuntimeError("SF_INSTANCE_URL is required")
     import sys
     from pathlib import Path
 
@@ -55,9 +54,9 @@ def _build_sfcc() -> Any:
     if str(examples_dir) not in sys.path:
         sys.path.insert(0, str(examples_dir))
 
-    from sfcc.sfcc_bm_backend import SFCCBusinessManagerBackend
+    from salesforce.api.sf_oms_backend import ETSOMSBackend
 
-    return SFCCBusinessManagerBackend()
+    return ETSOMSBackend()
 
 
 @asynccontextmanager
@@ -66,9 +65,9 @@ async def lifespan(app: FastAPI):
     if not os.environ.get("GOOGLE_API_KEY") and os.environ.get("GEMINI_API_KEY"):
         os.environ["GOOGLE_API_KEY"] = os.environ["GEMINI_API_KEY"]
 
-    sfcc = _build_sfcc()
-    set_sfcc(sfcc)
-    store_name = os.environ.get("SFCC_DISPLAY_SITE_ID", "DreamHaus")
+    backend = _build_backend()
+    set_backend(backend)
+    store_name = os.environ.get("SF_STORE_NAME", "ACME B2B Store")
     _agent = GeminiStorefrontAgent(store_name=store_name)
     log.info("Gemini ADK storefront agent ready for store: %s", store_name)
     yield
@@ -122,7 +121,7 @@ def _require_session(session_id: str | None) -> str:
 async def health() -> dict:
     return {
         "ok": True,
-        "store": os.environ.get("SFCC_DISPLAY_SITE_ID", "DreamHaus"),
+        "store": os.environ.get("SF_STORE_NAME", "ACME B2B Store"),
         "model": os.environ.get("GEMINI_MODEL", "gemini-2.0-flash"),
     }
 
@@ -159,30 +158,18 @@ async def chat(
 
 @app.get("/api/products")
 async def list_products(category: str = "", limit: int = 24) -> dict:
-    from .storefront_tools import _sfcc, _normalize_product
+    from .storefront_tools import _backend, _product_to_dict, _sf_ctx
 
-    if _sfcc is None:
+    if _backend is None:
         return {"products": []}
     try:
-        body: dict[str, Any] = {
-            "query": {"match_all_query": {}},
-            "select": "(**)",
-            "count": max(1, min(limit, 100)),
-        }
-        if category:
-            body["query"] = {
-                "filtered_query": {
-                    "query": {"match_all_query": {}},
-                    "filter": {"term_filter": {
-                        "field": "primary_category_id",
-                        "operator": "is",
-                        "values": [category],
-                    }},
-                }
-            }
-        data = await _sfcc._request("POST", "product_search", json=body)
-        hits = (data or {}).get("hits", [])
-        return {"products": [_normalize_product(h) for h in hits]}
+        from shopping_agent import SearchFilters
+        ctx = _sf_ctx()
+        filters = SearchFilters(category=category) if category else None
+        products = await _backend.search_products(
+            ctx, "", filters, limit=max(1, min(limit, 100))
+        )
+        return {"products": [_product_to_dict(p) for p in products]}
     except Exception as exc:
         log.warning("list_products failed: %s", exc)
         return {"products": []}
@@ -190,15 +177,16 @@ async def list_products(category: str = "", limit: int = 24) -> dict:
 
 @app.get("/api/products/{product_id:path}")
 async def get_product(product_id: str) -> dict:
-    from .storefront_tools import _sfcc, _normalize_product
+    from .storefront_tools import _backend, _product_to_dict, _sf_ctx
 
-    if _sfcc is None:
+    if _backend is None:
         raise HTTPException(status_code=503, detail="Backend not initialised")
     try:
-        data = await _sfcc._request("GET", f"products/{product_id}?select=(**)", site=True)
-        if not data:
+        ctx = _sf_ctx()
+        p = await _backend.get_product_details(ctx, product_id)
+        if not p:
             raise HTTPException(status_code=404, detail="Product not found")
-        return _normalize_product(data)
+        return _product_to_dict(p)
     except HTTPException:
         raise
     except Exception as exc:
@@ -217,16 +205,16 @@ async def cart_add(
     request: CartAddRequest,
     x_session_id: str | None = Header(default=None),
 ) -> dict:
-    from .storefront_tools import _sfcc, _normalize_product, add_to_cart
+    from .storefront_tools import _backend, _product_to_dict, _sf_ctx, add_to_cart
 
     sid = _require_session(x_session_id)
-    # Look up product details to get title and price
     product: dict[str, Any] = {}
-    if _sfcc:
+    if _backend:
         try:
-            data = await _sfcc._request("GET", f"products/{request.product_id}?select=(**)", site=True)
-            if data:
-                product = _normalize_product(data)
+            ctx = _sf_ctx()
+            p = await _backend.get_product_details(ctx, request.product_id)
+            if p:
+                product = _product_to_dict(p)
         except Exception as exc:
             log.warning("cart_add product lookup failed: %s", exc)
     if not product:
@@ -276,7 +264,6 @@ async def reset(
         _carts.pop(x_session_id, None)
         if _agent:
             _agent.drop_session(x_session_id)
-    # Start a fresh session for the same user
     new_sid = secrets.token_urlsafe(24)
     _sessions[new_sid] = {"user_id": "guest", "created_at": time.time()}
     if _agent:

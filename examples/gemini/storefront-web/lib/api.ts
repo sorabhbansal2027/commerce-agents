@@ -9,7 +9,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 export const api = new AgentApi(API_URL, "/api");
 
 export const UNREACHABLE =
-  "Couldn't reach the DreamHaus API. Start it with " +
+  "Couldn't reach the ACME B2B API. Start it with " +
   "`uvicorn gemini.api.storefront_main:app --app-dir examples --port 8001` and try again.";
 
 export async function fetchProducts(): Promise<Product[] | null> {

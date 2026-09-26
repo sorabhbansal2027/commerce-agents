@@ -24,10 +24,10 @@ import type { Product } from "@/lib/types";
 import ProductTile from "../ProductTile";
 
 const STARTERS: Starter[] = [
-  { icon: "search", prompt: "Show me bracelets and necklaces" },
-  { icon: "tag", prompt: "What jewelry is under $100?" },
-  { icon: "home", prompt: "I need a gift for someone who loves minimalist style" },
-  { icon: "edit", prompt: "Compare your rings and tell me which is most popular" },
+  { icon: "search", prompt: "Show me available laptops and workstations" },
+  { icon: "tag", prompt: "What servers do you have?" },
+  { icon: "home", prompt: "I need networking equipment for a small office" },
+  { icon: "edit", prompt: "Compare your monitors and recommend the best value" },
 ];
 
 /** What the store is featuring: labelled bestseller or new, photographed ones first. */

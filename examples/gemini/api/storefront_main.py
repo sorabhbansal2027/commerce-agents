@@ -248,6 +248,23 @@ async def cart_add(
     return {"ok": True, "cart": result["cart"]}
 
 
+@app.get("/api/debug/normalize")
+async def debug_normalize() -> dict:
+    from .storefront_tools import _sfcc, _normalize_product
+    if _sfcc is None:
+        return {"error": "no backend"}
+    data = await _sfcc._request("POST", "product_search", json={"query": {"match_all_query": {}}, "count": 1, "select": "(**)"})
+    hits = (data or {}).get("hits", [])
+    if not hits:
+        return {"error": "no hits"}
+    h = hits[0]
+    return {
+        "raw_short_description": h.get("short_description"),
+        "raw_long_description": h.get("long_description"),
+        "normalized": _normalize_product(h),
+    }
+
+
 @app.get("/api/orders")
 async def list_orders(x_session_id: str | None = Header(default=None)) -> dict:
     _require_session(x_session_id)

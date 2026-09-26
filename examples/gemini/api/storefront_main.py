@@ -54,9 +54,9 @@ def _build_backend() -> Any:
     if str(examples_dir) not in sys.path:
         sys.path.insert(0, str(examples_dir))
 
-    from salesforce.api.sf_oms_backend import ETSOMSBackend
+    from salesforce.api.sf_oms_backend import SalesforceOMSBackend
 
-    return ETSOMSBackend()
+    return SalesforceOMSBackend()
 
 
 @asynccontextmanager

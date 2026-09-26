@@ -67,6 +67,20 @@
   [services.build]
     dockerfilePath = "Dockerfile.merchant-web"
 
+# ── Gemini ADK merchant portal ───────────────────────────────────────────────
+
+[[services]]
+  name = "gemini-merchant-api"
+  [services.build]
+    dockerfilePath = "Dockerfile.gemini-api"
+  [services.deploy]
+    startCommand = "uvicorn gemini.api.main:app --app-dir examples --host 0.0.0.0 --port 8000"
+
+[[services]]
+  name = "gemini-merchant-web"
+  [services.build]
+    dockerfilePath = "Dockerfile.gemini-web"
+
 # ── LiteLLM proxy (Bedrock backend for all agents) ───────────────────────────
 #
 # Exposes an Anthropic-compatible API on port 4000, forwarding to AWS Bedrock.

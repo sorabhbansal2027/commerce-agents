@@ -1,0 +1,16 @@
+# Gemini ADK merchant API container.
+# build: 2026-09-26
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Copy everything first — local editable packages must exist before pip installs them.
+COPY . .
+
+RUN pip install --no-cache-dir -r requirements.txt && \
+    pip install --no-cache-dir google-adk
+
+ENV PYTHONUNBUFFERED=1
+EXPOSE 8000
+
+CMD ["uvicorn", "gemini.api.main:app", "--app-dir", "examples", "--host", "0.0.0.0", "--port", "8000"]

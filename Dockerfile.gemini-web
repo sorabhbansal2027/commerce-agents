@@ -1,0 +1,33 @@
+# build: 2026-09-26e
+# Gemini merchant portal — frontend lives in examples/gemini/merchant-web/.
+
+# ── Stage 1: build ────────────────────────────────────────────────────────────
+FROM node:20-slim AS builder
+WORKDIR /app
+
+ENV NEXT_PUBLIC_API_URL=https://gemini-merchant-api-production.up.railway.app
+
+# Mirror the repo layout so file:../../web-shared resolves at install time.
+COPY examples/web-shared                ./examples/web-shared
+COPY examples/gemini/merchant-web       ./examples/gemini/merchant-web
+
+WORKDIR /app/examples/gemini/merchant-web
+RUN npm install
+# npm creates node_modules/web-shared as a symlink; Turbopack doesn't follow symlinks
+# in production builds, so replace it with a real copy of the source files.
+RUN rm -rf node_modules/web-shared \
+    && cp -rL /app/examples/web-shared node_modules/web-shared
+
+RUN npm run build
+
+# ── Stage 2: serve (standalone) ───────────────────────────────────────────────
+FROM node:20-slim
+WORKDIR /app
+
+COPY --from=builder /app/examples/gemini/merchant-web/.next/standalone ./
+COPY --from=builder /app/examples/gemini/merchant-web/.next/static     ./.next/static
+
+ENV NODE_ENV=production
+# PORT is injected by Railway (defaults to 8080); Next.js standalone reads it automatically.
+
+CMD ["node", "server.js"]

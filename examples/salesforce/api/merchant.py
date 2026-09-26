@@ -79,7 +79,7 @@ class _SFCCAdapter:
                 listings.append(Listing(
                     listing_id=h.get("id", ""),
                     title=title,
-                    status="active" if h.get("online_flag", {}).get("default", True) else "inactive",
+                    status="active" if h.get("online_flag", {}).get("default", True) else "paused",
                     price=float(price) if price else 0.0,
                     currency=self._sfcc._currency,
                     category=h.get("primary_category_id"),
@@ -95,12 +95,44 @@ class _SFCCAdapter:
     async def get_business_snapshot(
         self, session: MerchantSessionContext, period: str | None = None
     ) -> BusinessSnapshot:
+        # order_search lives in the Shop API (/dw/shop/), not the Data API
+        instance = self._sfcc._instance
+        version = self._sfcc._version
+        client_id = self._sfcc._client_id
         try:
-            return await self._sfcc.get_business_snapshot(session, period)
-        except (httpx.HTTPStatusError, httpx.ConnectError) as exc:
-            log.warning("SFCC order_search unavailable (%s); returning empty snapshot", exc)
-            return BusinessSnapshot(period=period or "30d", sales=0.0, orders=0,
-                                   note="Order data unavailable — OCAPI order_search not configured")
+            token = await self._sfcc._get_token()
+            async with httpx.AsyncClient(timeout=15) as c:
+                r = await c.post(
+                    f"{instance}/s/{os.environ.get('SFCC_DISPLAY_SITE_ID', 'DreamHaus')}/dw/shop/{version}/order_search",
+                    json={"query": {"match_all_query": {}}, "count": 1,
+                          "select": "(total,hits.(order_no,status,order_total,currency))"},
+                    headers={"Authorization": f"Bearer {token}",
+                             "x-dw-client-id": client_id,
+                             "Content-Type": "application/json"},
+                )
+                r.raise_for_status()
+                body = r.json()
+            total_orders = body.get("total", 0)
+            hits = body.get("hits", [])
+            sales = sum(float(h.get("order_total", 0) or 0) for h in hits)
+            return BusinessSnapshot(
+                period=period or "30d", sales=sales, orders=total_orders,
+                note=None,
+            )
+        except Exception as exc:
+            log.warning("SFCC shop order_search unavailable (%s); falling back", exc)
+        try:
+            data = await self._sfcc._request("POST", "product_search", json={
+                "query": {"match_all_query": {}}, "count": 1,
+            })
+            product_count = (data or {}).get("total")
+        except Exception:
+            product_count = None
+        return BusinessSnapshot(
+            period=period or "30d", sales=0.0, orders=0,
+            product_count=product_count,
+            note="Order history requires Trusted System auth — not available via client credentials",
+        )
 
     async def get_inventory_alerts(self, session: MerchantSessionContext) -> list:
         try:
@@ -115,13 +147,14 @@ class _SFCCAdapter:
             records = (data or {}).get("data", [])
             alerts = []
             for r in records:
-                ats = r.get("ats", r.get("allocation", 0)) or 0
+                alloc = r.get("allocation", {})
+                ats = r.get("ats") or (alloc.get("amount") if isinstance(alloc, dict) else alloc) or 0
                 if ats <= 5:
                     alerts.append(
                         InventoryAlert(
-                            listing_id=r.get("id", ""),
-                            title=r.get("id", ""),
-                            alert_kind="low_stock",
+                            listing_id=r.get("product_id", r.get("id", "")),
+                            title=r.get("product_name", r.get("product_id", r.get("id", ""))),
+                            kind="low_stock",
                             stock=int(ats),
                             threshold=5,
                         )
@@ -133,17 +166,48 @@ class _SFCCAdapter:
 
     async def get_order_issues(self, session: MerchantSessionContext) -> list:
         try:
-            return await self._sfcc.get_order_issues(session)
-        except (httpx.HTTPStatusError, httpx.ConnectError) as exc:
-            log.warning("SFCC order_search unavailable for order issues (%s)", exc)
+            from merchant_agent import OrderIssue
+            instance = self._sfcc._instance
+            version = self._sfcc._version
+            client_id = self._sfcc._client_id
+            token = await self._sfcc._get_token()
+            async with httpx.AsyncClient(timeout=15) as c:
+                r = await c.post(
+                    f"{instance}/s/{os.environ.get('SFCC_DISPLAY_SITE_ID', 'DreamHaus')}/dw/shop/{version}/order_search",
+                    json={"query": {"filtered_query": {
+                              "query": {"match_all_query": {}},
+                              "filter": {"term_filter": {"field": "status",
+                                  "operator": "one_of", "values": ["failed", "hold"]}}}},
+                          "select": "(**)", "count": 50},
+                    headers={"Authorization": f"Bearer {token}",
+                             "x-dw-client-id": client_id,
+                             "Content-Type": "application/json"},
+                )
+                r.raise_for_status()
+            hits = r.json().get("hits", [])
+            return [OrderIssue(
+                order_id=h.get("order_no", ""),
+                issue_kind=h.get("status", "hold"),
+                summary=f"Order {h.get('order_no')} is {h.get('status')}",
+                customer=h.get("customer_info", {}).get("customer_name"),
+                order_total=h.get("order_total"),
+                currency=self._sfcc._currency,
+                created_at=h.get("creation_date"),
+            ) for h in hits]
+        except Exception as exc:
+            log.warning("SFCC shop order_search unavailable for order issues (%s)", exc)
             return []
 
     async def search_listings(self, session: MerchantSessionContext, query: str, filters: Any = None, limit: int = 8) -> list:
         try:
             from merchant_agent import Listing, ListingFilters
-            # short_description is not queryable on this SFCC instance
+            base_query: dict[str, Any] = (
+                {"match_all_query": {}}
+                if not query
+                else {"text_query": {"fields": ["id", "name"], "search_phrase": query}}
+            )
             body: dict[str, Any] = {
-                "query": {"text_query": {"fields": ["id", "name"], "search_phrase": query}},
+                "query": base_query,
                 "select": "(**)",
                 "count": limit,
             }
@@ -163,7 +227,7 @@ class _SFCCAdapter:
                 listings.append(Listing(
                     listing_id=h.get("id", ""),
                     title=title,
-                    status="active" if h.get("online_flag", {}).get("default", True) else "inactive",
+                    status="active" if h.get("online_flag", {}).get("default", True) else "paused",
                     price=float(price) if price else 0.0,
                     currency=self._sfcc._currency,
                     category=h.get("primary_category_id"),
@@ -172,6 +236,27 @@ class _SFCCAdapter:
         except (httpx.HTTPStatusError, httpx.ConnectError) as exc:
             log.warning("SFCC product_search unavailable (%s)", exc)
             return []
+
+    async def get_listing(self, session: MerchantSessionContext, listing_id: str) -> Any:
+        result = await self._sfcc.get_listing(session, listing_id)
+        if result is None:
+            return None
+        # Fix: org-level SFCC returns name as {"default": "..."} dict; also "inactive" is invalid
+        raw_name = result.title if isinstance(result.title, str) else ""
+        if isinstance(result.title, dict):
+            raw_name = result.title.get("default", listing_id)
+        from merchant_agent import ListingDetails
+        return ListingDetails(
+            listing_id=result.listing_id,
+            title=raw_name,
+            status="paused" if getattr(result, "status", "active") == "inactive" else getattr(result, "status", "active"),
+            price=result.price,
+            currency=result.currency,
+            category=result.category,
+            description=getattr(result, "description", None),
+            stock=getattr(result, "stock", None),
+            attributes=getattr(result, "attributes", {}),
+        )
 
     async def get_pending_quote_approvals(self, session: MerchantSessionContext) -> list:
         return []  # SFCC BM does not support quote approvals

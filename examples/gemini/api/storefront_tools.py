@@ -46,8 +46,14 @@ def _normalize_product(h: dict[str, Any]) -> dict[str, Any]:
     prices = h.get("prices", {})
     price = float(next(iter(prices.values()), 0.0) or 0.0)
     raw_desc = h.get("short_description", h.get("long_description", ""))
+    # SFCC locale format: {"default": {"_type": "markup_text", "markup": "..."}}
+    # or direct markup_text: {"_type": "markup_text", "markup": "..."}
     if isinstance(raw_desc, dict):
-        short_desc = raw_desc.get("markup") or raw_desc.get("source") or raw_desc.get("default", "")
+        inner = raw_desc.get("default", raw_desc)
+        if isinstance(inner, dict):
+            short_desc = inner.get("markup") or inner.get("source") or ""
+        else:
+            short_desc = inner or ""
     else:
         short_desc = raw_desc or ""
     image = None

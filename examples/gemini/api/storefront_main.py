@@ -120,16 +120,10 @@ def _require_session(session_id: str | None) -> str:
 
 @app.get("/api/health")
 async def health() -> dict:
-    import inspect
-    from .storefront_tools import _normalize_product
-    src = inspect.getsource(_normalize_product)
-    has_fix = "markup" in src
     return {
         "ok": True,
         "store": os.environ.get("SFCC_DISPLAY_SITE_ID", "DreamHaus"),
         "model": os.environ.get("GEMINI_MODEL", "gemini-2.0-flash"),
-        "normalization_fix": has_fix,
-        "build": "2026-09-26c",
     }
 
 
@@ -246,23 +240,6 @@ async def cart_add(
         image_url=product.get("image_url") or "",
     )
     return {"ok": True, "cart": result["cart"]}
-
-
-@app.get("/api/debug/normalize")
-async def debug_normalize() -> dict:
-    from .storefront_tools import _sfcc, _normalize_product
-    if _sfcc is None:
-        return {"error": "no backend"}
-    data = await _sfcc._request("POST", "product_search", json={"query": {"match_all_query": {}}, "count": 1, "select": "(**)"})
-    hits = (data or {}).get("hits", [])
-    if not hits:
-        return {"error": "no hits"}
-    h = hits[0]
-    return {
-        "raw_short_description": h.get("short_description"),
-        "raw_long_description": h.get("long_description"),
-        "normalized": _normalize_product(h),
-    }
 
 
 @app.get("/api/orders")

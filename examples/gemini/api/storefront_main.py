@@ -120,10 +120,16 @@ def _require_session(session_id: str | None) -> str:
 
 @app.get("/api/health")
 async def health() -> dict:
+    import inspect
+    from .storefront_tools import _normalize_product
+    src = inspect.getsource(_normalize_product)
+    has_fix = "markup" in src
     return {
         "ok": True,
         "store": os.environ.get("SFCC_DISPLAY_SITE_ID", "DreamHaus"),
         "model": os.environ.get("GEMINI_MODEL", "gemini-2.0-flash"),
+        "normalization_fix": has_fix,
+        "build": "2026-09-26c",
     }
 
 

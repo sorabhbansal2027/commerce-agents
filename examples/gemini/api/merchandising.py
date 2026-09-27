@@ -386,22 +386,22 @@ Rules:
     return result_data
 
 
-async def bulk_enrich_catalog(query: str = "", limit: int = 5) -> dict:
-    """Enrich multiple products at once. Fetches up to limit products and enriches each.
+async def bulk_enrich_catalog(query: str = "", limit: int = 50) -> dict:
+    """Enrich multiple products concurrently. Fetches up to limit products then enriches
+    them in parallel (max 10 concurrent Gemini calls to stay within rate limits).
 
-    Returns {"results": [MerchandisingResult, ...], "total": int}.
+    Returns {"results": [MerchandisingResult, ...], "total": int, "failed": int}.
     """
+    import asyncio
+
     from gemini.ontology.bbw_products import BBW_PRODUCTS
 
-    limit = max(1, min(limit, 5))
+    limit = max(1, limit)
 
-    # Gather candidates: BBW fixtures + SFCC search
+    # Gather candidates: BBW fixtures first (no network), then SFCC
     candidates: list[dict] = []
-
-    # BBW products first (no network needed)
     candidates.extend(BBW_PRODUCTS[:limit])
 
-    # If we still have room, fetch from SFCC
     if len(candidates) < limit and _backend is not None:
         try:
             sfcc_results = await _backend.search_listings(
@@ -413,16 +413,27 @@ async def bulk_enrich_catalog(query: str = "", limit: int = 5) -> dict:
             log.warning("bulk_enrich: SFCC search failed: %s", exc)
 
     candidates = candidates[:limit]
+    pids = [p.get("id") or p.get("listing_id", "") for p in candidates]
+    pids = [pid for pid in pids if pid]
 
-    results = []
-    for product in candidates:
-        pid = product.get("id") or product.get("listing_id", "")
-        if not pid:
-            continue
-        try:
-            result = await enrich_product(pid)
-            results.append(result)
-        except Exception as exc:
-            log.warning("bulk_enrich: enrich failed for %s: %s", pid, exc)
+    # Enrich concurrently in batches of 10 to respect Gemini rate limits
+    _CONCURRENCY = 10
+    results, failed = [], 0
+    for batch_start in range(0, len(pids), _CONCURRENCY):
+        batch = pids[batch_start : batch_start + _CONCURRENCY]
 
-    return {"results": results, "total": len(results)}
+        async def _enrich_one(pid: str) -> dict | None:
+            try:
+                return await enrich_product(pid)
+            except Exception as exc:
+                log.warning("bulk_enrich: enrich failed for %s: %s", pid, exc)
+                return None
+
+        batch_results = await asyncio.gather(*[_enrich_one(pid) for pid in batch])
+        for r in batch_results:
+            if r is not None:
+                results.append(r)
+            else:
+                failed += 1
+
+    return {"results": results, "total": len(results), "failed": failed}

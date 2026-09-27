@@ -125,7 +125,7 @@ class GeoRequest(BaseModel):
 
 class BulkEnrichRequest(BaseModel):
     query: str = ""
-    limit: int = Field(default=5, ge=1, le=5)
+    limit: int = Field(default=50, ge=1, le=500)
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
@@ -235,7 +235,7 @@ async def listings(q: str = "", limit: int = 50, x_session_id: str | None = Head
         return {"listings": []}
 
     try:
-        results = await _backend.search_listings(_session(), q, None, min(limit, 100))
+        results = await _backend.search_listings(_session(), q, None, limit)
         return {"listings": [r.model_dump(mode="json", exclude_none=True) for r in results]}
     except Exception as exc:
         log.warning("listings failed: %s", exc)

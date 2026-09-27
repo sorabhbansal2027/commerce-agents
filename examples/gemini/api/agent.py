@@ -99,7 +99,6 @@ class GeminiMerchantAgent:
     async def ensure_session(self, session_id: str) -> None:
         """Create the ADK session if it does not exist yet."""
         try:
-            from google.adk.sessions import InMemorySessionService
 
             existing = await self._session_service.get_session(
                 app_name="gemini_merchant",
@@ -114,14 +113,14 @@ class GeminiMerchantAgent:
                 )
         except Exception:
             # ADK may raise if session doesn't exist; create it
-            try:
+            import contextlib
+
+            with contextlib.suppress(Exception):
                 await self._session_service.create_session(
                     app_name="gemini_merchant",
                     user_id="operator",
                     session_id=session_id,
                 )
-            except Exception:
-                pass
 
     async def stream_turn(
         self, session_id: str, user_message: str

@@ -2,7 +2,18 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { AgentApi } from "web-shared";
-import type { AlertsResponse, ListingDetailResponse, ListingsResponse, OverviewResponse, QuoteApprovalsResponse } from "./types";
+import type {
+  AlertsResponse,
+  BBWProduct,
+  GeoContent,
+  ListingDetailResponse,
+  ListingsResponse,
+  MerchandisingResult,
+  OverviewResponse,
+  ProductOntology,
+  QuoteApprovalsResponse,
+  SEOContent,
+} from "./types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -37,4 +48,34 @@ export function approveQuote(workitemId: string, comments = ""): Promise<unknown
 
 export function rejectQuote(workitemId: string, comments = ""): Promise<unknown> {
   return api.post(`/quote-approvals/${encodeURIComponent(workitemId)}/reject`, { comments });
+}
+
+// --- Merchandising ---
+
+export function fetchBBWProducts(): Promise<{ products: BBWProduct[] } | null> {
+  return api.get<{ products: BBWProduct[] }>("/merchandising/products");
+}
+
+export function enrichProduct(listingId: string, autoStage = false): Promise<MerchandisingResult | null> {
+  return api.post<MerchandisingResult>("/merchandising/enrich", {
+    listing_id: listingId,
+    aspects: "all",
+    auto_stage: autoStage,
+  });
+}
+
+export function generateSEO(listingId: string, market = "US", brand = "DreamHaus"): Promise<SEOContent | null> {
+  return api.post<SEOContent>("/merchandising/seo", { listing_id: listingId, market, brand });
+}
+
+export function generateGeo(listingId: string, regions = "US-northeast,US-south,US-west,UK"): Promise<{ variants: GeoContent[] } | null> {
+  return api.post<{ variants: GeoContent[] }>("/merchandising/geo", { listing_id: listingId, regions });
+}
+
+export function classifyProduct(listingId: string): Promise<ProductOntology | null> {
+  return api.get<ProductOntology>(`/merchandising/classify/${encodeURIComponent(listingId)}`);
+}
+
+export function bulkEnrich(query = "", limit = 5): Promise<{ results: MerchandisingResult[] } | null> {
+  return api.post<{ results: MerchandisingResult[] }>("/merchandising/bulk", { query, limit });
 }

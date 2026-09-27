@@ -18,12 +18,13 @@ import AssistantPanel from "@/components/AssistantPanel";
 import CatalogView from "@/components/views/CatalogView";
 import HomeView from "@/components/views/HomeView";
 import InventoryView from "@/components/views/InventoryView";
+import MerchandisingView from "@/components/views/MerchandisingView";
 import OrdersView from "@/components/views/OrdersView";
 import QuoteApprovalsView from "@/components/views/QuoteApprovalsView";
 import { api, fetchOverview, fetchQuoteApprovals, UNREACHABLE } from "@/lib/api";
 import type { StagedChange } from "@/lib/types";
 
-type PortalView = "home" | "catalog" | "orders" | "inventory" | "quotes";
+type PortalView = "home" | "catalog" | "orders" | "inventory" | "quotes" | "merchandising";
 
 function StoreMark() {
   return (
@@ -83,8 +84,9 @@ export default function PortalPage() {
         id: "quotes",
         label: "Quote Approvals",
         icon: "edit",
-        count: quoteApprovals ? (quoteApprovals.approvals.length || null) : null,
+        count: quoteApprovals ? (quoteApprovals.approvals?.length || null) : null,
       },
+      { id: "merchandising", label: "Merchandising", icon: "tag" },
     ];
   }, [overview]);
 
@@ -135,6 +137,7 @@ export default function PortalPage() {
             ) : null}
             {view === "inventory" ? <InventoryView refreshKey={refreshKey} onAskAssistant={askAssistant} /> : null}
             {view === "quotes" ? <QuoteApprovalsView refreshKey={refreshKey} onAskAssistant={askAssistant} /> : null}
+            {view === "merchandising" ? <MerchandisingView onAskAssistant={askAssistant} /> : null}
           </>
         ) : null}
       </PortalShell>

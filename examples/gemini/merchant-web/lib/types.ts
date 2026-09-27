@@ -227,6 +227,64 @@ export interface QuoteApprovalsResponse {
   approvals: PendingQuoteApproval[];
 }
 
+// --- Merchandising / ontology ---
+
+export interface SemanticAttribute {
+  key: string;
+  value: string;
+  confidence: number;
+  source: string;
+}
+
+export interface ProductOntology {
+  listing_id: string;
+  category: string | null;
+  subcategory: string | null;
+  style_tags: string[];
+  occasions: string[];
+  benefits: string[];
+  target_persona: string | null;
+  semantic_attributes: SemanticAttribute[];
+}
+
+export interface SEOContent {
+  title: string;
+  meta_description: string;
+  h1: string;
+  keywords: string[];
+  slug: string;
+}
+
+export interface GeoContent {
+  region: string;
+  title_variant: string | null;
+  description_variant: string;
+  occasion_tags: string[];
+  seasonal_notes: string | null;
+}
+
+export interface MerchandisingResult {
+  listing_id: string;
+  original_title: string;
+  enriched_description: string;
+  benefits_bullets: string[];
+  ontology: ProductOntology;
+  seo: SEOContent | null;
+  geo_variants: GeoContent[];
+  staged_change_id: string | null;
+}
+
+export interface BBWProduct {
+  id: string;
+  title: string;
+  description: string;
+  category: string;
+  price: number;
+  currency: string;
+  status: string;
+  attributes: Record<string, string>;
+}
+
 // --- Presentation payloads, as streamed after server enrichment ---
 
 export interface MetricEntry {

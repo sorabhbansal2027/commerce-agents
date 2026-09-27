@@ -58,8 +58,9 @@ def _build_agent(store_name: str, session_id: str) -> Any:
             "google-adk is required. Install it with: pip install google-adk"
         ) from exc
 
-    from .storefront_tools import ALL_STOREFRONT_TOOLS
     import functools
+
+    from .storefront_tools import ALL_STOREFRONT_TOOLS
 
     # Bind session_id into the cart tools so ADK can call them without it
     def _bound(fn: Any, **kw: Any) -> Any:
@@ -141,14 +142,14 @@ class GeminiStorefrontAgent:
                     session_id=session_id,
                 )
         except Exception:
-            try:
+            import contextlib
+
+            with contextlib.suppress(Exception):
                 await svc.create_session(
                     app_name="gemini_storefront",
                     user_id="shopper",
                     session_id=session_id,
                 )
-            except Exception:
-                pass
 
     def drop_session(self, session_id: str) -> None:
         self._sessions.pop(session_id, None)
@@ -158,7 +159,8 @@ class GeminiStorefrontAgent:
     ) -> AsyncIterator[str]:
         """Run one agent turn and yield SSE frames."""
         from google.genai import types as gtypes
-        from .storefront_tools import _cart_payload, _carts
+
+        from .storefront_tools import _cart_payload
 
         runner, _ = self._get_or_create_runner(session_id)
         await self.ensure_session(session_id)

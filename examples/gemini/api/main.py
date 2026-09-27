@@ -32,6 +32,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from .agent import GeminiMerchantAgent
+from .merchandising import set_merchandising_backend
 from .tools import set_backend
 
 log = logging.getLogger(__name__)
@@ -58,8 +59,8 @@ def _build_backend() -> Any:
     if str(examples_dir) not in sys.path:
         sys.path.insert(0, str(examples_dir))
 
-    from sfcc.sfcc_bm_backend import SFCCBusinessManagerBackend
     from salesforce.api.merchant import _SFCCAdapter
+    from sfcc.sfcc_bm_backend import SFCCBusinessManagerBackend
 
     return _SFCCAdapter(SFCCBusinessManagerBackend())
 
@@ -73,6 +74,7 @@ async def lifespan(app: FastAPI):
 
     backend = _build_backend()
     set_backend(backend)
+    set_merchandising_backend(backend)
     store_name = os.environ.get("SFCC_DISPLAY_SITE_ID", "DreamHaus")
     _agent = GeminiMerchantAgent(store_name=store_name)
     log.info("Gemini ADK merchant agent ready for store: %s", store_name)
@@ -102,6 +104,28 @@ class SessionResponse(BaseModel):
 
 class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=4000)
+
+
+class EnrichRequest(BaseModel):
+    listing_id: str
+    aspects: str = "all"
+    auto_stage: bool = False
+
+
+class SEORequest(BaseModel):
+    listing_id: str
+    market: str = "US"
+    brand: str = "DreamHaus"
+
+
+class GeoRequest(BaseModel):
+    listing_id: str
+    regions: str = "US-northeast,UK"
+
+
+class BulkEnrichRequest(BaseModel):
+    query: str = ""
+    limit: int = Field(default=5, ge=1, le=5)
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
@@ -196,6 +220,8 @@ async def overview(x_session_id: str | None = Header(default=None)) -> dict:
             "inventory": inventory_data,
             "order_issues": order_issues,
         },
+        "recent_orders": [],
+        "recent_changes": [],
     }
 
 
@@ -275,3 +301,78 @@ async def reset(x_session_id: str | None = Header(default=None)) -> dict:
 @app.get("/api/merchant/memory")
 async def memory(x_session_id: str | None = Header(default=None)) -> dict:
     return {"facts": []}
+
+
+# ── Merchandising endpoints ────────────────────────────────────────────────────
+
+
+@app.post("/api/merchant/merchandising/enrich")
+async def merchandising_enrich(
+    request: EnrichRequest,
+    x_session_id: str | None = Header(default=None),
+) -> dict:
+    if not x_session_id or x_session_id not in _sessions:
+        raise HTTPException(status_code=401, detail="Invalid or missing X-Session-Id header")
+    from .merchandising import enrich_product
+
+    return await enrich_product(request.listing_id, aspects=request.aspects, auto_stage=request.auto_stage)
+
+
+@app.post("/api/merchant/merchandising/seo")
+async def merchandising_seo(
+    request: SEORequest,
+    x_session_id: str | None = Header(default=None),
+) -> dict:
+    if not x_session_id or x_session_id not in _sessions:
+        raise HTTPException(status_code=401, detail="Invalid or missing X-Session-Id header")
+    from .merchandising import generate_seo_content
+
+    return await generate_seo_content(request.listing_id, market=request.market, brand=request.brand)
+
+
+@app.post("/api/merchant/merchandising/geo")
+async def merchandising_geo(
+    request: GeoRequest,
+    x_session_id: str | None = Header(default=None),
+) -> dict:
+    if not x_session_id or x_session_id not in _sessions:
+        raise HTTPException(status_code=401, detail="Invalid or missing X-Session-Id header")
+    from .merchandising import generate_geo_content
+
+    return await generate_geo_content(request.listing_id, regions=request.regions)
+
+
+@app.get("/api/merchant/merchandising/classify/{listing_id}")
+async def merchandising_classify(
+    listing_id: str,
+    x_session_id: str | None = Header(default=None),
+) -> dict:
+    if not x_session_id or x_session_id not in _sessions:
+        raise HTTPException(status_code=401, detail="Invalid or missing X-Session-Id header")
+    from .merchandising import classify_product_ontology
+
+    return await classify_product_ontology(listing_id)
+
+
+@app.post("/api/merchant/merchandising/bulk")
+async def merchandising_bulk(
+    request: BulkEnrichRequest,
+    x_session_id: str | None = Header(default=None),
+) -> dict:
+    if not x_session_id or x_session_id not in _sessions:
+        raise HTTPException(status_code=401, detail="Invalid or missing X-Session-Id header")
+    from .merchandising import bulk_enrich_catalog
+
+    return await bulk_enrich_catalog(query=request.query, limit=request.limit)
+
+
+@app.get("/api/merchant/merchandising/products")
+async def merchandising_products(
+    x_session_id: str | None = Header(default=None),
+) -> dict:
+    """Return the BBW product fixture catalog for the merchandising demo UI."""
+    if not x_session_id or x_session_id not in _sessions:
+        raise HTTPException(status_code=401, detail="Invalid or missing X-Session-Id header")
+    from gemini.ontology.bbw_products import BBW_PRODUCTS
+
+    return {"products": BBW_PRODUCTS}

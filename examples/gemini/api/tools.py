@@ -9,7 +9,6 @@ async methods; ADK calls tools in the event loop so ``asyncio.run`` is not neede
 from __future__ import annotations
 
 import logging
-import os
 from typing import Any
 
 log = logging.getLogger(__name__)
@@ -214,6 +213,66 @@ async def discard_change(change_id: str) -> dict:
         return {"error": str(exc)}
 
 
+# ── Merchandising tools ───────────────────────────────────────────────────────
+
+
+async def enrich_product(listing_id: str, aspects: str = "all") -> dict:
+    """Generate a vivid B2C product description, benefit bullets, and semantic attributes for a listing.
+
+    Use this when asked to enrich, improve, or generate content for a product.
+
+    Args:
+        listing_id: The product ID to enrich (supports BBW-* fixture IDs and SFCC product IDs).
+        aspects: Aspects to enrich — use "all" to enrich description and benefits together.
+    """
+    from .merchandising import enrich_product as _enrich
+
+    return await _enrich(listing_id, aspects=aspects)
+
+
+async def generate_seo_content(listing_id: str, market: str = "US", brand: str = "DreamHaus") -> dict:
+    """Generate keyword-optimised SEO title, meta description, H1, and URL slug for a product.
+
+    Use this when asked to generate SEO content, optimise for search, or improve discoverability.
+
+    Args:
+        listing_id: The product ID (supports BBW-* fixture IDs and SFCC product IDs).
+        market: Target market, e.g. US, UK, CA.
+        brand: Brand name to include at the end of the SEO title.
+    """
+    from .merchandising import generate_seo_content as _seo
+
+    return await _seo(listing_id, market=market, brand=brand)
+
+
+async def generate_geo_content(listing_id: str, regions: str = "US-northeast,UK") -> dict:
+    """Generate region-specific product description variants for different geographic markets.
+
+    Use this when asked to localise content, adapt descriptions for different regions, or
+    create geo-targeted copy.
+
+    Args:
+        listing_id: The product ID (supports BBW-* fixture IDs and SFCC product IDs).
+        regions: Comma-separated list from: US-northeast, US-south, US-west, UK, CA.
+    """
+    from .merchandising import generate_geo_content as _geo
+
+    return await _geo(listing_id, regions=regions)
+
+
+async def classify_product_ontology(listing_id: str) -> dict:
+    """Classify a product into the B2C taxonomy: category, occasions, style tags, and target persona.
+
+    Use this when asked to classify, tag, or categorise a product for collection building or navigation.
+
+    Args:
+        listing_id: The product ID (supports BBW-* fixture IDs and SFCC product IDs).
+    """
+    from .merchandising import classify_product_ontology as _classify
+
+    return await _classify(listing_id)
+
+
 # ── All tools exported for the ADK agent ─────────────────────────────────────
 
 ALL_TOOLS = [
@@ -228,4 +287,9 @@ ALL_TOOLS = [
     stage_inventory_action,
     apply_change,
     discard_change,
+    # Merchandising tools
+    enrich_product,
+    generate_seo_content,
+    generate_geo_content,
+    classify_product_ontology,
 ]

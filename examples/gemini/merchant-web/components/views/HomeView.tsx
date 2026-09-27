@@ -311,13 +311,13 @@ export default function HomeView({
         <div className="flex flex-col gap-4">
           <Insights insights={data.insights ?? []} onAskAssistant={onAskAssistant} />
           <Panel title="Recent orders" action={<ViewLink label="All orders" onClick={() => onNavigate("orders")} />}>
-            {data.recent_orders.length === 0 ? (
+            {(data.recent_orders?.length ?? 0) === 0 ? (
               <p className="px-[18px] pb-4 text-[13px] text-(--ink-soft)">No orders yet.</p>
             ) : (
               <RecordList rows={orderRows(data.recent_orders.slice(0, 4))} />
             )}
           </Panel>
-          <RecentChanges changes={data.recent_changes} />
+          <RecentChanges changes={data.recent_changes ?? []} />
         </div>
       </div>
     </div>

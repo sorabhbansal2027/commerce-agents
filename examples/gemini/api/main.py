@@ -194,7 +194,12 @@ async def overview(x_session_id: str | None = Header(default=None)) -> dict:
     if not x_session_id or x_session_id not in _sessions:
         raise HTTPException(status_code=401, detail="Invalid or missing X-Session-Id header")
     if _backend is None:
-        raise HTTPException(status_code=503, detail="Backend not initialised")
+        return {
+            "snapshot": {"sales": 0.0, "orders": 0, "period": "30d", "alerts": {"low_stock": 0, "order_issues": 0, "pending_changes": 0}},
+            "needs_attention": {"inventory": [], "order_issues": []},
+            "recent_orders": [],
+            "recent_changes": [],
+        }
 
     sess = _session()
     snapshot_data: dict = {}

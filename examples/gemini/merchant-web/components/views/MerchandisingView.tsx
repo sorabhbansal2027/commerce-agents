@@ -628,6 +628,31 @@ function KGPanel({ product }: { product: BBWProduct }) {
         </div>
       </div>
 
+      {/* Category presets — shows the breadth of KG coverage */}
+      <div className="rounded-lg border border-(--border) bg-(--surface-raised) p-3">
+        <p className="mb-2 text-xs font-medium text-(--ink-secondary)">Browse by category:</p>
+        <div className="grid grid-cols-2 gap-2">
+          {[
+            { label: "🌿 Botanical extracts", term: "eucalyptus" },
+            { label: "🌸 Floral ingredients", term: "jasmine" },
+            { label: "🪵 Wood materials", term: "sandalwood" },
+            { label: "🍋 Citrus compounds", term: "bergamot" },
+            { label: "🌾 Aromatic grasses", term: "vetiver" },
+            { label: "🧴 Skin care actives", term: "shea butter" },
+            { label: "🕯️ Wax & carriers", term: "soy wax" },
+            { label: "🌲 Resinous notes", term: "frankincense" },
+          ].map(({ label, term }) => (
+            <button
+              key={term}
+              onClick={() => void runSearch(term)}
+              className="rounded-md border border-(--border) bg-(--surface) px-3 py-2 text-left text-xs text-(--ink-secondary) hover:border-(--brand) hover:text-(--ink) transition-colors"
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Results */}
       {searching && (
         <div className="flex items-center gap-2 py-6 justify-center text-(--ink-secondary)">

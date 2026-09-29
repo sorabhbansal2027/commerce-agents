@@ -5,7 +5,10 @@
 FROM node:20-slim AS builder
 WORKDIR /app
 
-ENV NEXT_PUBLIC_API_URL=https://gemini-merchant-api-production.up.railway.app
+# Override at build time for non-Railway targets:
+#   docker build --build-arg NEXT_PUBLIC_API_URL=https://... -f Dockerfile.merchant-web .
+ARG NEXT_PUBLIC_API_URL=https://gemini-merchant-api-production.up.railway.app
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 
 # Mirror the repo layout so file:../../web-shared resolves at install time.
 COPY examples/web-shared                ./examples/web-shared

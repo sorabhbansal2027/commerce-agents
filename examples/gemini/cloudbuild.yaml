@@ -1,0 +1,151 @@
+# Deploy gemini-merchant-api and gemini-merchant-web to Cloud Run.
+#
+# Run from repo root:
+#   gcloud builds submit . \
+#     --project=spartan-concord-510108-p2 \
+#     --config=examples/gemini/cloudbuild.yaml \
+#     --substitutions=_GOOGLE_API_KEY=YOUR_KEY,_GOOGLE_KG_API_KEY=YOUR_KG_KEY
+
+substitutions:
+  _REGION: us-central1
+  _REPO: commerce
+  _GOOGLE_API_KEY: ''
+  _GOOGLE_KG_API_KEY: ''
+
+steps:
+  # ── 1. Ensure Artifact Registry repo exists ───────────────────────────────
+  - id: ensure-registry
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        gcloud artifacts repositories describe ${_REPO} \
+          --project=$PROJECT_ID --location=${_REGION} &>/dev/null \
+        || gcloud artifacts repositories create ${_REPO} \
+             --project=$PROJECT_ID \
+             --repository-format=docker \
+             --location=${_REGION} \
+             --description="Commerce agents images"
+
+  # ── 2. Build merchant-api ─────────────────────────────────────────────────
+  - id: build-api
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -f
+      - examples/gemini/Dockerfile.merchant-api
+      - -t
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/merchant-api:$BUILD_ID
+      - -t
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/merchant-api:latest
+      - .
+    waitFor: [ensure-registry]
+
+  # ── 3. Push merchant-api ──────────────────────────────────────────────────
+  - id: push-api
+    name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - --all-tags
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/merchant-api
+    waitFor: [build-api]
+
+  # ── 4. Deploy merchant-api to Cloud Run ───────────────────────────────────
+  - id: deploy-api
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - gemini-merchant-api
+      - --image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/merchant-api:$BUILD_ID
+      - --project=$PROJECT_ID
+      - --region=${_REGION}
+      - --platform=managed
+      - --allow-unauthenticated
+      - --port=8000
+      - --set-env-vars=GOOGLE_API_KEY=${_GOOGLE_API_KEY},GOOGLE_KG_API_KEY=${_GOOGLE_KG_API_KEY}
+    waitFor: [push-api]
+
+  # ── 5. Capture API URL for web build arg ──────────────────────────────────
+  - id: get-api-url
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        gcloud run services describe gemini-merchant-api \
+          --project=$PROJECT_ID \
+          --region=${_REGION} \
+          --format="value(status.url)" | tee /workspace/api_url.txt
+    waitFor: [deploy-api]
+
+  # ── 6. Build merchant-web (bakes in the GCP API URL) ─────────────────────
+  - id: build-web
+    name: gcr.io/cloud-builders/docker
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        docker build \
+          -f examples/gemini/Dockerfile.merchant-web \
+          --build-arg NEXT_PUBLIC_API_URL=$$(cat /workspace/api_url.txt) \
+          -t ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/merchant-web:$BUILD_ID \
+          -t ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/merchant-web:latest \
+          .
+    waitFor: [get-api-url]
+
+  # ── 7. Push merchant-web ──────────────────────────────────────────────────
+  - id: push-web
+    name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - --all-tags
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/merchant-web
+    waitFor: [build-web]
+
+  # ── 8. Deploy merchant-web to Cloud Run ───────────────────────────────────
+  - id: deploy-web
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - gemini-merchant-web
+      - --image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/merchant-web:$BUILD_ID
+      - --project=$PROJECT_ID
+      - --region=${_REGION}
+      - --platform=managed
+      - --allow-unauthenticated
+      - --port=8080
+    waitFor: [push-web]
+
+  # ── 9. Print deployed URLs ────────────────────────────────────────────────
+  - id: print-urls
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        WEB_URL=$$(gcloud run services describe gemini-merchant-web \
+          --project=$PROJECT_ID --region=${_REGION} --format="value(status.url)")
+        echo ""
+        echo "GCP deployment complete"
+        echo "  API → $$(cat /workspace/api_url.txt)"
+        echo "  Web → $$WEB_URL"
+        echo ""
+        echo "Railway (unchanged):"
+        echo "  API → https://gemini-merchant-api-production.up.railway.app"
+        echo "  Web → https://gemini-merchant-web-production.up.railway.app"
+    waitFor: [deploy-web]
+
+images:
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/merchant-api:$BUILD_ID
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/merchant-api:latest
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/merchant-web:$BUILD_ID
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/merchant-web:latest
+
+options:
+  machineType: E2_HIGHCPU_8
+  logging: CLOUD_LOGGING_ONLY

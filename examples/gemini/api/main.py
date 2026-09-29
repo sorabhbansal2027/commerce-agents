@@ -48,11 +48,15 @@ _sessions: dict[str, dict[str, Any]] = {}
 _agent: GeminiMerchantAgent | None = None
 
 
-def _build_backend() -> Any:
-    """Build the SFCC adapter if SFCC env vars are present."""
+def _build_backend() -> Any | None:
+    """Build the SFCC adapter when SFCC env vars are present; return None otherwise.
+
+    Without SFCC credentials the API still serves BBW fixture products via the
+    ontology module — useful for demo environments that don't have live SFCC access.
+    """
     if not os.environ.get("SFCC_INSTANCE_URL"):
-        raise RuntimeError("SFCC_INSTANCE_URL is required")
-    # Reuse the same SFCCAdapter from the salesforce vertical
+        log.info("SFCC_INSTANCE_URL not set — running in fixture-only mode (BBW products)")
+        return None
     import sys
     from pathlib import Path
 
@@ -74,8 +78,9 @@ async def lifespan(app: FastAPI):
         os.environ["GOOGLE_API_KEY"] = os.environ["GEMINI_API_KEY"]
 
     backend = _build_backend()
-    set_backend(backend)
-    set_merchandising_backend(backend)
+    if backend is not None:
+        set_backend(backend)
+        set_merchandising_backend(backend)
     store_name = os.environ.get("SFCC_DISPLAY_SITE_ID", "DreamHaus")
     _agent = GeminiMerchantAgent(store_name=store_name)
     log.info("Gemini ADK merchant agent ready for store: %s", store_name)

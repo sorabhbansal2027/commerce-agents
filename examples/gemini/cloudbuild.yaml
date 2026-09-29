@@ -9,15 +9,22 @@
 #     --substitutions=_GOOGLE_API_KEY=KEY,_GOOGLE_KG_API_KEY=KEY \
 #     --region=us-central1
 #
-# Web-only redeploy (API URL already known):
-#   gcloud builds submit . ... \
-#     --substitutions=...,_WEB_API_URL=https://gemini-merchant-api-t4nrmsjpcq-uc.a.run.app
+# API-only redeploy (preserves existing env vars on the service, no keys needed):
+#   gcloud builds submit . \
+#     --project=spartan-concord-510108-p2 \
+#     --config=examples/gemini/cloudbuild.yaml \
+#     --substitutions=_WEB_API_URL=https://gemini-merchant-api-t4nrmsjpcq-uc.a.run.app \
+#     --region=us-central1
+#
+# deploy-api uses --update-env-vars so existing GOOGLE_API_KEY/KG keys are preserved
+# when _GOOGLE_API_KEY/_GOOGLE_KG_API_KEY are left empty.
 
 substitutions:
   _REGION: us-central1
   _REPO: commerce
   _GOOGLE_API_KEY: ''
   _GOOGLE_KG_API_KEY: ''
+  _GEMINI_MODEL: 'gemini-2.5-flash'
   _WEB_API_URL: ''
 
 steps:
@@ -60,20 +67,29 @@ steps:
     waitFor: [build-api]
 
   # ── 4. Deploy merchant-api to Cloud Run ───────────────────────────────────
+  # Always sets GEMINI_MODEL; only updates GOOGLE_API_KEY/KG when non-empty
+  # so a code-only redeploy (keys not passed) preserves existing key values.
   - id: deploy-api
     name: gcr.io/google.com/cloudsdktool/cloud-sdk
-    entrypoint: gcloud
+    entrypoint: bash
     args:
-      - run
-      - deploy
-      - gemini-merchant-api
-      - --image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/merchant-api:$BUILD_ID
-      - --project=$PROJECT_ID
-      - --region=${_REGION}
-      - --platform=managed
-      - --allow-unauthenticated
-      - --port=8000
-      - --set-env-vars=GOOGLE_API_KEY=${_GOOGLE_API_KEY},GOOGLE_KG_API_KEY=${_GOOGLE_KG_API_KEY}
+      - -c
+      - |
+        ENV_VARS="GEMINI_MODEL=${_GEMINI_MODEL}"
+        if [ -n "${_GOOGLE_API_KEY}" ]; then
+          ENV_VARS="$$ENV_VARS,GOOGLE_API_KEY=${_GOOGLE_API_KEY}"
+        fi
+        if [ -n "${_GOOGLE_KG_API_KEY}" ]; then
+          ENV_VARS="$$ENV_VARS,GOOGLE_KG_API_KEY=${_GOOGLE_KG_API_KEY}"
+        fi
+        gcloud run deploy gemini-merchant-api \
+          --image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/merchant-api:$BUILD_ID \
+          --project=$PROJECT_ID \
+          --region=${_REGION} \
+          --platform=managed \
+          --allow-unauthenticated \
+          --port=8000 \
+          --update-env-vars="$$ENV_VARS"
     waitFor: [push-api]
 
   # ── 5. Resolve API URL ────────────────────────────────────────────────────

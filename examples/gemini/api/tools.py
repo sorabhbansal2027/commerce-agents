@@ -181,8 +181,72 @@ async def stage_inventory_action(
         return {"error": str(exc)}
 
 
+async def approve_change(change_id: str) -> dict:
+    """Record explicit operator approval for a staged change, enabling apply_change to proceed.
+
+    Call this ONLY after the operator has explicitly said they approve a specific change
+    (e.g. "approve", "apply change <id>", "yes, apply that"). The approval gate on
+    apply_change blocks execution until this is called.
+
+    Args:
+        change_id: The change_id returned by a stage_ tool or get_pending_changes.
+    """
+    return {"approved": change_id, "status": "approval_recorded"}
+
+
+async def run_analysis(brief: str, metrics: dict | None = None) -> dict:
+    """Compute a derived metric or answer a specific analytical question using Gemini.
+
+    Use for questions that require computation across multiple figures — segment drivers,
+    period comparisons, correlation between metrics, or "why did X change" questions.
+    Do NOT use for plain lookups that a snapshot already answers.
+
+    Args:
+        brief: One or two sentences describing exactly what to compute and why.
+               Include the specific metrics and period in scope.
+        metrics: Optional dict of raw figures to reason over (from get_business_snapshot
+                 or other tools). Pass what you have; Gemini will work with it.
+    """
+    try:
+        from google import genai
+        from google.genai import types as gtypes
+
+        import os
+        client = genai.Client(api_key=os.environ.get("GOOGLE_API_KEY", ""))
+        model = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
+
+        metrics_str = ""
+        if metrics:
+            import json as _json
+            metrics_str = f"\n\nAvailable metrics:\n{_json.dumps(metrics, indent=2)}"
+
+        prompt = (
+            f"You are a commerce analyst. Answer this analytical question concisely, "
+            f"showing your reasoning. Return a JSON object with fields: "
+            f"'answer' (string, 1-3 sentences), 'computation' (string, the steps taken), "
+            f"'confidence' ('high'|'medium'|'low'), 'caveat' (string or null).\n\n"
+            f"Question: {brief}{metrics_str}"
+        )
+
+        response = await client.aio.models.generate_content(
+            model=model,
+            contents=prompt,
+            config=gtypes.GenerateContentConfig(
+                response_mime_type="application/json",
+                temperature=0.1,
+            ),
+        )
+        import json as _json
+        return _json.loads(response.text)
+    except Exception as exc:
+        log.warning("run_analysis failed: %s", exc)
+        return {"answer": f"Analysis unavailable: {exc}", "confidence": "low", "caveat": str(exc)}
+
+
 async def apply_change(change_id: str) -> dict:
     """Apply a staged change the operator has approved. This is the only call that modifies live state.
+
+    The approval gate blocks this tool until approve_change is called for this change_id.
 
     Args:
         change_id: The change_id from get_pending_changes or a stage_ tool result.
@@ -291,18 +355,20 @@ async def lookup_product_entities(query: str, limit: int = 5) -> dict:
     return await _kglookup(query, limit=limit)
 
 
-# ── All tools exported for the ADK agent ─────────────────────────────────────
+# ── All tools exported for both ADK (Path 2) and genai-raw (Path 1) ──────────
 
 ALL_TOOLS = [
     get_business_snapshot,
     get_inventory_alerts,
     get_order_issues,
+    run_analysis,
     search_listings,
     get_listing,
     get_pending_changes,
     get_pending_quote_approvals,
     stage_listing_update,
     stage_inventory_action,
+    approve_change,
     apply_change,
     discard_change,
     # Merchandising tools
@@ -312,3 +378,11 @@ ALL_TOOLS = [
     classify_product_ontology,
     lookup_product_entities,
 ]
+
+# Deduplicated function map used by the genai-raw path's manual dispatch loop
+ALL_TOOL_FUNCTIONS: dict[str, Any] = {fn.__name__: fn for fn in dict.fromkeys(ALL_TOOLS)}
+
+
+def get_tool_declarations() -> list:
+    """Return deduplicated tool callables for google.genai auto-conversion to FunctionDeclarations."""
+    return list(dict.fromkeys(ALL_TOOLS))

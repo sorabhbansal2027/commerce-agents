@@ -23,9 +23,24 @@ import logging
 import os
 import time
 from collections.abc import AsyncIterator
+from pathlib import Path
 from typing import Any
 
 log = logging.getLogger(__name__)
+
+_SKILLS_DIR = Path(__file__).parent.parent / "skills"
+
+
+def _load_skills() -> str:
+    """Load per-domain skill instructions from examples/gemini/skills/."""
+    if not _SKILLS_DIR.exists():
+        return ""
+    parts = []
+    for skill_md in sorted(_SKILLS_DIR.glob("*/SKILL.md")):
+        content = skill_md.read_text().strip()
+        if content:
+            parts.append(content)
+    return "\n\n---\n\n".join(parts) if parts else ""
 
 # ── System prompts ─────────────────────────────────────────────────────────────
 
@@ -103,6 +118,80 @@ def _before_model_cb(callback_context: Any, llm_request: Any) -> None:
     return None
 
 
+_WRITE_TOOLS = {"stage_listing_update", "stage_inventory_action"}
+_APPLY_TOOLS = {"apply_change"}
+
+
+def _before_tool_cb(
+    tool: Any,
+    args: dict[str, Any],
+    tool_context: Any,
+) -> dict[str, Any] | None:
+    """Safety gates: provenance and approval — run before every tool call.
+
+    Returns a dict to short-circuit the tool (dict becomes the result),
+    or None to let the tool execute normally.
+
+    PROVENANCE gate: write tools may only target listing_ids that were
+    returned by a read tool (search_listings / get_listing) this session.
+    Tracks seen IDs via session.state["seen_listing_ids"].
+
+    APPROVAL gate: apply_change may only proceed if the operator called
+    approve_change for that change_id this session.
+    Tracks approved IDs via session.state["approved_change_ids"].
+    """
+    tool_name: str = getattr(tool, "name", None) or ""
+    try:
+        # Provenance gate
+        if tool_name in _WRITE_TOOLS:
+            listing_id = args.get("listing_id", "")
+            seen: list[str] = tool_context.state.get("seen_listing_ids", [])
+            if listing_id and listing_id not in seen:
+                return {
+                    "error": (
+                        f"Provenance gate blocked: '{listing_id}' was not returned by "
+                        "search_listings or get_listing this session. "
+                        "Read the listing first before staging a change."
+                    ),
+                    "gate": "provenance",
+                }
+
+        # Options gate
+        if tool_name == "stage_inventory_action":
+            action = args.get("action", "")
+            if action not in ("restock", "pause", "activate"):
+                return {
+                    "error": f"Options gate blocked: action '{action}' is invalid. Choose restock, pause, or activate.",
+                    "gate": "options",
+                }
+
+        # Guardrail gate
+        if tool_name == "stage_inventory_action":
+            qty = args.get("quantity", 0)
+            if isinstance(qty, int) and qty > 10_000:
+                return {
+                    "error": f"Guardrail gate blocked: quantity {qty} exceeds the per-action cap of 10 000 units.",
+                    "gate": "guardrail",
+                }
+
+        # Approval gate
+        if tool_name in _APPLY_TOOLS:
+            change_id = args.get("change_id", "")
+            approved: list[str] = tool_context.state.get("approved_change_ids", [])
+            if change_id and change_id not in approved:
+                return {
+                    "error": (
+                        f"Approval gate blocked: change '{change_id}' has not been "
+                        "approved by the operator. "
+                        "Call approve_change after the operator explicitly approves."
+                    ),
+                    "gate": "approval",
+                }
+    except Exception as exc:
+        log.debug("before_tool_cb: gate check skipped: %s", exc)
+    return None
+
+
 def _after_tool_cb(
     tool: Any,
     args: dict[str, Any],
@@ -117,15 +206,57 @@ def _after_tool_cb(
     tool_name: str = getattr(tool, "name", None) or ""
     now = datetime.datetime.utcnow().isoformat() + "Z"
 
-    # Persist business-critical data in session state across turns
     try:
+        # Business snapshot cache
         if tool_name == "get_business_snapshot":
             tool_context.state["last_snapshot"] = tool_response
             tool_context.state["snapshot_fetched_at"] = now
+
+        # Inventory alert cache
         elif tool_name == "get_inventory_alerts" and isinstance(tool_response, dict):
             alerts = tool_response.get("alerts", [])
             tool_context.state["last_alerts_count"] = len(alerts)
             tool_context.state["last_alerts_fetched_at"] = now
+
+        # Provenance tracking — record IDs returned by read tools
+        elif tool_name == "get_listing" and isinstance(tool_response, dict):
+            lid = tool_response.get("id") or args.get("listing_id", "")
+            if lid:
+                seen: list[str] = list(tool_context.state.get("seen_listing_ids", []))
+                if lid not in seen:
+                    seen.append(lid)
+                    tool_context.state["seen_listing_ids"] = seen
+
+        elif tool_name == "search_listings" and isinstance(tool_response, dict):
+            new_ids = [item.get("id") for item in tool_response.get("listings", []) if item.get("id")]
+            seen = list(tool_context.state.get("seen_listing_ids", []))
+            seen.extend(i for i in new_ids if i not in seen)
+            tool_context.state["seen_listing_ids"] = seen
+
+        # Stage tracking — record change IDs for approval gate
+        elif tool_name in _WRITE_TOOLS and isinstance(tool_response, dict):
+            cid = tool_response.get("change_id")
+            if cid:
+                staged: list[str] = list(tool_context.state.get("staged_change_ids", []))
+                if cid not in staged:
+                    staged.append(cid)
+                    tool_context.state["staged_change_ids"] = staged
+
+        elif tool_name == "get_pending_changes" and isinstance(tool_response, dict):
+            new_cids = [c.get("change_id") for c in tool_response.get("changes", []) if c.get("change_id")]
+            staged = list(tool_context.state.get("staged_change_ids", []))
+            staged.extend(c for c in new_cids if c not in staged)
+            tool_context.state["staged_change_ids"] = staged
+
+        # Approval tracking — approve_change records the change_id
+        elif tool_name == "approve_change" and isinstance(tool_response, dict):
+            cid = tool_response.get("approved")
+            if cid:
+                approved: list[str] = list(tool_context.state.get("approved_change_ids", []))
+                if cid not in approved:
+                    approved.append(cid)
+                    tool_context.state["approved_change_ids"] = approved
+
     except Exception as exc:
         log.debug("after_tool_cb: session state write skipped: %s", exc)
 
@@ -161,6 +292,11 @@ def _build_merchandising_agent(store_name: str) -> Any:
         stage_listing_update,
     )
 
+    merch_skill = _load_skills()  # injects the merchandising SKILL.md into instruction
+    instruction = _MERCH_PROMPT.format(store_name=store_name)
+    if merch_skill:
+        instruction = instruction + "\n\n" + merch_skill
+
     return Agent(
         name="merchandising_agent",
         model=os.environ.get("GEMINI_MODEL", "gemini-2.0-flash"),
@@ -168,8 +304,9 @@ def _build_merchandising_agent(store_name: str) -> Any:
             "Specialist in product enrichment, SEO copy, geographic variants, and ontology "
             "classification. Handles the full classify → enrich → stage workflow."
         ),
-        instruction=_MERCH_PROMPT.format(store_name=store_name),
+        instruction=instruction,
         before_model_callback=_before_model_cb,
+        before_tool_callback=_before_tool_cb,
         after_tool_callback=_after_tool_cb,
         tools=[
             get_listing,
@@ -195,6 +332,7 @@ def _build_agent(store_name: str) -> Any:
 
     from .tools import (
         apply_change,
+        approve_change,
         discard_change,
         get_business_snapshot,
         get_inventory_alerts,
@@ -202,31 +340,39 @@ def _build_agent(store_name: str) -> Any:
         get_order_issues,
         get_pending_changes,
         get_pending_quote_approvals,
+        run_analysis,
         search_listings,
         stage_inventory_action,
         stage_listing_update,
     )
 
     merch_agent = _build_merchandising_agent(store_name)
+    skills = _load_skills()
+    instruction = _ORCHESTRATOR_PROMPT.format(store_name=store_name)
+    if skills:
+        instruction = instruction + "\n\n" + skills
 
     return Agent(
         name="gemini_merchant_agent",
         model=os.environ.get("GEMINI_MODEL", "gemini-2.0-flash"),
         description=f"Merchant AI orchestrator for {store_name}",
-        instruction=_ORCHESTRATOR_PROMPT.format(store_name=store_name),
+        instruction=instruction,
         before_model_callback=_before_model_cb,
+        before_tool_callback=_before_tool_cb,
         after_tool_callback=_after_tool_cb,
         sub_agents=[merch_agent],
         tools=[
             get_business_snapshot,
             get_inventory_alerts,
             get_order_issues,
+            run_analysis,
             search_listings,
             get_listing,
             get_pending_changes,
             get_pending_quote_approvals,
             stage_listing_update,
             stage_inventory_action,
+            approve_change,
             apply_change,
             discard_change,
         ],
@@ -243,30 +389,51 @@ def _sse(event_type: str, data: dict[str, Any]) -> str:
 # ── Agent class ────────────────────────────────────────────────────────────────
 
 
+def _build_session_service() -> Any:
+    """Return VertexAiSessionService when GCP project is configured, else InMemorySessionService.
+
+    Set GOOGLE_CLOUD_PROJECT + GOOGLE_CLOUD_LOCATION env vars to enable
+    persistent, scalable session storage via Vertex AI. Without them the agent
+    falls back to in-process memory (sessions are lost on restart).
+    """
+    project = os.environ.get("GOOGLE_CLOUD_PROJECT")
+    location = os.environ.get("GOOGLE_CLOUD_LOCATION", "us-central1")
+    if project:
+        try:
+            from google.adk.sessions import VertexAiSessionService  # type: ignore[import]
+            log.info("Using VertexAiSessionService (project=%s, location=%s)", project, location)
+            return VertexAiSessionService(project=project, location=location)
+        except Exception as exc:
+            log.warning("VertexAiSessionService unavailable, falling back to InMemory: %s", exc)
+    from google.adk.sessions import InMemorySessionService  # type: ignore[import]
+    return InMemorySessionService()
+
+
 class GeminiMerchantAgent:
-    """One deployment of the Gemini ADK merchant agent.
+    """One deployment of the Gemini ADK merchant agent — Path 2 (ADK Agent + Runner).
 
     ``runner`` and ``session_service`` are created once at startup and shared
-    across all requests; ADK's InMemorySessionService maintains per-session
-    conversation history and state.
+    across all requests.
 
     ADK framework features active:
-    - before_model_callback: injects date + store into every LLM call
-    - after_tool_callback: caches snapshot/alerts in session.state
+    - before_model_callback: injects date + store into every model call
+    - before_tool_callback: provenance gate (write tools) + approval gate (apply_change)
+    - after_tool_callback: provenance tracking, approval tracking, cache, trim
     - sub_agents: MerchandisingAgent handles all content generation tasks
-    - session.state: stores_name seeded at create_session; snapshot written after tool calls
-    - prime_session: proactively fetches briefing on login (no LLM call needed)
+    - session.state: store_name seeded at create_session; IDs tracked per turn
+    - prime_session: proactively fetches briefing at login (no LLM round-trip)
+    - Session service: VertexAiSessionService when GOOGLE_CLOUD_PROJECT is set,
+      otherwise InMemorySessionService (sessions lost on restart)
     """
 
     def __init__(self, store_name: str) -> None:
         try:
             from google.adk.runners import Runner  # type: ignore[import]
-            from google.adk.sessions import InMemorySessionService  # type: ignore[import]
         except ImportError as exc:
             raise ImportError("google-adk is required. pip install google-adk") from exc
 
         self._store_name = store_name
-        self._session_service = InMemorySessionService()
+        self._session_service = _build_session_service()
         self._runner = Runner(
             agent=_build_agent(store_name),
             app_name="gemini_merchant",

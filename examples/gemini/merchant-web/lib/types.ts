@@ -285,6 +285,34 @@ export interface BBWProduct {
   attributes: Record<string, string>;
 }
 
+export interface StagedChangeItem {
+  target: string;
+  field: string;
+  before: string | null;
+  after: string;
+}
+
+export interface StagedChangeSummary {
+  change_id: string;
+  kind: string;
+  status: string;
+  summary: string;
+  items: StagedChangeItem[];
+  created_at: string;
+  created_by: string;
+}
+
+export interface StagedChangesResponse {
+  changes: StagedChangeSummary[];
+}
+
+export interface ApplyChangeResponse {
+  change_id: string;
+  status: string;
+  summary: string;
+  applied_at: string | null;
+}
+
 // --- Presentation payloads, as streamed after server enrichment ---
 
 export interface MetricEntry {

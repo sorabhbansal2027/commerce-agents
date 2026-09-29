@@ -19,6 +19,7 @@ Optional:
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import secrets
@@ -128,6 +129,10 @@ class BulkEnrichRequest(BaseModel):
     limit: int = Field(default=50, ge=1, le=500)
 
 
+class ApplyChangeRequest(BaseModel):
+    change_id: str
+
+
 # ── Routes ────────────────────────────────────────────────────────────────────
 
 
@@ -143,6 +148,9 @@ async def create_session() -> SessionResponse:
     _sessions[session_id] = {"created_at": time.time(), "store_name": store_name}
     if _agent:
         await _agent.ensure_session(session_id)
+        # Prime the session with business context in the background so the
+        # operator can ask "what needs attention?" and get an instant answer.
+        asyncio.create_task(_agent.prime_session(session_id))
     return SessionResponse(
         session_id=session_id,
         merchant_id="gemini-merchant",
@@ -303,6 +311,21 @@ async def memory(x_session_id: str | None = Header(default=None)) -> dict:
     return {"facts": []}
 
 
+@app.get("/api/merchant/briefing")
+async def briefing(x_session_id: str | None = Header(default=None)) -> dict:
+    """Return the pre-fetched business briefing primed at session creation.
+
+    The briefing contains the business snapshot and top inventory alerts
+    collected proactively via prime_session() so the first "what's happening?"
+    message gets an instant answer without waiting for a tool call round-trip.
+    """
+    if not x_session_id or x_session_id not in _sessions:
+        raise HTTPException(status_code=401, detail="Invalid or missing X-Session-Id header")
+    if _agent is None:
+        raise HTTPException(status_code=503, detail="Agent not initialised")
+    return _agent.get_briefing(x_session_id)
+
+
 # ── Merchandising endpoints ────────────────────────────────────────────────────
 
 
@@ -364,6 +387,101 @@ async def merchandising_bulk(
     from .merchandising import bulk_enrich_catalog
 
     return await bulk_enrich_catalog(query=request.query, limit=request.limit)
+
+
+@app.get("/api/merchant/merchandising/changes")
+async def get_staged_changes(x_session_id: str | None = Header(default=None)) -> dict:
+    """Return all pending staged merchandising changes."""
+    if not x_session_id or x_session_id not in _sessions:
+        raise HTTPException(status_code=401, detail="Invalid or missing X-Session-Id header")
+    from .tools import _backend, _session
+
+    if _backend is None:
+        return {"changes": []}
+    try:
+        changes = await _backend.get_pending_changes(_session())
+        return {
+            "changes": [
+                {
+                    "change_id": c.change_id,
+                    "kind": c.kind.value if hasattr(c.kind, "value") else str(c.kind),
+                    "status": c.status.value if hasattr(c.status, "value") else str(c.status),
+                    "summary": c.summary,
+                    "items": [
+                        {"target": i.target, "field": i.field, "before": i.before, "after": i.after}
+                        for i in c.items
+                    ],
+                    "created_at": c.created_at.isoformat(),
+                    "created_by": c.created_by,
+                }
+                for c in changes
+            ]
+        }
+    except Exception as exc:
+        log.warning("get_pending_changes failed: %s", exc)
+        return {"changes": []}
+
+
+@app.post("/api/merchant/merchandising/apply")
+async def apply_staged_change(
+    request: ApplyChangeRequest,
+    x_session_id: str | None = Header(default=None),
+) -> dict:
+    """Apply a staged change — writes enriched content to the live SFCC product."""
+    if not x_session_id or x_session_id not in _sessions:
+        raise HTTPException(status_code=401, detail="Invalid or missing X-Session-Id header")
+    from .tools import _backend, _session
+
+    if _backend is None:
+        raise HTTPException(status_code=503, detail="Backend not initialised")
+    try:
+        change = await _backend.apply_change(_session(), request.change_id)
+        return {
+            "change_id": change.change_id,
+            "status": change.status.value if hasattr(change.status, "value") else str(change.status),
+            "summary": change.summary,
+            "applied_at": change.applied_at.isoformat() if change.applied_at else None,
+        }
+    except Exception as exc:
+        log.warning("apply_change failed: %s", exc)
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/merchant/merchandising/changes/{change_id}/discard")
+async def discard_staged_change(
+    change_id: str,
+    x_session_id: str | None = Header(default=None),
+) -> dict:
+    """Discard a pending staged change without writing to SFCC."""
+    if not x_session_id or x_session_id not in _sessions:
+        raise HTTPException(status_code=401, detail="Invalid or missing X-Session-Id header")
+    from .tools import _backend, _session
+
+    if _backend is None:
+        raise HTTPException(status_code=503, detail="Backend not initialised")
+    try:
+        change = await _backend.discard_change(_session(), change_id)
+        return {
+            "change_id": change.change_id,
+            "status": change.status.value if hasattr(change.status, "value") else str(change.status),
+        }
+    except Exception as exc:
+        log.warning("discard_change failed: %s", exc)
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/api/merchant/merchandising/entities")
+async def merchandising_entities(
+    q: str,
+    limit: int = 5,
+    x_session_id: str | None = Header(default=None),
+) -> dict:
+    """Look up real-world semantic entities from Google Knowledge Graph for a product name or ingredient."""
+    if not x_session_id or x_session_id not in _sessions:
+        raise HTTPException(status_code=401, detail="Invalid or missing X-Session-Id header")
+    from .merchandising import lookup_product_entities
+
+    return await lookup_product_entities(q, limit=limit)
 
 
 @app.get("/api/merchant/merchandising/products")

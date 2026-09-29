@@ -264,6 +264,7 @@ async def classify_product_ontology(listing_id: str) -> dict:
     """Classify a product into the B2C taxonomy: category, occasions, style tags, and target persona.
 
     Use this when asked to classify, tag, or categorise a product for collection building or navigation.
+    The result includes Knowledge Graph entity IDs and Wikipedia descriptions for key ingredients.
 
     Args:
         listing_id: The product ID (supports BBW-* fixture IDs and SFCC product IDs).
@@ -271,6 +272,23 @@ async def classify_product_ontology(listing_id: str) -> dict:
     from .merchandising import classify_product_ontology as _classify
 
     return await _classify(listing_id)
+
+
+async def lookup_product_entities(query: str, limit: int = 5) -> dict:
+    """Look up real-world semantic entities for a product name, ingredient, or fragrance note in Google Knowledge Graph.
+
+    Use this before writing copy about specific ingredients or materials to ground claims in
+    real-world facts — for example, to get the Wikipedia description of "teakwood", "eucalyptus
+    spearmint", or "shea butter" before including them in enriched product descriptions.
+
+    Args:
+        query: Product name, ingredient, or fragrance note to look up
+               (e.g. "mahogany teakwood", "eucalyptus spearmint", "shea butter").
+        limit: Number of entities to return (1-10).
+    """
+    from .merchandising import lookup_product_entities as _kglookup
+
+    return await _kglookup(query, limit=limit)
 
 
 # ── All tools exported for the ADK agent ─────────────────────────────────────
@@ -292,4 +310,5 @@ ALL_TOOLS = [
     generate_seo_content,
     generate_geo_content,
     classify_product_ontology,
+    lookup_product_entities,
 ]

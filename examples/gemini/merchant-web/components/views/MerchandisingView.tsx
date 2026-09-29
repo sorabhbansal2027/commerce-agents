@@ -5,13 +5,22 @@
 
 import { useCallback, useEffect, useState } from "react";
 import {
+  applyChange,
   classifyProduct,
+  discardChange,
   enrichProduct,
   fetchBBWProducts,
   generateGeo,
   generateSEO,
 } from "@/lib/api";
-import type { BBWProduct, GeoContent, MerchandisingResult, ProductOntology, SEOContent } from "@/lib/types";
+import type {
+  ApplyChangeResponse,
+  BBWProduct,
+  GeoContent,
+  MerchandisingResult,
+  ProductOntology,
+  SEOContent,
+} from "@/lib/types";
 
 // ── Sub-types ─────────────────────────────────────────────────────────────────
 
@@ -80,17 +89,71 @@ function LoadingSpinner() {
 
 // ── Result panels ─────────────────────────────────────────────────────────────
 
-function EnrichPanel({ result, onStage }: { result: MerchandisingResult; onStage: () => void }) {
+type ApplyState =
+  | { phase: "idle" }
+  | { phase: "confirming" }
+  | { phase: "applying" }
+  | { phase: "applied"; result: ApplyChangeResponse }
+  | { phase: "error"; message: string };
+
+function EnrichPanel({
+  result,
+  originalDescription,
+  onStage,
+}: {
+  result: MerchandisingResult;
+  originalDescription: string;
+  onStage: () => void;
+}) {
+  const [applyState, setApplyState] = useState<ApplyState>({ phase: "idle" });
+
+  const handleApply = async () => {
+    if (!result.staged_change_id) return;
+    setApplyState({ phase: "applying" });
+    try {
+      const res = await applyChange(result.staged_change_id);
+      if (res) {
+        setApplyState({ phase: "applied", result: res });
+      } else {
+        setApplyState({ phase: "error", message: "Apply returned no response — check API logs." });
+      }
+    } catch (e) {
+      setApplyState({ phase: "error", message: String(e) });
+    }
+  };
+
+  const handleDiscard = async () => {
+    if (!result.staged_change_id) return;
+    try {
+      await discardChange(result.staged_change_id);
+    } catch {
+      // best-effort
+    }
+    setApplyState({ phase: "idle" });
+    onStage(); // re-run to clear staged state
+  };
+
   return (
     <div className="space-y-5">
-      <div>
-        <div className="mb-1 flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-(--ink)">Enriched Description</h3>
-          <CopyButton text={result.enriched_description} />
+      {/* Before / After description diff */}
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <div className="mb-1 flex items-center gap-1.5">
+            <span className="rounded px-1.5 py-0.5 text-xs font-semibold bg-gray-100 text-gray-600">Before</span>
+          </div>
+          <p className="rounded-lg border border-(--border) bg-(--surface-raised) p-3 text-sm leading-relaxed text-(--ink-secondary) min-h-[80px]">
+            {originalDescription || <em className="text-(--ink-secondary)">No description</em>}
+          </p>
         </div>
-        <p className="rounded-lg border border-(--border) bg-(--surface-raised) p-3 text-sm leading-relaxed text-(--ink)">
-          {result.enriched_description}
-        </p>
+        <div>
+          <div className="mb-1 flex items-center justify-between">
+            <span className="rounded px-1.5 py-0.5 text-xs font-semibold bg-purple-100 text-purple-700">After (AI)</span>
+            <CopyButton text={result.enriched_description} />
+          </div>
+          <p className="rounded-lg border border-purple-200 bg-purple-50 p-3 text-sm leading-relaxed text-(--ink) min-h-[80px]">
+            {result.enriched_description}
+          </p>
+        </div>
       </div>
 
       {result.benefits_bullets.length > 0 && (
@@ -133,18 +196,107 @@ function EnrichPanel({ result, onStage }: { result: MerchandisingResult; onStage
         </div>
       )}
 
-      {result.staged_change_id ? (
-        <div className="rounded-lg bg-green-50 border border-green-200 p-3 text-sm text-green-800">
-          Change staged: <code className="font-mono">{result.staged_change_id}</code>
-        </div>
-      ) : (
-        <button
-          onClick={onStage}
-          className="w-full rounded-lg border border-(--brand) bg-(--brand) py-2 text-sm font-medium text-white hover:opacity-90 transition-opacity"
-        >
-          Stage Changes
-        </button>
-      )}
+      {/* Save to product model section */}
+      <div className="rounded-lg border border-(--border) bg-(--surface-raised) p-4 space-y-3">
+        <h3 className="text-sm font-semibold text-(--ink)">Save to Product Data Model</h3>
+
+        {!result.staged_change_id && applyState.phase === "idle" && (
+          <>
+            <p className="text-xs text-(--ink-secondary)">
+              Stage this AI-generated content as a pending change, then apply it to write directly to the SFCC product catalog.
+            </p>
+            <button
+              onClick={onStage}
+              className="w-full rounded-lg border border-(--brand) bg-(--brand) py-2 text-sm font-medium text-white hover:opacity-90 transition-opacity"
+            >
+              Stage Changes
+            </button>
+          </>
+        )}
+
+        {result.staged_change_id && applyState.phase === "idle" && (
+          <>
+            <div className="flex items-center gap-2 text-xs text-(--ink-secondary)">
+              <span className="inline-block h-2 w-2 rounded-full bg-amber-400" />
+              Staged — change ID: <code className="font-mono text-(--ink)">{result.staged_change_id}</code>
+            </div>
+            <p className="text-xs text-(--ink-secondary)">
+              Review the before/after above. Click <strong>Apply to SFCC</strong> to write the enriched description to the live product catalog.
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setApplyState({ phase: "confirming" })}
+                className="flex-1 rounded-lg bg-(--brand) py-2 text-sm font-medium text-white hover:opacity-90 transition-opacity"
+              >
+                Apply to SFCC
+              </button>
+              <button
+                onClick={() => void handleDiscard()}
+                className="rounded-lg border border-(--border) px-3 py-2 text-sm text-(--ink-secondary) hover:bg-(--surface) transition-colors"
+              >
+                Discard
+              </button>
+            </div>
+          </>
+        )}
+
+        {applyState.phase === "confirming" && (
+          <>
+            <p className="text-xs font-medium text-amber-700 bg-amber-50 rounded p-2 border border-amber-200">
+              This will write the AI-generated description to the live SFCC product record for <strong>{result.listing_id}</strong>. This cannot be undone from this UI.
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => void handleApply()}
+                className="flex-1 rounded-lg bg-green-600 py-2 text-sm font-medium text-white hover:bg-green-700 transition-colors"
+              >
+                Confirm — Write to SFCC
+              </button>
+              <button
+                onClick={() => setApplyState({ phase: "idle" })}
+                className="rounded-lg border border-(--border) px-3 py-2 text-sm text-(--ink-secondary) hover:bg-(--surface) transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </>
+        )}
+
+        {applyState.phase === "applying" && (
+          <div className="flex items-center gap-2 text-sm text-(--ink-secondary)">
+            <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+            Writing to SFCC…
+          </div>
+        )}
+
+        {applyState.phase === "applied" && (
+          <div className="rounded-lg bg-green-50 border border-green-200 p-3 space-y-1">
+            <p className="text-sm font-medium text-green-800">Applied to SFCC product catalog</p>
+            <p className="text-xs text-green-700">
+              Change <code className="font-mono">{applyState.result.change_id}</code> — status: {applyState.result.status}
+            </p>
+            {applyState.result.applied_at && (
+              <p className="text-xs text-green-600">{new Date(applyState.result.applied_at).toLocaleString()}</p>
+            )}
+          </div>
+        )}
+
+        {applyState.phase === "error" && (
+          <div className="rounded-lg bg-red-50 border border-red-200 p-3">
+            <p className="text-sm font-medium text-red-800">Apply failed</p>
+            <p className="text-xs text-red-700 mt-1">{applyState.message}</p>
+            <button
+              onClick={() => setApplyState({ phase: "idle" })}
+              className="mt-2 text-xs text-red-600 underline"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -413,7 +565,7 @@ export default function MerchandisingView({ onAskAssistant }: MerchandisingViewP
     } finally {
       setLoading(false);
     }
-  }, [selectedProduct]);
+  }, [selectedProduct, enrichResult]);
 
   const EXAMPLE_PROMPTS = [
     "Enrich all body care listings for the holiday gift guide",
@@ -561,7 +713,11 @@ export default function MerchandisingView({ onAskAssistant }: MerchandisingViewP
                 ) : (
                   <>
                     {activeTab === "enrich" && enrichResult && (
-                      <EnrichPanel result={enrichResult} onStage={handleStage} />
+                      <EnrichPanel
+                        result={enrichResult}
+                        originalDescription={selectedProduct.description ?? ""}
+                        onStage={() => void handleStage()}
+                      />
                     )}
                     {activeTab === "enrich" && !enrichResult && (
                       <div className="flex flex-col items-center justify-center gap-3 py-12 text-center">

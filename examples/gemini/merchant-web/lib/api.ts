@@ -13,6 +13,9 @@ import type {
   ProductOntology,
   QuoteApprovalsResponse,
   SEOContent,
+  StagedChange,
+  StagedChangesResponse,
+  ApplyChangeResponse,
 } from "./types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -78,4 +81,19 @@ export function classifyProduct(listingId: string): Promise<ProductOntology | nu
 
 export function bulkEnrich(query = "", limit = 5): Promise<{ results: MerchandisingResult[] } | null> {
   return api.post<{ results: MerchandisingResult[] }>("/merchandising/bulk", { query, limit });
+}
+
+export function fetchStagedChanges(): Promise<StagedChangesResponse | null> {
+  return api.get<StagedChangesResponse>("/merchandising/changes");
+}
+
+export function applyChange(changeId: string): Promise<ApplyChangeResponse | null> {
+  return api.post<ApplyChangeResponse>("/merchandising/apply", { change_id: changeId });
+}
+
+export function discardChange(changeId: string): Promise<{ change_id: string; status: string } | null> {
+  return api.post<{ change_id: string; status: string }>(
+    `/merchandising/changes/${encodeURIComponent(changeId)}/discard`,
+    {},
+  );
 }

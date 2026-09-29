@@ -90,6 +90,117 @@ async def _generate_json(prompt: str) -> dict | list:
         return {}
 
 
+# ── Google Knowledge Graph enrichment ────────────────────────────────────────
+
+
+def _lookup_google_kg_sync(query: str, limit: int, api_key: str) -> list[dict]:
+    """Google Knowledge Graph Search API — requires GOOGLE_KG_API_KEY (separate from GEMINI_API_KEY)."""
+    import urllib.error
+    import urllib.parse
+    import urllib.request
+
+    params = urllib.parse.urlencode({"query": query, "key": api_key, "limit": limit})
+    url = f"https://kgsearch.googleapis.com/v1/entities:search?{params}"
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "commerce-agents/1.0"})
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            data = json.loads(resp.read().decode())
+        results = []
+        for item in data.get("itemListElement", []):
+            r = item.get("result", {})
+            dd = r.get("detailedDescription", {})
+            schema_types = [t.replace("http://schema.org/", "") for t in r.get("@type", []) if t != "Thing"]
+            results.append({
+                "name": r.get("name", ""),
+                "types": schema_types,
+                "description": r.get("description", ""),
+                "url": dd.get("url", ""),
+                "article_body": (dd.get("articleBody") or "")[:200],
+                "score": item.get("resultScore", 0),
+                "entity_id": "",
+                "provider": "google_knowledge_graph",
+            })
+        return results
+    except urllib.error.HTTPError as exc:
+        body = ""
+        try:
+            body = exc.read().decode()[:300]
+        except Exception:
+            pass
+        log.warning("Google KG lookup failed for %r: HTTP %s — %s", query, exc.code, body)
+        return []
+    except Exception as exc:
+        log.warning("Google KG lookup failed for %r: %s", query, exc)
+        return []
+
+
+def _lookup_wikidata_sync(query: str, limit: int) -> list[dict]:
+    """Wikidata entity search — no API key required, open knowledge graph."""
+    import urllib.error
+    import urllib.parse
+    import urllib.request
+
+    params = urllib.parse.urlencode({
+        "action": "wbsearchentities",
+        "search": query,
+        "language": "en",
+        "format": "json",
+        "limit": limit,
+        "type": "item",
+    })
+    url = f"https://www.wikidata.org/w/api.php?{params}"
+    try:
+        req = urllib.request.Request(url, headers={
+            "User-Agent": "commerce-agents/1.0 (product ontology enrichment)",
+            "Accept": "application/json",
+        })
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            data = json.loads(resp.read().decode())
+        results = []
+        for item in data.get("search", []):
+            label = item.get("label", "")
+            wiki_url = (
+                f"https://en.wikipedia.org/wiki/{urllib.parse.quote(label.replace(' ', '_'))}"
+                if label else ""
+            )
+            results.append({
+                "name": label,
+                "types": [],
+                "description": item.get("description", ""),
+                "url": wiki_url,
+                "article_body": item.get("description", ""),
+                "score": max(0, 1000 - item.get("index", 0) * 100),
+                "entity_id": item.get("id", ""),   # Wikidata Q-ID e.g. "Q133485"
+                "provider": "wikidata",
+            })
+        return results
+    except urllib.error.HTTPError as exc:
+        body = ""
+        try:
+            body = exc.read().decode()[:300]
+        except Exception:
+            pass
+        log.warning("Wikidata lookup failed for %r: HTTP %s — %s", query, exc.code, body)
+        return []
+    except Exception as exc:
+        log.warning("Wikidata lookup failed for %r: %s", query, exc)
+        return []
+
+
+def _lookup_kg_entities_sync(query: str, limit: int = 3) -> list[dict]:
+    """Dispatch to Google KG (if GOOGLE_KG_API_KEY is set) or fall back to Wikidata."""
+    kg_key = os.environ.get("GOOGLE_KG_API_KEY")
+    if kg_key:
+        return _lookup_google_kg_sync(query, limit, kg_key)
+    return _lookup_wikidata_sync(query, limit)
+
+
+async def _lookup_kg_entities(query: str, limit: int = 3) -> list[dict]:
+    """Async wrapper: runs the KG HTTP call in a thread-pool executor."""
+    import asyncio
+    return await asyncio.get_running_loop().run_in_executor(None, _lookup_kg_entities_sync, query, limit)
+
+
 # ── Merchandising endpoints ───────────────────────────────────────────────────
 
 
@@ -169,7 +280,7 @@ Rules:
             change = await _backend.stage_listing_update(
                 _session(),
                 listing_id,
-                {"description": enriched, "benefits": bullets},
+                {"long_description": enriched, "short_description": bullets},
                 "AI-generated B2C content enrichment",
             )
             staged_change_id = getattr(change, "change_id", None)
@@ -383,7 +494,75 @@ Rules:
         }
 
     result_data["listing_id"] = listing_id
+
+    # Enrich semantic_attributes with Knowledge Graph entity lookup.
+    # Query the product title + up to 2 key scent/ingredient attributes (capped at 3 KG calls).
+    kg_queries: list[str] = [title]
+    for attr_key in ("scent_notes", "key_ingredient", "fragrance_family"):
+        val = (product.get("attributes") or {}).get(attr_key, "")
+        for note in str(val).split(",")[:2]:
+            note = note.strip()
+            if note and note not in kg_queries:
+                kg_queries.append(note)
+
+    kg_attrs: list[dict] = []
+    for q in kg_queries[:3]:
+        entities = await _lookup_kg_entities(q, limit=1)
+        if not entities:
+            continue
+        e = entities[0]
+        key_slug = q.lower().replace(" ", "_")[:40]
+        if e.get("name"):
+            kg_attrs.append({
+                "key": f"kg_entity:{key_slug}",
+                "value": e["name"],
+                "confidence": 0.9,
+                "source": "knowledge_graph",
+            })
+        if e.get("description"):
+            kg_attrs.append({
+                "key": f"kg_description:{key_slug}",
+                "value": e["description"][:120],
+                "confidence": 1.0,
+                "source": "knowledge_graph",
+            })
+        if e.get("url"):
+            kg_attrs.append({
+                "key": f"kg_url:{key_slug}",
+                "value": e["url"],
+                "confidence": 1.0,
+                "source": "knowledge_graph",
+            })
+        if e.get("entity_id"):
+            kg_attrs.append({
+                "key": f"kg_entity_id:{key_slug}",
+                "value": e["entity_id"],   # Wikidata Q-ID, e.g. "Q133485"
+                "confidence": 1.0,
+                "source": "knowledge_graph",
+            })
+
+    existing = result_data.get("semantic_attributes") or []
+    result_data["semantic_attributes"] = existing + kg_attrs
     return result_data
+
+
+async def lookup_product_entities(query: str, limit: int = 5) -> dict:
+    """Look up real-world semantic entities for a product name, ingredient, or fragrance note.
+
+    Uses Wikidata entity search (no API key required) or Google Knowledge Graph
+    if GOOGLE_KG_API_KEY is set. Returns typed entity results with descriptions
+    and Wikipedia URLs to ground copy claims in real-world facts.
+
+    Args:
+        query: Product name, ingredient, or fragrance note to look up
+               (e.g. "mahogany teakwood", "eucalyptus", "shea butter").
+        limit: Number of entities to return (1-10).
+    """
+    import os
+
+    provider = "google_knowledge_graph" if os.environ.get("GOOGLE_KG_API_KEY") else "wikidata"
+    entities = await _lookup_kg_entities(query, limit=min(max(1, limit), 10))
+    return {"query": query, "source": provider, "entities": entities}
 
 
 async def bulk_enrich_catalog(query: str = "", limit: int = 50) -> dict:

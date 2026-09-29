@@ -1,9 +1,11 @@
-"""Gemini ADK merchant agent.
+"""Gemini ADK merchant agent — maximizing all ADK framework features.
 
-Builds a Google ADK Agent backed by the SFCC merchant tools, exposes a
-``stream_turn`` async generator that yields SSE-formatted strings in the same
-format as the Anthropic-based agent so the existing merchant-web frontend works
-without modification.
+ADK features used:
+  • before_model_callback  — injects live date and store name into every model call
+  • after_tool_callback    — caches key tool outputs in session.state; trims large arrays
+  • sub_agents             — routes content tasks to a specialized MerchandisingAgent
+  • session.state          — persists snapshot / alert data across turns
+  • prime_session()        — proactively fetches a business briefing on login
 
 SSE event types emitted:
   text_delta      {"text": "..."}
@@ -14,6 +16,8 @@ SSE event types emitted:
 
 from __future__ import annotations
 
+import asyncio
+import datetime
 import json
 import logging
 import os
@@ -23,14 +27,16 @@ from typing import Any
 
 log = logging.getLogger(__name__)
 
-_SYSTEM_PROMPT = """You are a merchant AI assistant for {store_name}, a commerce store.
+# ── System prompts ─────────────────────────────────────────────────────────────
 
-You help the merchant operator understand their business, manage their catalog, \
+_ORCHESTRATOR_PROMPT = """You are a merchant AI assistant for {store_name}, a commerce store.
+
+You help the merchant operator understand their business, manage their catalog,
 monitor inventory, and take action on orders and product listings.
 
 ## Core rules
-- Always read data before writing (get_listing before stage_listing_update, \
-get_inventory_alerts before stage_inventory_action).
+- Always read data before writing (get_listing before stage_listing_update,
+  get_inventory_alerts before stage_inventory_action).
 - Stage changes first; never apply without the operator's explicit approval.
 - Be concise and direct. Lead with figures and recommendations, not preamble.
 - When inventory alerts show low stock, proactively suggest restocking actions.
@@ -43,32 +49,198 @@ get_inventory_alerts before stage_inventory_action).
 4. For catalog work, search first then get the full listing before editing.
 5. After staging a change, tell the operator what was staged and ask for approval.
 6. Only call apply_change after the operator explicitly says "approve" or "apply".
+
+## Merchandising tasks
+For all product content operations — enriching descriptions, generating SEO copy,
+creating geo-targeted variants, or classifying products into the B2C taxonomy —
+transfer to the merchandising_agent. That specialist handles the full
+classify → enrich → stage workflow with dedicated content tools.
+"""
+
+_MERCH_PROMPT = """You are a merchandising specialist AI for {store_name}.
+
+You handle all product content tasks: enriching descriptions, generating SEO copy,
+creating geo-targeted variants, and classifying products into the B2C taxonomy.
+
+## Rules
+- Start by reading the product with get_listing (or search_listings if no ID is given).
+- After enriching, offer to stage the changes with stage_listing_update.
+- Only stage changes; never apply without explicit operator approval.
+- Ground all copy in the product's actual attributes — do not invent specifications.
+- Use classify_product_ontology before SEO or geo work to establish the product's taxonomy.
+- For any ingredient or material, call lookup_product_entities to ground claims in facts.
 """
 
 
-def _build_agent(store_name: str) -> Any:
-    """Construct and return the ADK Agent instance."""
-    try:
-        from google.adk.agents import Agent
-    except ImportError as exc:
-        raise ImportError(
-            "google-adk is required. Install it with: pip install google-adk"
-        ) from exc
+# ── ADK callbacks ──────────────────────────────────────────────────────────────
 
-    from .tools import ALL_TOOLS
+
+def _before_model_cb(callback_context: Any, llm_request: Any) -> None:
+    """Inject live date and store name into every model call via system instruction."""
+    today = datetime.date.today().isoformat()
+    try:
+        store = callback_context.state.get("store_name", "the store")
+    except Exception:
+        store = "the store"
+    injection = f" [Context — Today: {today} | Store: {store}]"
+
+    try:
+        cfg = llm_request.config
+        if cfg is None:
+            return None
+        si = cfg.system_instruction
+        if si is None:
+            return None
+        if hasattr(si, "parts") and si.parts:
+            for part in si.parts:
+                if hasattr(part, "text") and isinstance(part.text, str):
+                    part.text = part.text + injection
+                    break
+        elif isinstance(si, str):
+            cfg.system_instruction = si + injection
+    except Exception as exc:
+        log.debug("before_model_cb: could not inject context: %s", exc)
+    return None
+
+
+def _after_tool_cb(
+    tool: Any,
+    args: dict[str, Any],
+    tool_context: Any,
+    tool_response: dict[str, Any],
+) -> dict[str, Any] | None:
+    """Cache key tool outputs in session.state and trim oversized payloads.
+
+    Returns None to keep the original response, or a replacement dict to
+    override it (used to trim large listing arrays before they hit the model).
+    """
+    tool_name: str = getattr(tool, "name", None) or ""
+    now = datetime.datetime.utcnow().isoformat() + "Z"
+
+    # Persist business-critical data in session state across turns
+    try:
+        if tool_name == "get_business_snapshot":
+            tool_context.state["last_snapshot"] = tool_response
+            tool_context.state["snapshot_fetched_at"] = now
+        elif tool_name == "get_inventory_alerts" and isinstance(tool_response, dict):
+            alerts = tool_response.get("alerts", [])
+            tool_context.state["last_alerts_count"] = len(alerts)
+            tool_context.state["last_alerts_fetched_at"] = now
+    except Exception as exc:
+        log.debug("after_tool_cb: session state write skipped: %s", exc)
+
+    # Trim oversized listing arrays to keep context window manageable
+    if tool_name == "search_listings" and isinstance(tool_response, dict):
+        listings = tool_response.get("listings", [])
+        if len(listings) > 20:
+            return {**tool_response, "listings": listings[:20], "_trimmed": len(listings) - 20}
+
+    return None
+
+
+# ── Agent builders ─────────────────────────────────────────────────────────────
+
+
+def _build_merchandising_agent(store_name: str) -> Any:
+    """Specialized sub-agent that owns the content enrichment pipeline."""
+    try:
+        from google.adk.agents import Agent  # type: ignore[import]
+    except ImportError as exc:
+        raise ImportError("google-adk is required. pip install google-adk") from exc
+
+    from .tools import (
+        apply_change,
+        classify_product_ontology,
+        discard_change,
+        enrich_product,
+        generate_geo_content,
+        generate_seo_content,
+        get_listing,
+        lookup_product_entities,
+        search_listings,
+        stage_listing_update,
+    )
+
+    return Agent(
+        name="merchandising_agent",
+        model=os.environ.get("GEMINI_MODEL", "gemini-2.0-flash"),
+        description=(
+            "Specialist in product enrichment, SEO copy, geographic variants, and ontology "
+            "classification. Handles the full classify → enrich → stage workflow."
+        ),
+        instruction=_MERCH_PROMPT.format(store_name=store_name),
+        before_model_callback=_before_model_cb,
+        after_tool_callback=_after_tool_cb,
+        tools=[
+            get_listing,
+            search_listings,
+            classify_product_ontology,
+            enrich_product,
+            generate_seo_content,
+            generate_geo_content,
+            lookup_product_entities,
+            stage_listing_update,
+            apply_change,
+            discard_change,
+        ],
+    )
+
+
+def _build_agent(store_name: str) -> Any:
+    """Construct the orchestrator ADK Agent with callbacks and a merchandising sub-agent."""
+    try:
+        from google.adk.agents import Agent  # type: ignore[import]
+    except ImportError as exc:
+        raise ImportError("google-adk is required. pip install google-adk") from exc
+
+    from .tools import (
+        apply_change,
+        discard_change,
+        get_business_snapshot,
+        get_inventory_alerts,
+        get_listing,
+        get_order_issues,
+        get_pending_changes,
+        get_pending_quote_approvals,
+        search_listings,
+        stage_inventory_action,
+        stage_listing_update,
+    )
+
+    merch_agent = _build_merchandising_agent(store_name)
 
     return Agent(
         name="gemini_merchant_agent",
         model=os.environ.get("GEMINI_MODEL", "gemini-2.0-flash"),
-        description=f"Merchant AI assistant for {store_name}",
-        instruction=_SYSTEM_PROMPT.format(store_name=store_name),
-        tools=ALL_TOOLS,
+        description=f"Merchant AI orchestrator for {store_name}",
+        instruction=_ORCHESTRATOR_PROMPT.format(store_name=store_name),
+        before_model_callback=_before_model_cb,
+        after_tool_callback=_after_tool_cb,
+        sub_agents=[merch_agent],
+        tools=[
+            get_business_snapshot,
+            get_inventory_alerts,
+            get_order_issues,
+            search_listings,
+            get_listing,
+            get_pending_changes,
+            get_pending_quote_approvals,
+            stage_listing_update,
+            stage_inventory_action,
+            apply_change,
+            discard_change,
+        ],
     )
 
 
+# ── SSE helper ─────────────────────────────────────────────────────────────────
+
+
 def _sse(event_type: str, data: dict[str, Any]) -> str:
-    """Format one SSE frame."""
     return f"event: {event_type}\ndata: {json.dumps(data)}\n\n"
+
+
+# ── Agent class ────────────────────────────────────────────────────────────────
 
 
 class GeminiMerchantAgent:
@@ -76,17 +248,22 @@ class GeminiMerchantAgent:
 
     ``runner`` and ``session_service`` are created once at startup and shared
     across all requests; ADK's InMemorySessionService maintains per-session
-    conversation history.
+    conversation history and state.
+
+    ADK framework features active:
+    - before_model_callback: injects date + store into every LLM call
+    - after_tool_callback: caches snapshot/alerts in session.state
+    - sub_agents: MerchandisingAgent handles all content generation tasks
+    - session.state: stores_name seeded at create_session; snapshot written after tool calls
+    - prime_session: proactively fetches briefing on login (no LLM call needed)
     """
 
     def __init__(self, store_name: str) -> None:
         try:
-            from google.adk.runners import Runner
-            from google.adk.sessions import InMemorySessionService
+            from google.adk.runners import Runner  # type: ignore[import]
+            from google.adk.sessions import InMemorySessionService  # type: ignore[import]
         except ImportError as exc:
-            raise ImportError(
-                "google-adk is required. Install it with: pip install google-adk"
-            ) from exc
+            raise ImportError("google-adk is required. pip install google-adk") from exc
 
         self._store_name = store_name
         self._session_service = InMemorySessionService()
@@ -95,11 +272,13 @@ class GeminiMerchantAgent:
             app_name="gemini_merchant",
             session_service=self._session_service,
         )
+        # Briefing cache populated by prime_session(); keyed by session_id
+        self._briefings: dict[str, dict] = {}
 
     async def ensure_session(self, session_id: str) -> None:
-        """Create the ADK session if it does not exist yet."""
+        """Create the ADK session with seeded state if it does not exist yet."""
+        initial_state = {"store_name": self._store_name}
         try:
-
             existing = await self._session_service.get_session(
                 app_name="gemini_merchant",
                 user_id="operator",
@@ -110,17 +289,48 @@ class GeminiMerchantAgent:
                     app_name="gemini_merchant",
                     user_id="operator",
                     session_id=session_id,
+                    state=initial_state,
                 )
         except Exception:
-            # ADK may raise if session doesn't exist; create it
             import contextlib
-
             with contextlib.suppress(Exception):
                 await self._session_service.create_session(
                     app_name="gemini_merchant",
                     user_id="operator",
                     session_id=session_id,
+                    state=initial_state,
                 )
+
+    async def prime_session(self, session_id: str) -> dict:
+        """Proactively fetch a business briefing and cache it for the briefing endpoint.
+
+        Called in the background after session creation so the operator can ask
+        "what needs my attention?" and get an instant answer without waiting for
+        the first tool call round-trip.
+        """
+        from .tools import _backend, _session as _make_session
+
+        if _backend is None:
+            return {}
+        try:
+            sess = _make_session()
+            snap = await _backend.get_business_snapshot(sess)
+            alerts = await _backend.get_inventory_alerts(sess)
+            briefing: dict = {
+                "snapshot": snap.model_dump(mode="json", exclude_none=True),
+                "alerts_count": len(alerts),
+                "top_alerts": [a.model_dump(mode="json", exclude_none=True) for a in alerts[:3]],
+                "generated_at": datetime.datetime.utcnow().isoformat() + "Z",
+            }
+            self._briefings[session_id] = briefing
+            return briefing
+        except Exception as exc:
+            log.warning("prime_session failed: %s", exc)
+            return {}
+
+    def get_briefing(self, session_id: str) -> dict:
+        """Return the most recent pre-fetched briefing for a session, or {}."""
+        return self._briefings.get(session_id, {})
 
     async def stream_turn(
         self, session_id: str, user_message: str
@@ -128,10 +338,10 @@ class GeminiMerchantAgent:
         """Run one agent turn and yield SSE frames.
 
         Yields text_delta frames while the model streams text, tool_call /
-        tool_result frames around each function execution, and a final
-        turn_complete frame.
+        tool_result frames around each function execution (including those from
+        the merchandising sub-agent), and a final turn_complete frame.
         """
-        from google.genai import types as gtypes
+        from google.genai import types as gtypes  # type: ignore[import]
 
         await self.ensure_session(session_id)
 
@@ -148,7 +358,7 @@ class GeminiMerchantAgent:
                     parts=[gtypes.Part(text=user_message)],
                 ),
             ):
-                # Accumulate usage when available
+                # Accumulate token usage when available
                 if hasattr(event, "usage_metadata") and event.usage_metadata:
                     um = event.usage_metadata
                     input_tokens = getattr(um, "prompt_token_count", input_tokens) or input_tokens
@@ -158,7 +368,6 @@ class GeminiMerchantAgent:
                     continue
 
                 for part in event.content.parts:
-                    # Function call emitted by the model
                     if hasattr(part, "function_call") and part.function_call and part.function_call.name:
                         fc = part.function_call
                         yield _sse("tool_call", {
@@ -166,8 +375,6 @@ class GeminiMerchantAgent:
                             "id": fc.name,
                             "input": dict(fc.args) if fc.args else {},
                         })
-
-                    # Function response (result of tool execution)
                     elif hasattr(part, "function_response") and part.function_response and part.function_response.name:
                         fr = part.function_response
                         result = fr.response or {}
@@ -176,8 +383,6 @@ class GeminiMerchantAgent:
                             "id": fr.name,
                             "content": json.dumps(result),
                         })
-
-                    # Text from the model
                     elif hasattr(part, "text") and part.text:
                         yield _sse("text_delta", {"text": part.text})
 

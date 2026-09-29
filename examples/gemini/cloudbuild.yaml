@@ -1,24 +1,23 @@
 # Deploy gemini-merchant-api and gemini-merchant-web to Cloud Run.
+# Cloud Build substitution rules: $_VAR and $PROJECT_ID/$BUILD_ID are Cloud Build vars.
+# All other bash vars/subshells must use $$ to escape: $$VAR, $$(cmd).
 #
-# Full deploy (run from repo root):
+# Full deploy (from repo root):
 #   gcloud builds submit . \
 #     --project=spartan-concord-510108-p2 \
 #     --config=examples/gemini/cloudbuild.yaml \
-#     --substitutions=_GOOGLE_API_KEY=YOUR_KEY,_GOOGLE_KG_API_KEY=YOUR_KG_KEY
+#     --substitutions=_GOOGLE_API_KEY=KEY,_GOOGLE_KG_API_KEY=KEY \
+#     --region=us-central1
 #
 # Web-only redeploy (API URL already known):
-#   gcloud builds submit . \
-#     --project=spartan-concord-510108-p2 \
-#     --config=examples/gemini/cloudbuild.yaml \
-#     --substitutions=_GOOGLE_API_KEY=YOUR_KEY,_GOOGLE_KG_API_KEY=YOUR_KG_KEY,_SKIP_API=true,_WEB_API_URL=https://gemini-merchant-api-t4nrmsjpcq-uc.a.run.app
+#   gcloud builds submit . ... \
+#     --substitutions=...,_WEB_API_URL=https://gemini-merchant-api-t4nrmsjpcq-uc.a.run.app
 
 substitutions:
   _REGION: us-central1
   _REPO: commerce
   _GOOGLE_API_KEY: ''
   _GOOGLE_KG_API_KEY: ''
-  # Set to the GCP API Cloud Run URL to skip rebuilding the API image.
-  # Leave empty on a full deploy — it will be auto-detected after API deploy.
   _WEB_API_URL: ''
 
 steps:
@@ -77,7 +76,9 @@ steps:
       - --set-env-vars=GOOGLE_API_KEY=${_GOOGLE_API_KEY},GOOGLE_KG_API_KEY=${_GOOGLE_KG_API_KEY}
     waitFor: [push-api]
 
-  # ── 5. Resolve API URL: use _WEB_API_URL if set, else detect from Cloud Run ─
+  # ── 5. Resolve API URL ────────────────────────────────────────────────────
+  # Uses _WEB_API_URL if supplied, otherwise queries Cloud Run after deploy.
+  # $$ escapes are required: Cloud Build replaces $VAR; $$ becomes $ in bash.
   - id: resolve-api-url
     name: gcr.io/google.com/cloudsdktool/cloud-sdk
     entrypoint: bash
@@ -92,7 +93,7 @@ steps:
             --region=${_REGION} \
             --format="value(status.url)" > /workspace/api_url.txt
         fi
-        echo "Using API URL: $(cat /workspace/api_url.txt)"
+        echo "Using API URL: $$(cat /workspace/api_url.txt)"
     waitFor: [deploy-api]
 
   # ── 6. Build merchant-web (bakes in the GCP API URL) ─────────────────────
@@ -102,11 +103,11 @@ steps:
     args:
       - -c
       - |
-        API_URL=$(cat /workspace/api_url.txt)
-        echo "Baking in API URL: ${API_URL}"
+        WEB_API=$$(cat /workspace/api_url.txt)
+        echo "Baking in API URL: $$WEB_API"
         docker build \
           -f examples/gemini/Dockerfile.merchant-web \
-          --build-arg "NEXT_PUBLIC_API_URL=${API_URL}" \
+          --build-arg "NEXT_PUBLIC_API_URL=$$WEB_API" \
           -t ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/merchant-web:$BUILD_ID \
           -t ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/merchant-web:latest \
           .
@@ -144,16 +145,16 @@ steps:
     args:
       - -c
       - |
-        WEB_URL=$(gcloud run services describe gemini-merchant-web \
+        WEB_URL=$$(gcloud run services describe gemini-merchant-web \
           --project=$PROJECT_ID --region=${_REGION} --format="value(status.url)")
         echo ""
         echo "GCP deployment complete"
-        echo "  API → $(cat /workspace/api_url.txt)"
-        echo "  Web → ${WEB_URL}"
+        echo "  API -> $$(cat /workspace/api_url.txt)"
+        echo "  Web -> $$WEB_URL"
         echo ""
         echo "Railway (unchanged):"
-        echo "  API → https://gemini-merchant-api-production.up.railway.app"
-        echo "  Web → https://gemini-merchant-web-production.up.railway.app"
+        echo "  API -> https://gemini-merchant-api-production.up.railway.app"
+        echo "  Web -> https://gemini-merchant-web-production.up.railway.app"
     waitFor: [deploy-web]
 
 images:

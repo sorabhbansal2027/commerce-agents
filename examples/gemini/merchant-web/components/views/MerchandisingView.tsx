@@ -550,42 +550,42 @@ const SPARQL_PRESETS_MAP: Record<string, { label: string; query: string }> = {
   botanical: {
     label: "🌿 Botanical extracts",
     query:
-      "# Essential oils and plant extracts used in fragrance\nSELECT DISTINCT ?item ?itemLabel ?itemDescription WHERE {\n  { ?item wdt:P279* wd:Q381165 }\n  UNION\n  { ?item wdt:P279* wd:Q162828 }\n  FILTER NOT EXISTS { ?item wdt:P31 wd:Q4167410 }\n  SERVICE wikibase:label { bd:serviceParam wikibase:language \"en\" }\n} LIMIT 12",
+      "# Plant genera in the Lamiaceae family — lavender, mint, rosemary, sage, basil\n# P105=taxon rank, Q34740=genus, P171=parent taxon, Q33759=Lamiaceae\nSELECT DISTINCT ?item ?itemLabel ?itemDescription WHERE {\n  ?item wdt:P105 wd:Q34740 ;\n        wdt:P171+ wd:Q33759 .\n  SERVICE wikibase:label { bd:serviceParam wikibase:language \"en\" }\n} LIMIT 12",
   },
   floral: {
     label: "🌸 Floral ingredients",
     query:
-      "# Flowering plants used as fragrance ingredients\nSELECT DISTINCT ?item ?itemLabel ?itemDescription WHERE {\n  ?item wdt:P31/wdt:P279* wd:Q506 .\n  ?item wdt:P18 [] .\n  SERVICE wikibase:label { bd:serviceParam wikibase:language \"en\" }\n} LIMIT 12",
+      "# Flowering plant genera used in perfumery — rosa, jasmine, ylang-ylang…\n# Uses Wikidata entity search federation service\nSELECT ?item ?itemLabel ?itemDescription WHERE {\n  SERVICE wikibase:mwapi {\n    bd:serviceParam wikibase:api \"EntitySearch\" ;\n                    wikibase:endpoint \"www.wikidata.org\" ;\n                    mwapi:search \"flower fragrance perfume\" ;\n                    mwapi:language \"en\" .\n    ?item wikibase:apiOutputItem mwapi:item .\n    ?ord wikibase:apiOrdinal true .\n  }\n  ?item wdt:P31/wdt:P279* wd:Q16521 .\n  SERVICE wikibase:label { bd:serviceParam wikibase:language \"en\" }\n} ORDER BY ?ord LIMIT 12",
   },
   wood: {
     label: "🪵 Wood materials",
     query:
-      "# Wood species used in fragrance and materials\nSELECT DISTINCT ?item ?itemLabel ?itemDescription WHERE {\n  ?item wdt:P31/wdt:P279* wd:Q287 .\n  ?item wdt:P18 [] .\n  SERVICE wikibase:label { bd:serviceParam wikibase:language \"en\" }\n} LIMIT 12",
+      "# Aromatic wood genera — sandalwood, cedar, pine, rosewood…\n# Uses Wikidata entity search federation service\nSELECT DISTINCT ?item ?itemLabel ?itemDescription WHERE {\n  SERVICE wikibase:mwapi {\n    bd:serviceParam wikibase:api \"EntitySearch\" ;\n                    wikibase:endpoint \"www.wikidata.org\" ;\n                    mwapi:search \"aromatic wood tree genus\" ;\n                    mwapi:language \"en\" .\n    ?item wikibase:apiOutputItem mwapi:item .\n    ?ord wikibase:apiOrdinal true .\n  }\n  ?item wdt:P31/wdt:P279* wd:Q16521 .\n  SERVICE wikibase:label { bd:serviceParam wikibase:language \"en\" }\n} ORDER BY ?ord LIMIT 12",
   },
   citrus: {
     label: "🍋 Citrus compounds",
     query:
-      "# Terpene compounds found in citrus plants\nSELECT DISTINCT ?item ?itemLabel ?itemDescription WHERE {\n  ?item wdt:P279* wd:Q131524 .\n  ?item wdt:P703 ?plant .\n  ?plant wdt:P171* wd:Q19704 .\n  SERVICE wikibase:label { bd:serviceParam wikibase:language \"en\" }\n} LIMIT 12",
+      "# Monoterpenes and sesquiterpenes — limonene, linalool, citronellol…\n# P279=subclass of, Q131524=terpene (organic compound class)\nSELECT DISTINCT ?item ?itemLabel ?itemDescription WHERE {\n  ?item wdt:P279* wd:Q131524 .\n  ?item wdt:P18 [] .\n  FILTER NOT EXISTS { ?item wdt:P31 wd:Q4167410 }\n  SERVICE wikibase:label { bd:serviceParam wikibase:language \"en\" }\n} LIMIT 12",
   },
   grasses: {
     label: "🌾 Aromatic grasses",
     query:
-      "# Plants in the Poaceae (grass) family\nSELECT DISTINCT ?item ?itemLabel ?itemDescription WHERE {\n  ?item wdt:P31/wdt:P279* wd:Q756 .\n  ?item wdt:P171* wd:Q46078 .\n  SERVICE wikibase:label { bd:serviceParam wikibase:language \"en\" }\n} LIMIT 12",
+      "# Grass genera in the Poaceae family — vetiver, lemongrass, citronella…\n# P105=taxon rank, Q34740=genus, P171=parent taxon, Q46078=Poaceae\nSELECT DISTINCT ?item ?itemLabel ?itemDescription WHERE {\n  ?item wdt:P105 wd:Q34740 ;\n        wdt:P171+ wd:Q46078 .\n  SERVICE wikibase:label { bd:serviceParam wikibase:language \"en\" }\n} LIMIT 12",
   },
   skin: {
     label: "🧴 Skin care actives",
     query:
-      "# Fatty acids and lipids used in cosmetics\nSELECT DISTINCT ?item ?itemLabel ?itemDescription WHERE {\n  { ?item wdt:P279* wd:Q61476 }\n  UNION\n  { ?item wdt:P279* wd:Q18534 }\n  ?item wdt:P18 [] .\n  SERVICE wikibase:label { bd:serviceParam wikibase:language \"en\" }\n} LIMIT 12",
+      "# Fatty acids used in cosmetics and skin care — oleic, stearic, linoleic…\n# P279=subclass of, Q61476=fatty acid\nSELECT DISTINCT ?item ?itemLabel ?itemDescription WHERE {\n  ?item wdt:P279* wd:Q61476 .\n  ?item wdt:P18 [] .\n  FILTER NOT EXISTS { ?item wdt:P31 wd:Q4167410 }\n  SERVICE wikibase:label { bd:serviceParam wikibase:language \"en\" }\n} LIMIT 12",
   },
   wax: {
     label: "🕯️ Wax & carriers",
     query:
-      "# Waxes and waxy substances used in candles and cosmetics\nSELECT DISTINCT ?item ?itemLabel ?itemDescription WHERE {\n  ?item wdt:P279* wd:Q124695 .\n  SERVICE wikibase:label { bd:serviceParam wikibase:language \"en\" }\n} LIMIT 12",
+      "# Wax types used in candles, lip balm, and cosmetic bases\n# P279=subclass of, Q124695=wax\nSELECT DISTINCT ?item ?itemLabel ?itemDescription WHERE {\n  ?item wdt:P279* wd:Q124695 .\n  FILTER NOT EXISTS { ?item wdt:P31 wd:Q4167410 }\n  SERVICE wikibase:label { bd:serviceParam wikibase:language \"en\" }\n} LIMIT 12",
   },
   resinous: {
     label: "🌲 Resinous notes",
     query:
-      "# Plant resins used in incense and perfumery\nSELECT DISTINCT ?item ?itemLabel ?itemDescription WHERE {\n  ?item wdt:P279* wd:Q145740 .\n  SERVICE wikibase:label { bd:serviceParam wikibase:language \"en\" }\n} LIMIT 12",
+      "# Plant resins — frankincense, myrrh, benzoin, labdanum, elemi…\n# Uses Wikidata entity search for resin-related items\nSELECT ?item ?itemLabel ?itemDescription WHERE {\n  SERVICE wikibase:mwapi {\n    bd:serviceParam wikibase:api \"EntitySearch\" ;\n                    wikibase:endpoint \"www.wikidata.org\" ;\n                    mwapi:search \"plant resin incense perfume\" ;\n                    mwapi:language \"en\" .\n    ?item wikibase:apiOutputItem mwapi:item .\n    ?ord wikibase:apiOrdinal true .\n  }\n  SERVICE wikibase:label { bd:serviceParam wikibase:language \"en\" }\n} ORDER BY ?ord LIMIT 12",
   },
 };
 

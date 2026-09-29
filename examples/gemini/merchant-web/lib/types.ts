@@ -369,3 +369,17 @@ export interface KGEntitiesResponse {
   source: string;
   entities: KGEntity[];
 }
+
+// --- SPARQL query results ---
+
+export interface SPARQLResult {
+  columns: string[];
+  rows: Record<string, string>[];
+  query: string;
+  elapsed_ms?: number;
+}
+
+export interface SPARQLPreset {
+  label: string;
+  query: string;
+}

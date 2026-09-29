@@ -654,3 +654,161 @@ async def bulk_enrich_catalog(query: str = "", limit: int = 50) -> dict:
                 failed += 1
 
     return {"results": results, "total": len(results), "failed": failed}
+
+
+# ── SPARQL / Wikidata query engine ────────────────────────────────────────────
+
+WIKIDATA_SPARQL_URL = "https://query.wikidata.org/sparql"
+
+# Pre-built SPARQL queries for each category preset in the KG Explorer.
+# Uses Wikidata property paths (P279* = subclass-of chain) and the
+# wikibase:label service to return human-readable labels in English.
+SPARQL_PRESETS: dict[str, dict[str, str]] = {
+    "botanical": {
+        "label": "🌿 Botanical extracts",
+        "query": (
+            "# Essential oils and plant extracts used in fragrance\n"
+            "SELECT DISTINCT ?item ?itemLabel ?itemDescription WHERE {\n"
+            "  { ?item wdt:P279* wd:Q381165 }\n"
+            "  UNION\n"
+            "  { ?item wdt:P279* wd:Q162828 }\n"
+            "  FILTER NOT EXISTS { ?item wdt:P31 wd:Q4167410 }\n"
+            "  SERVICE wikibase:label { bd:serviceParam wikibase:language \"en\" }\n"
+            "} LIMIT 12"
+        ),
+    },
+    "floral": {
+        "label": "🌸 Floral ingredients",
+        "query": (
+            "# Flowering plants used as fragrance ingredients\n"
+            "SELECT DISTINCT ?item ?itemLabel ?itemDescription WHERE {\n"
+            "  ?item wdt:P31/wdt:P279* wd:Q506 .\n"
+            "  ?item wdt:P18 [] .\n"
+            "  SERVICE wikibase:label { bd:serviceParam wikibase:language \"en\" }\n"
+            "} LIMIT 12"
+        ),
+    },
+    "wood": {
+        "label": "🪵 Wood materials",
+        "query": (
+            "# Wood species used in fragrance and materials\n"
+            "SELECT DISTINCT ?item ?itemLabel ?itemDescription WHERE {\n"
+            "  ?item wdt:P31/wdt:P279* wd:Q287 .\n"
+            "  ?item wdt:P18 [] .\n"
+            "  SERVICE wikibase:label { bd:serviceParam wikibase:language \"en\" }\n"
+            "} LIMIT 12"
+        ),
+    },
+    "citrus": {
+        "label": "🍋 Citrus compounds",
+        "query": (
+            "# Terpene compounds found in citrus plants\n"
+            "SELECT DISTINCT ?item ?itemLabel ?itemDescription WHERE {\n"
+            "  ?item wdt:P279* wd:Q131524 .\n"
+            "  ?item wdt:P703 ?plant .\n"
+            "  ?plant wdt:P171* wd:Q19704 .\n"
+            "  SERVICE wikibase:label { bd:serviceParam wikibase:language \"en\" }\n"
+            "} LIMIT 12"
+        ),
+    },
+    "grasses": {
+        "label": "🌾 Aromatic grasses",
+        "query": (
+            "# Plants in the Poaceae (grass) family\n"
+            "SELECT DISTINCT ?item ?itemLabel ?itemDescription WHERE {\n"
+            "  ?item wdt:P31/wdt:P279* wd:Q756 .\n"
+            "  ?item wdt:P171* wd:Q46078 .\n"
+            "  SERVICE wikibase:label { bd:serviceParam wikibase:language \"en\" }\n"
+            "} LIMIT 12"
+        ),
+    },
+    "skin": {
+        "label": "🧴 Skin care actives",
+        "query": (
+            "# Compounds (fatty acids, lipids) used in cosmetics\n"
+            "SELECT DISTINCT ?item ?itemLabel ?itemDescription WHERE {\n"
+            "  { ?item wdt:P279* wd:Q61476 }\n"
+            "  UNION\n"
+            "  { ?item wdt:P279* wd:Q18534 }\n"
+            "  ?item wdt:P18 [] .\n"
+            "  SERVICE wikibase:label { bd:serviceParam wikibase:language \"en\" }\n"
+            "} LIMIT 12"
+        ),
+    },
+    "wax": {
+        "label": "🕯️ Wax & carriers",
+        "query": (
+            "# Waxes and waxy substances used in candles and cosmetics\n"
+            "SELECT DISTINCT ?item ?itemLabel ?itemDescription WHERE {\n"
+            "  ?item wdt:P279* wd:Q124695 .\n"
+            "  SERVICE wikibase:label { bd:serviceParam wikibase:language \"en\" }\n"
+            "} LIMIT 12"
+        ),
+    },
+    "resinous": {
+        "label": "🌲 Resinous notes",
+        "query": (
+            "# Plant resins used in incense and perfumery\n"
+            "SELECT DISTINCT ?item ?itemLabel ?itemDescription WHERE {\n"
+            "  ?item wdt:P279* wd:Q145740 .\n"
+            "  SERVICE wikibase:label { bd:serviceParam wikibase:language \"en\" }\n"
+            "} LIMIT 12"
+        ),
+    },
+}
+
+
+def _sparql_query_sync(query: str) -> dict:
+    """POST a SPARQL query to the Wikidata endpoint; return {columns, rows, elapsed_ms}."""
+    import time
+    import urllib.error
+    import urllib.parse
+    import urllib.request
+
+    t0 = time.monotonic()
+    req = urllib.request.Request(
+        WIKIDATA_SPARQL_URL,
+        data=urllib.parse.urlencode({"query": query}).encode(),
+        headers={
+            "Accept": "application/sparql-results+json",
+            "Content-Type": "application/x-www-form-urlencoded",
+            "User-Agent": "commerce-agents/1.0 (product-ontology-demo)",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            data = json.loads(resp.read().decode())
+    except urllib.error.HTTPError as exc:
+        body = ""
+        try:
+            body = exc.read().decode()[:400]
+        except Exception:
+            pass
+        raise RuntimeError(f"SPARQL HTTP {exc.code}: {body}") from exc
+    except Exception as exc:
+        raise RuntimeError(f"SPARQL request failed: {exc}") from exc
+
+    cols = data["head"]["vars"]
+    rows = []
+    for binding in data["results"]["bindings"]:
+        row: dict[str, str] = {}
+        for col in cols:
+            if col in binding:
+                val = binding[col]["value"]
+                # Shorten Wikidata entity URIs to bare Q-IDs
+                if val.startswith("http://www.wikidata.org/entity/"):
+                    val = val[len("http://www.wikidata.org/entity/"):]
+                row[col] = val
+            else:
+                row[col] = ""
+        rows.append(row)
+
+    elapsed_ms = round((time.monotonic() - t0) * 1000)
+    return {"columns": cols, "rows": rows, "elapsed_ms": elapsed_ms}
+
+
+async def sparql_kg_query(query: str) -> dict:
+    """Async wrapper around _sparql_query_sync."""
+    import asyncio
+    return await asyncio.get_running_loop().run_in_executor(None, _sparql_query_sync, query)

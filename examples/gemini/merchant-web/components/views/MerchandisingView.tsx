@@ -12,6 +12,7 @@ import {
   fetchBBWProducts,
   generateGeo,
   generateSEO,
+  runSPARQLQuery,
   searchEntities,
 } from "@/lib/api";
 import type {
@@ -22,6 +23,7 @@ import type {
   MerchandisingResult,
   ProductOntology,
   SEOContent,
+  SPARQLResult,
 } from "@/lib/types";
 
 // ── Sub-types ─────────────────────────────────────────────────────────────────
@@ -542,13 +544,121 @@ function KGEntityCard({ entity }: { entity: KGEntity }) {
   );
 }
 
+// ── SPARQL preset queries (mirrors SPARQL_PRESETS in merchandising.py) ─────────
+
+const SPARQL_PRESETS_MAP: Record<string, { label: string; query: string }> = {
+  botanical: {
+    label: "🌿 Botanical extracts",
+    query:
+      "# Essential oils and plant extracts used in fragrance\nSELECT DISTINCT ?item ?itemLabel ?itemDescription WHERE {\n  { ?item wdt:P279* wd:Q381165 }\n  UNION\n  { ?item wdt:P279* wd:Q162828 }\n  FILTER NOT EXISTS { ?item wdt:P31 wd:Q4167410 }\n  SERVICE wikibase:label { bd:serviceParam wikibase:language \"en\" }\n} LIMIT 12",
+  },
+  floral: {
+    label: "🌸 Floral ingredients",
+    query:
+      "# Flowering plants used as fragrance ingredients\nSELECT DISTINCT ?item ?itemLabel ?itemDescription WHERE {\n  ?item wdt:P31/wdt:P279* wd:Q506 .\n  ?item wdt:P18 [] .\n  SERVICE wikibase:label { bd:serviceParam wikibase:language \"en\" }\n} LIMIT 12",
+  },
+  wood: {
+    label: "🪵 Wood materials",
+    query:
+      "# Wood species used in fragrance and materials\nSELECT DISTINCT ?item ?itemLabel ?itemDescription WHERE {\n  ?item wdt:P31/wdt:P279* wd:Q287 .\n  ?item wdt:P18 [] .\n  SERVICE wikibase:label { bd:serviceParam wikibase:language \"en\" }\n} LIMIT 12",
+  },
+  citrus: {
+    label: "🍋 Citrus compounds",
+    query:
+      "# Terpene compounds found in citrus plants\nSELECT DISTINCT ?item ?itemLabel ?itemDescription WHERE {\n  ?item wdt:P279* wd:Q131524 .\n  ?item wdt:P703 ?plant .\n  ?plant wdt:P171* wd:Q19704 .\n  SERVICE wikibase:label { bd:serviceParam wikibase:language \"en\" }\n} LIMIT 12",
+  },
+  grasses: {
+    label: "🌾 Aromatic grasses",
+    query:
+      "# Plants in the Poaceae (grass) family\nSELECT DISTINCT ?item ?itemLabel ?itemDescription WHERE {\n  ?item wdt:P31/wdt:P279* wd:Q756 .\n  ?item wdt:P171* wd:Q46078 .\n  SERVICE wikibase:label { bd:serviceParam wikibase:language \"en\" }\n} LIMIT 12",
+  },
+  skin: {
+    label: "🧴 Skin care actives",
+    query:
+      "# Fatty acids and lipids used in cosmetics\nSELECT DISTINCT ?item ?itemLabel ?itemDescription WHERE {\n  { ?item wdt:P279* wd:Q61476 }\n  UNION\n  { ?item wdt:P279* wd:Q18534 }\n  ?item wdt:P18 [] .\n  SERVICE wikibase:label { bd:serviceParam wikibase:language \"en\" }\n} LIMIT 12",
+  },
+  wax: {
+    label: "🕯️ Wax & carriers",
+    query:
+      "# Waxes and waxy substances used in candles and cosmetics\nSELECT DISTINCT ?item ?itemLabel ?itemDescription WHERE {\n  ?item wdt:P279* wd:Q124695 .\n  SERVICE wikibase:label { bd:serviceParam wikibase:language \"en\" }\n} LIMIT 12",
+  },
+  resinous: {
+    label: "🌲 Resinous notes",
+    query:
+      "# Plant resins used in incense and perfumery\nSELECT DISTINCT ?item ?itemLabel ?itemDescription WHERE {\n  ?item wdt:P279* wd:Q145740 .\n  SERVICE wikibase:label { bd:serviceParam wikibase:language \"en\" }\n} LIMIT 12",
+  },
+};
+
+function SPARQLResultsTable({ result }: { result: SPARQLResult }) {
+  if (result.rows.length === 0) {
+    return (
+      <p className="text-xs text-(--ink-faint) py-6 text-center">
+        Query returned no results — try modifying the SPARQL above.
+      </p>
+    );
+  }
+  const toWikidataUrl = (val: string) =>
+    /^Q\d+$/.test(val) ? `https://www.wikidata.org/wiki/${val}` : null;
+
+  return (
+    <div className="overflow-x-auto rounded-lg border border-(--border) text-xs">
+      <table className="w-full border-collapse">
+        <thead>
+          <tr className="bg-(--surface-raised) border-b border-(--border)">
+            {result.columns.map((col) => (
+              <th key={col} className="px-3 py-2 text-left font-medium text-(--ink-secondary) whitespace-nowrap">
+                ?{col}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-(--border)">
+          {result.rows.map((row, i) => (
+            <tr key={i} className="hover:bg-(--surface-raised) transition-colors">
+              {result.columns.map((col) => {
+                const val = row[col] ?? "";
+                const href = toWikidataUrl(val);
+                return (
+                  <td key={col} className="px-3 py-2 text-(--ink) max-w-xs">
+                    {href ? (
+                      <a
+                        href={href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-mono text-violet-600 hover:underline"
+                      >
+                        {val}
+                      </a>
+                    ) : (
+                      <span className="line-clamp-2" title={val}>{val}</span>
+                    )}
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function KGPanel({ product }: { product: BBWProduct }) {
+  const [mode, setMode] = useState<"search" | "sparql">("search");
+
+  // Search mode state
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<KGEntity[] | null>(null);
   const [source, setSource] = useState("");
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // SPARQL mode state
+  const [sparqlQuery, setSparqlQuery] = useState(SPARQL_PRESETS_MAP.botanical.query);
+  const [sparqlRunning, setSparqlRunning] = useState(false);
+  const [sparqlResult, setSparqlResult] = useState<SPARQLResult | null>(null);
+  const [sparqlError, setSparqlError] = useState<string | null>(null);
 
   // Quick-fill terms derived from the product's attributes
   const quickTerms: string[] = [];
@@ -585,107 +695,219 @@ function KGPanel({ product }: { product: BBWProduct }) {
     void runSearch(query);
   };
 
+  const runSPARQL = async () => {
+    const q = sparqlQuery.trim();
+    if (!q) return;
+    setSparqlRunning(true);
+    setSparqlError(null);
+    setSparqlResult(null);
+    try {
+      const res = await runSPARQLQuery(q);
+      if (res) {
+        setSparqlResult(res);
+      } else {
+        setSparqlError("No response from the SPARQL endpoint.");
+      }
+    } catch {
+      setSparqlError("SPARQL query failed — check syntax or try a simpler query.");
+    } finally {
+      setSparqlRunning(false);
+    }
+  };
+
+  // Category preset entries used for both search and SPARQL modes
+  const categoryPresets = Object.entries(SPARQL_PRESETS_MAP).map(([key, p]) => ({
+    key,
+    label: p.label,
+    sparqlQuery: p.query,
+    searchTerm: ({ botanical: "eucalyptus", floral: "jasmine", wood: "sandalwood", citrus: "bergamot", grasses: "vetiver", skin: "shea butter", wax: "soy wax", resinous: "frankincense" } as Record<string, string>)[key] ?? key,
+  }));
+
   return (
     <div className="space-y-4">
-      {/* Search form */}
-      <div>
-        <p className="mb-2 text-xs text-(--ink-secondary)">
-          Search the open knowledge graph for real-world facts about ingredients, materials, or scent notes.
-          Results are used to ground AI-generated copy in verifiable entity data.
+      {/* Mode toggle */}
+      <div className="flex items-center justify-between">
+        <p className="text-xs text-(--ink-secondary)">
+          {mode === "search"
+            ? "Search the knowledge graph for real-world ingredient facts."
+            : "Write and run SPARQL queries against the Wikidata endpoint."}
         </p>
-        <form onSubmit={handleSubmit} className="flex gap-2">
-          <input
-            ref={inputRef}
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="e.g. mahogany wood, eucalyptus, shea butter…"
-            className="flex-1 rounded-lg border border-(--border) bg-(--surface) px-3 py-2 text-sm text-(--ink) placeholder:text-(--ink-faint) focus:outline-none focus:ring-2 focus:ring-(--brand)"
-          />
+        <div className="flex rounded-lg border border-(--border) overflow-hidden text-xs font-medium">
           <button
-            type="submit"
-            disabled={!query.trim() || searching}
-            className="rounded-lg bg-(--brand) px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50 transition-opacity"
+            onClick={() => setMode("search")}
+            className={`px-3 py-1.5 transition-colors ${mode === "search" ? "bg-(--brand) text-white" : "bg-(--surface) text-(--ink-secondary) hover:bg-(--surface-raised)"}`}
           >
-            {searching ? "Searching…" : "Search"}
+            Search
           </button>
-        </form>
+          <button
+            onClick={() => setMode("sparql")}
+            className={`px-3 py-1.5 transition-colors ${mode === "sparql" ? "bg-(--brand) text-white" : "bg-(--surface) text-(--ink-secondary) hover:bg-(--surface-raised)"}`}
+          >
+            SPARQL
+          </button>
+        </div>
       </div>
 
-      {/* Quick-fill chips from product attributes */}
-      <div>
-        <p className="mb-1.5 text-xs font-medium text-(--ink-secondary)">Quick-fill from this product:</p>
-        <div className="flex flex-wrap gap-1.5">
-          {quickTerms.map((term, i) => (
+      {mode === "search" ? (
+        <>
+          {/* Search form */}
+          <form onSubmit={handleSubmit} className="flex gap-2">
+            <input
+              ref={inputRef}
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="e.g. mahogany wood, eucalyptus, shea butter…"
+              className="flex-1 rounded-lg border border-(--border) bg-(--surface) px-3 py-2 text-sm text-(--ink) placeholder:text-(--ink-faint) focus:outline-none focus:ring-2 focus:ring-(--brand)"
+            />
             <button
-              key={i}
-              onClick={() => void runSearch(term)}
-              className="rounded-full border border-(--border) bg-(--surface-raised) px-2.5 py-0.5 text-xs text-(--ink-secondary) hover:bg-(--surface) hover:text-(--ink) transition-colors"
+              type="submit"
+              disabled={!query.trim() || searching}
+              className="rounded-lg bg-(--brand) px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50 transition-opacity"
             >
-              {term}
+              {searching ? "Searching…" : "Search"}
             </button>
-          ))}
-        </div>
-      </div>
+          </form>
 
-      {/* Category presets — shows the breadth of KG coverage */}
-      <div className="rounded-lg border border-(--border) bg-(--surface-raised) p-3">
-        <p className="mb-2 text-xs font-medium text-(--ink-secondary)">Browse by category:</p>
-        <div className="grid grid-cols-2 gap-2">
-          {[
-            { label: "🌿 Botanical extracts", term: "eucalyptus" },
-            { label: "🌸 Floral ingredients", term: "jasmine" },
-            { label: "🪵 Wood materials", term: "sandalwood" },
-            { label: "🍋 Citrus compounds", term: "bergamot" },
-            { label: "🌾 Aromatic grasses", term: "vetiver" },
-            { label: "🧴 Skin care actives", term: "shea butter" },
-            { label: "🕯️ Wax & carriers", term: "soy wax" },
-            { label: "🌲 Resinous notes", term: "frankincense" },
-          ].map(({ label, term }) => (
-            <button
-              key={term}
-              onClick={() => void runSearch(term)}
-              className="rounded-md border border-(--border) bg-(--surface) px-3 py-2 text-left text-xs text-(--ink-secondary) hover:border-(--brand) hover:text-(--ink) transition-colors"
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Results */}
-      {searching && (
-        <div className="flex items-center gap-2 py-6 justify-center text-(--ink-secondary)">
-          <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-          </svg>
-          <span className="text-sm">Querying knowledge graph…</span>
-        </div>
-      )}
-
-      {error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>
-      )}
-
-      {results !== null && !searching && (
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <p className="text-xs text-(--ink-secondary)">
-              {results.length === 0
-                ? `No entities found for "${query}"`
-                : `${results.length} ${results.length === 1 ? "entity" : "entities"} for "${query}"`}
-            </p>
-            {source && (
-              <span className="text-xs text-(--ink-faint)">
-                via {source === "wikidata" ? "Open Entity Graph" : "Enterprise Entity Graph"}
-              </span>
-            )}
+          {/* Quick-fill chips from product attributes */}
+          <div>
+            <p className="mb-1.5 text-xs font-medium text-(--ink-secondary)">Quick-fill from this product:</p>
+            <div className="flex flex-wrap gap-1.5">
+              {quickTerms.map((term, i) => (
+                <button
+                  key={i}
+                  onClick={() => void runSearch(term)}
+                  className="rounded-full border border-(--border) bg-(--surface-raised) px-2.5 py-0.5 text-xs text-(--ink-secondary) hover:bg-(--surface) hover:text-(--ink) transition-colors"
+                >
+                  {term}
+                </button>
+              ))}
+            </div>
           </div>
-          {results.map((entity, i) => (
-            <KGEntityCard key={i} entity={entity} />
-          ))}
-        </div>
+
+          {/* Category presets */}
+          <div className="rounded-lg border border-(--border) bg-(--surface-raised) p-3">
+            <p className="mb-2 text-xs font-medium text-(--ink-secondary)">Browse by category:</p>
+            <div className="grid grid-cols-2 gap-2">
+              {categoryPresets.map(({ key, label, searchTerm }) => (
+                <button
+                  key={key}
+                  onClick={() => void runSearch(searchTerm)}
+                  className="rounded-md border border-(--border) bg-(--surface) px-3 py-2 text-left text-xs text-(--ink-secondary) hover:border-(--brand) hover:text-(--ink) transition-colors"
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Search results */}
+          {searching && (
+            <div className="flex items-center gap-2 py-6 justify-center text-(--ink-secondary)">
+              <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+              <span className="text-sm">Querying knowledge graph…</span>
+            </div>
+          )}
+          {error && (
+            <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>
+          )}
+          {results !== null && !searching && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-(--ink-secondary)">
+                  {results.length === 0
+                    ? `No entities found for "${query}"`
+                    : `${results.length} ${results.length === 1 ? "entity" : "entities"} for "${query}"`}
+                </p>
+                {source && (
+                  <span className="text-xs text-(--ink-faint)">
+                    via {source === "wikidata" ? "Open Entity Graph" : "Enterprise Entity Graph"}
+                  </span>
+                )}
+              </div>
+              {results.map((entity, i) => (
+                <KGEntityCard key={i} entity={entity} />
+              ))}
+            </div>
+          )}
+        </>
+      ) : (
+        <>
+          {/* SPARQL editor */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-medium text-(--ink-secondary)">SPARQL query (Wikidata endpoint)</p>
+              <a
+                href="https://www.wikidata.org/wiki/Wikidata:SPARQL_query_service/Wikidata_Query_Help"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-(--ink-faint) hover:text-(--ink) transition-colors"
+              >
+                Query help ↗
+              </a>
+            </div>
+            <textarea
+              value={sparqlQuery}
+              onChange={(e) => setSparqlQuery(e.target.value)}
+              rows={10}
+              spellCheck={false}
+              className="w-full rounded-lg border border-(--border) bg-(--surface) px-3 py-2 text-xs font-mono text-(--ink) focus:outline-none focus:ring-2 focus:ring-(--brand) resize-y"
+            />
+            <button
+              onClick={() => void runSPARQL()}
+              disabled={!sparqlQuery.trim() || sparqlRunning}
+              className="rounded-lg bg-(--brand) px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50 transition-opacity"
+            >
+              {sparqlRunning ? "Running…" : "Run Query"}
+            </button>
+          </div>
+
+          {/* Category presets — load SPARQL into editor */}
+          <div className="rounded-lg border border-(--border) bg-(--surface-raised) p-3">
+            <p className="mb-2 text-xs font-medium text-(--ink-secondary)">Load preset query:</p>
+            <div className="grid grid-cols-2 gap-2">
+              {categoryPresets.map(({ key, label, sparqlQuery: pq }) => (
+                <button
+                  key={key}
+                  onClick={() => { setSparqlQuery(pq); setSparqlResult(null); setSparqlError(null); }}
+                  className="rounded-md border border-(--border) bg-(--surface) px-3 py-2 text-left text-xs text-(--ink-secondary) hover:border-(--brand) hover:text-(--ink) transition-colors"
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* SPARQL results */}
+          {sparqlRunning && (
+            <div className="flex items-center gap-2 py-6 justify-center text-(--ink-secondary)">
+              <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+              <span className="text-sm">Querying Wikidata SPARQL endpoint…</span>
+            </div>
+          )}
+          {sparqlError && (
+            <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{sparqlError}</div>
+          )}
+          {sparqlResult && !sparqlRunning && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-(--ink-secondary)">
+                  {sparqlResult.rows.length} {sparqlResult.rows.length === 1 ? "row" : "rows"} returned
+                </p>
+                {sparqlResult.elapsed_ms !== undefined && (
+                  <span className="text-xs text-(--ink-faint)">{sparqlResult.elapsed_ms} ms · Wikidata</span>
+                )}
+              </div>
+              <SPARQLResultsTable result={sparqlResult} />
+            </div>
+          )}
+        </>
       )}
     </div>
   );

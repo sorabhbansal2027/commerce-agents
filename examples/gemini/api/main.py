@@ -486,6 +486,40 @@ async def discard_staged_change(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+@app.post("/api/merchant/merchandising/kg/sparql")
+async def kg_sparql(
+    body: dict,
+    x_session_id: str | None = Header(default=None),
+) -> dict:
+    """Execute an arbitrary SPARQL query against the Wikidata endpoint.
+
+    Body: { "query": "<SPARQL SELECT query>" }
+    Returns: { "columns": [...], "rows": [...], "elapsed_ms": N, "query": "..." }
+    """
+    if not x_session_id or x_session_id not in _sessions:
+        raise HTTPException(status_code=401, detail="Invalid or missing X-Session-Id header")
+    query = (body.get("query") or "").strip()
+    if not query:
+        raise HTTPException(status_code=400, detail="query is required")
+    try:
+        from .merchandising import sparql_kg_query
+        result = await sparql_kg_query(query)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {**result, "query": query}
+
+
+@app.get("/api/merchant/merchandising/kg/sparql/presets")
+async def kg_sparql_presets(
+    x_session_id: str | None = Header(default=None),
+) -> dict:
+    """Return the built-in SPARQL preset queries keyed by category slug."""
+    if not x_session_id or x_session_id not in _sessions:
+        raise HTTPException(status_code=401, detail="Invalid or missing X-Session-Id header")
+    from .merchandising import SPARQL_PRESETS
+    return SPARQL_PRESETS
+
+
 @app.get("/api/merchant/merchandising/entities")
 async def merchandising_entities(
     q: str,

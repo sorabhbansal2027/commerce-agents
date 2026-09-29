@@ -101,3 +101,7 @@ export function discardChange(changeId: string): Promise<{ change_id: string; st
 export function searchEntities(query: string, limit = 5): Promise<import("./types").KGEntitiesResponse | null> {
   return api.get("/merchandising/entities", { q: query, limit: String(limit) });
 }
+
+export function runSPARQLQuery(query: string): Promise<import("./types").SPARQLResult | null> {
+  return api.post<import("./types").SPARQLResult>("/merchandising/kg/sparql", { query });
+}

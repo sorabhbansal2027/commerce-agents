@@ -26,6 +26,7 @@ BBW_PRODUCTS: list[dict] = [
         "price": 26.95,
         "currency": "USD",
         "status": "active",
+        "image_url": "https://picsum.photos/seed/bbw-c001/400/400",
         "attributes": {
             "size": "14.5 oz",
             "burn_time": "45 hours",
@@ -47,6 +48,7 @@ BBW_PRODUCTS: list[dict] = [
         "price": 26.95,
         "currency": "USD",
         "status": "active",
+        "image_url": "https://picsum.photos/seed/bbw-c002/400/400",
         "attributes": {
             "size": "14.5 oz",
             "burn_time": "45 hours",
@@ -68,6 +70,7 @@ BBW_PRODUCTS: list[dict] = [
         "price": 14.50,
         "currency": "USD",
         "status": "active",
+        "image_url": "https://picsum.photos/seed/bbw-c003/400/400",
         "attributes": {
             "size": "7 oz",
             "burn_time": "25-45 hours",
@@ -90,6 +93,7 @@ BBW_PRODUCTS: list[dict] = [
         "price": 14.50,
         "currency": "USD",
         "status": "active",
+        "image_url": "https://picsum.photos/seed/bbw-b001/400/400",
         "attributes": {
             "size": "8 fl oz",
             "skin_type": "all",
@@ -111,6 +115,7 @@ BBW_PRODUCTS: list[dict] = [
         "price": 16.50,
         "currency": "USD",
         "status": "active",
+        "image_url": "https://picsum.photos/seed/bbw-b002/400/400",
         "attributes": {
             "size": "8 fl oz",
             "skin_type": "dry to normal",
@@ -132,6 +137,7 @@ BBW_PRODUCTS: list[dict] = [
         "price": 13.50,
         "currency": "USD",
         "status": "active",
+        "image_url": "https://picsum.photos/seed/bbw-b003/400/400",
         "attributes": {
             "size": "10 fl oz",
             "skin_type": "all",
@@ -154,6 +160,7 @@ BBW_PRODUCTS: list[dict] = [
         "price": 7.50,
         "currency": "USD",
         "status": "active",
+        "image_url": "https://picsum.photos/seed/bbw-h001/400/400",
         "attributes": {
             "size": "0.8 fl oz",
             "duration": "30 days",
@@ -174,6 +181,7 @@ BBW_PRODUCTS: list[dict] = [
         "price": 9.50,
         "currency": "USD",
         "status": "active",
+        "image_url": "https://picsum.photos/seed/bbw-h002/400/400",
         "attributes": {
             "size": "5.3 fl oz",
             "fragrance_family": "fresh",
@@ -194,6 +202,7 @@ BBW_PRODUCTS: list[dict] = [
         "price": 11.50,
         "currency": "USD",
         "status": "active",
+        "image_url": "https://picsum.photos/seed/bbw-h003/400/400",
         "attributes": {
             "size": "5.3 fl oz",
             "fragrance_family": "floral",
@@ -216,6 +225,7 @@ BBW_PRODUCTS: list[dict] = [
         "price": 9.50,
         "currency": "USD",
         "status": "active",
+        "image_url": "https://picsum.photos/seed/bbw-s001/400/400",
         "attributes": {
             "size": "8.75 fl oz",
             "skin_type": "sensitive",
@@ -237,6 +247,7 @@ BBW_PRODUCTS: list[dict] = [
         "price": 1.95,
         "currency": "USD",
         "status": "active",
+        "image_url": "https://picsum.photos/seed/bbw-s002/400/400",
         "attributes": {
             "size": "1 fl oz",
             "fragrance_family": "fruity",
@@ -257,6 +268,7 @@ BBW_PRODUCTS: list[dict] = [
         "price": 8.50,
         "currency": "USD",
         "status": "active",
+        "image_url": "https://picsum.photos/seed/bbw-s003/400/400",
         "attributes": {
             "size": "2 fl oz",
             "skin_type": "dry to very dry",

@@ -350,3 +350,22 @@ export interface ChangePreviewPayload {
   note?: string | null;
   change: StagedChange;
 }
+
+// --- Knowledge Graph / Wikidata entity search ---
+
+export interface KGEntity {
+  name: string;
+  types: string[];
+  description: string;
+  url: string;
+  article_body: string;
+  score: number;
+  entity_id: string;   // Wikidata Q-ID e.g. "Q133485"
+  provider: string;    // "wikidata" | "google_knowledge_graph"
+}
+
+export interface KGEntitiesResponse {
+  query: string;
+  source: string;
+  entities: KGEntity[];
+}

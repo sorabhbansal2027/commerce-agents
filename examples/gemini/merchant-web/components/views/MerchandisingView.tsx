@@ -3,7 +3,7 @@
 
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   applyChange,
   classifyProduct,
@@ -12,11 +12,13 @@ import {
   fetchBBWProducts,
   generateGeo,
   generateSEO,
+  searchEntities,
 } from "@/lib/api";
 import type {
   ApplyChangeResponse,
   BBWProduct,
   GeoContent,
+  KGEntity,
   MerchandisingResult,
   ProductOntology,
   SEOContent,
@@ -24,7 +26,7 @@ import type {
 
 // ── Sub-types ─────────────────────────────────────────────────────────────────
 
-type MerchandisingTab = "enrich" | "seo" | "geo" | "classify";
+type MerchandisingTab = "enrich" | "seo" | "geo" | "classify" | "kg";
 
 interface MerchandisingViewProps {
   onAskAssistant: (text: string) => void;
@@ -480,6 +482,190 @@ function ClassifyPanel({ ontology }: { ontology: ProductOntology }) {
   );
 }
 
+// ── Knowledge Graph panel ─────────────────────────────────────────────────────
+
+function KGEntityCard({ entity }: { entity: KGEntity }) {
+  return (
+    <div className="rounded-lg border border-(--border) p-4 space-y-2">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm font-semibold text-(--ink)">{entity.name}</span>
+            {entity.entity_id && (
+              <a
+                href={
+                  entity.entity_id.startsWith("kg:")
+                    ? `https://g.co/kg/${entity.entity_id.replace("kg:/", "")}`
+                    : `https://www.wikidata.org/wiki/${entity.entity_id}`
+                }
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded-full bg-violet-100 text-violet-700 px-2 py-0.5 text-xs font-mono hover:bg-violet-200 transition-colors"
+              >
+                {entity.entity_id.startsWith("kg:") ? entity.entity_id.replace("kg:/m/", "mid:") : entity.entity_id}
+              </a>
+            )}
+            {entity.provider === "wikidata" && (
+              <span className="rounded-full bg-blue-50 text-blue-600 border border-blue-200 px-2 py-0.5 text-xs">
+                Open Entity Graph
+              </span>
+            )}
+            {entity.provider === "google_knowledge_graph" && (
+              <span className="rounded-full bg-green-50 text-green-700 border border-green-200 px-2 py-0.5 text-xs">
+                Enterprise Entity Graph
+              </span>
+            )}
+          </div>
+          {entity.description && (
+            <p className="mt-1 text-sm text-(--ink-secondary)">{entity.description}</p>
+          )}
+        </div>
+        {entity.url && (
+          <a
+            href={entity.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="shrink-0 rounded-md border border-(--border) px-2.5 py-1 text-xs text-(--ink-secondary) hover:bg-(--surface-raised) transition-colors"
+          >
+            Wikipedia ↗
+          </a>
+        )}
+      </div>
+      {entity.types.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {entity.types.map((t, i) => (
+            <Chip key={i} label={t} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function KGPanel({ product }: { product: BBWProduct }) {
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<KGEntity[] | null>(null);
+  const [source, setSource] = useState("");
+  const [searching, setSearching] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Quick-fill terms derived from the product's attributes
+  const quickTerms: string[] = [];
+  const attrs = product.attributes ?? {};
+  if (attrs.scent_notes) attrs.scent_notes.split(",").slice(0, 3).forEach((n) => quickTerms.push(n.trim()));
+  if (attrs.key_ingredient) attrs.key_ingredient.split(",").slice(0, 2).forEach((n) => quickTerms.push(n.trim()));
+  if (attrs.fragrance_family && !quickTerms.includes(attrs.fragrance_family)) quickTerms.push(attrs.fragrance_family);
+  if (quickTerms.length === 0) quickTerms.push(product.title);
+
+  const runSearch = async (q: string) => {
+    const term = q.trim();
+    if (!term) return;
+    setQuery(term);
+    setSearching(true);
+    setError(null);
+    setResults(null);
+    try {
+      const res = await searchEntities(term, 5);
+      if (res) {
+        setResults(res.entities);
+        setSource(res.source);
+      } else {
+        setError("No response from the entities API — check the merchant API connection.");
+      }
+    } catch {
+      setError("Request failed — check the merchant API connection.");
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    void runSearch(query);
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Search form */}
+      <div>
+        <p className="mb-2 text-xs text-(--ink-secondary)">
+          Search the open knowledge graph for real-world facts about ingredients, materials, or scent notes.
+          Results are used to ground AI-generated copy in verifiable entity data.
+        </p>
+        <form onSubmit={handleSubmit} className="flex gap-2">
+          <input
+            ref={inputRef}
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="e.g. mahogany wood, eucalyptus, shea butter…"
+            className="flex-1 rounded-lg border border-(--border) bg-(--surface) px-3 py-2 text-sm text-(--ink) placeholder:text-(--ink-faint) focus:outline-none focus:ring-2 focus:ring-(--brand)"
+          />
+          <button
+            type="submit"
+            disabled={!query.trim() || searching}
+            className="rounded-lg bg-(--brand) px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50 transition-opacity"
+          >
+            {searching ? "Searching…" : "Search"}
+          </button>
+        </form>
+      </div>
+
+      {/* Quick-fill chips from product attributes */}
+      <div>
+        <p className="mb-1.5 text-xs font-medium text-(--ink-secondary)">Quick-fill from this product:</p>
+        <div className="flex flex-wrap gap-1.5">
+          {quickTerms.map((term, i) => (
+            <button
+              key={i}
+              onClick={() => void runSearch(term)}
+              className="rounded-full border border-(--border) bg-(--surface-raised) px-2.5 py-0.5 text-xs text-(--ink-secondary) hover:bg-(--surface) hover:text-(--ink) transition-colors"
+            >
+              {term}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Results */}
+      {searching && (
+        <div className="flex items-center gap-2 py-6 justify-center text-(--ink-secondary)">
+          <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+          </svg>
+          <span className="text-sm">Querying knowledge graph…</span>
+        </div>
+      )}
+
+      {error && (
+        <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>
+      )}
+
+      {results !== null && !searching && (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-(--ink-secondary)">
+              {results.length === 0
+                ? `No entities found for "${query}"`
+                : `${results.length} ${results.length === 1 ? "entity" : "entities"} for "${query}"`}
+            </p>
+            {source && (
+              <span className="text-xs text-(--ink-faint)">
+                via {source === "wikidata" ? "Open Entity Graph" : "Enterprise Entity Graph"}
+              </span>
+            )}
+          </div>
+          {results.map((entity, i) => (
+            <KGEntityCard key={i} entity={entity} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main view ─────────────────────────────────────────────────────────────────
 
 export default function MerchandisingView({ onAskAssistant }: MerchandisingViewProps) {
@@ -520,6 +706,9 @@ export default function MerchandisingView({ onAskAssistant }: MerchandisingViewP
       if (!selectedProduct) return;
       setActiveTab(tab);
       setError(null);
+
+      // KG tab is self-contained (has its own search state)
+      if (tab === "kg") return;
 
       // Return cached result if available
       if (tab === "enrich" && enrichResult) return;
@@ -579,6 +768,7 @@ export default function MerchandisingView({ onAskAssistant }: MerchandisingViewP
     { id: "seo", label: "SEO" },
     { id: "geo", label: "Geo" },
     { id: "classify", label: "Classify" },
+    { id: "kg", label: "Knowledge Graph" },
   ];
 
   return (
@@ -770,6 +960,10 @@ export default function MerchandisingView({ onAskAssistant }: MerchandisingViewP
                           Classify Product
                         </button>
                       </div>
+                    )}
+
+                    {activeTab === "kg" && (
+                      <KGPanel key={selectedProduct.id} product={selectedProduct} />
                     )}
                   </>
                 )}

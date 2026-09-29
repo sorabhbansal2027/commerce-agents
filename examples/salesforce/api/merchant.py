@@ -198,6 +198,21 @@ class _SFCCAdapter:
             log.warning("SFCC shop order_search unavailable for order issues (%s)", exc)
             return []
 
+    @staticmethod
+    def _sfcc_image_url(h: dict) -> str | None:
+        """Extract the primary image URL from a SFCC product search hit."""
+        # Search hits expose a singular "image" at the hit level; image_groups on full records.
+        hit_img = h.get("image", {})
+        url = hit_img.get("link") or hit_img.get("dis_base_link")
+        if url:
+            return url
+        for group in h.get("image_groups", []):
+            for img in group.get("images", []):
+                candidate = img.get("link") or img.get("dis_base_link")
+                if candidate:
+                    return candidate
+        return None
+
     async def search_listings(self, session: MerchantSessionContext, query: str, filters: Any = None, limit: int = 8) -> list:
         try:
             from merchant_agent import Listing, ListingFilters
@@ -210,6 +225,7 @@ class _SFCCAdapter:
                 "query": base_query,
                 "select": "(**)",
                 "count": limit,
+                "expand": ["images", "prices"],
             }
             if filters and isinstance(filters, ListingFilters) and filters.category:
                 body["query"] = {"filtered_query": {"query": body["query"],
@@ -231,6 +247,7 @@ class _SFCCAdapter:
                     price=float(price) if price else 0.0,
                     currency=self._sfcc._currency,
                     category=h.get("primary_category_id"),
+                    image_url=self._sfcc_image_url(h),
                 ))
             return listings
         except (httpx.HTTPStatusError, httpx.ConnectError) as exc:
@@ -255,6 +272,7 @@ class _SFCCAdapter:
             category=result.category,
             description=getattr(result, "description", None),
             stock=getattr(result, "stock", None),
+            image_url=getattr(result, "image_url", None),
             attributes=getattr(result, "attributes", {}),
         )
 

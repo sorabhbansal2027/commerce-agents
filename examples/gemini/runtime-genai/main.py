@@ -1,7 +1,7 @@
 """Gemini raw-genai merchant API — Path 1 (manual agentic loop).
 
 Uvicorn target:
-    uvicorn gemini.runtime-genai.main:app --app-dir examples --port 8007
+    uvicorn main:app --app-dir examples/gemini/runtime-genai --port 8007
 
 Required env vars:
     GEMINI_API_KEY          Google AI Studio key  (or use GOOGLE_API_KEY)
@@ -22,8 +22,10 @@ from __future__ import annotations
 import logging
 import os
 import secrets
+import sys
 import time
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, Header, HTTPException
@@ -31,9 +33,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from ..api.merchandising import set_merchandising_backend
-from ..api.tools import set_backend
-from .orchestrator import GenAIMerchantOrchestrator
+# examples/ must be on sys.path so gemini.api.* can be imported by name.
+_examples_dir = str(Path(__file__).parent.parent.parent)
+if _examples_dir not in sys.path:
+    sys.path.insert(0, _examples_dir)
+
+from gemini.api.merchandising import set_merchandising_backend  # noqa: E402
+from gemini.api.tools import set_backend  # noqa: E402
+from orchestrator import GenAIMerchantOrchestrator  # noqa: E402
 
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -45,12 +52,9 @@ _orchestrator: GenAIMerchantOrchestrator | None = None
 def _build_backend() -> Any:
     if not os.environ.get("SFCC_INSTANCE_URL"):
         raise RuntimeError("SFCC_INSTANCE_URL is required")
-    import sys
-    from pathlib import Path
-
-    examples_dir = Path(__file__).parent.parent.parent
-    if str(examples_dir) not in sys.path:
-        sys.path.insert(0, str(examples_dir))
+    salesforce_dir = str(Path(__file__).parent.parent.parent.parent / "salesforce")
+    if salesforce_dir not in sys.path:
+        sys.path.insert(0, salesforce_dir)
 
     from salesforce.api.merchant import _SFCCAdapter
     from sfcc.sfcc_bm_backend import SFCCBusinessManagerBackend
@@ -146,7 +150,7 @@ async def chat(
 
 @app.get("/api/merchant/overview")
 async def overview(x_session_id: str | None = Header(default=None)) -> dict:
-    from ..api.tools import _backend, _session
+    from gemini.api.tools import _backend, _session
 
     _require_session(x_session_id)
     if _backend is None:
@@ -196,7 +200,7 @@ async def overview(x_session_id: str | None = Header(default=None)) -> dict:
 
 @app.get("/api/merchant/alerts")
 async def alerts(x_session_id: str | None = Header(default=None)) -> dict:
-    from ..api.tools import _backend, _session
+    from gemini.api.tools import _backend, _session
 
     _require_session(x_session_id)
     if _backend is None:
@@ -216,7 +220,7 @@ async def listings(
     limit: int = 50,
     x_session_id: str | None = Header(default=None),
 ) -> dict:
-    from ..api.tools import _backend, _session
+    from gemini.api.tools import _backend, _session
 
     _require_session(x_session_id)
     if _backend is None:
@@ -235,7 +239,7 @@ async def get_listing(
     listing_id: str,
     x_session_id: str | None = Header(default=None),
 ) -> dict:
-    from ..api.tools import _backend, _session
+    from gemini.api.tools import _backend, _session
 
     _require_session(x_session_id)
     if _backend is None:

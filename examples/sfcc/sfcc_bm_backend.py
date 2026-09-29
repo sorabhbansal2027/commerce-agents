@@ -269,6 +269,25 @@ class SFCCBusinessManagerBackend(MerchantBackend):
 
     # ── Catalog ───────────────────────────────────────────────────────────────
 
+    @staticmethod
+    def _image_url(image_groups: list) -> str | None:
+        """Return the first medium or large image link from SFCC image_groups."""
+        preferred: str | None = None
+        fallback: str | None = None
+        for group in image_groups or []:
+            images = group.get("images", [])
+            if not images:
+                continue
+            link = images[0].get("link") or images[0].get("dis_base_link")
+            if not link:
+                continue
+            if group.get("view_type") in ("medium", "large"):
+                if preferred is None:
+                    preferred = link
+            elif fallback is None:
+                fallback = link
+        return preferred or fallback
+
     async def search_listings(
         self,
         session: MerchantSessionContext,
@@ -285,7 +304,7 @@ class SFCCBusinessManagerBackend(MerchantBackend):
             },
             "select": "(**)",
             "count": limit,
-            "expand": ["availability", "prices"],
+            "expand": ["availability", "prices", "images"],
         }
         if filters and filters.category:
             body["query"] = {
@@ -309,6 +328,21 @@ class SFCCBusinessManagerBackend(MerchantBackend):
             rep = h.get("represented_product", h)
             prices = rep.get("prices", {})
             price = next(iter(prices.values()), None) if prices else None
+            # SFCC search hits carry a primary "image" (singular) at the hit level;
+            # image_groups (plural) appear on individual product fetches.
+            hit_image = h.get("image", {})
+            hit_image_url = hit_image.get("link") or hit_image.get("dis_base_link")
+            image_url = (
+                hit_image_url
+                or self._image_url(h.get("image_groups", []))
+                or self._image_url(rep.get("image_groups", []))
+            )
+            if not image_url:
+                log.debug(
+                    "No image for %s — hit keys: %s",
+                    rep.get("id", h.get("product_id")),
+                    list(h.keys()),
+                )
             listings.append(
                 Listing(
                     listing_id=rep.get("id", h.get("product_id", "")),
@@ -317,6 +351,7 @@ class SFCCBusinessManagerBackend(MerchantBackend):
                     price=price,
                     currency=self._currency,
                     category=rep.get("primary_category_id"),
+                    image_url=image_url or None,
                 )
             )
         return listings
@@ -326,7 +361,7 @@ class SFCCBusinessManagerBackend(MerchantBackend):
     ) -> ListingDetails | None:
         data = await self._request(
             "GET",
-            f"products/{listing_id}?expand=availability,prices,categories,variations",
+            f"products/{listing_id}?expand=availability,prices,categories,variations,images",
         )
         if not data:
             return None
@@ -348,6 +383,7 @@ class SFCCBusinessManagerBackend(MerchantBackend):
             category=data.get("primary_category_id"),
             description=data.get("short_description") or data.get("long_description"),
             stock=stock,
+            image_url=self._image_url(data.get("image_groups", [])),
             attributes={
                 k: v
                 for k, v in data.get("c_", {}).items()

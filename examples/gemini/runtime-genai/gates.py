@@ -10,10 +10,10 @@ Gate order: provenance → options → guardrail → approval.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from .orchestrator import GenAISession
+    from orchestrator import GenAISession
 
 
 def check_provenance_gate(session: "GenAISession", tool_name: str, args: dict) -> dict | None:
@@ -70,7 +70,7 @@ def check_approval_gate(session: "GenAISession", tool_name: str, args: dict) -> 
     return None
 
 
-def run_gates(session: "GenAISession", tool_name: str, args: dict) -> dict | None:
+def run_gates(session: Any, tool_name: str, args: dict) -> dict | None:
     """Run all gates in order; return the first failure or None if all pass."""
     for check in (
         check_provenance_gate,

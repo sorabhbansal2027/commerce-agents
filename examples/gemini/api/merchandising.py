@@ -117,7 +117,7 @@ def _lookup_google_kg_sync(query: str, limit: int, api_key: str) -> list[dict]:
                 "url": dd.get("url", ""),
                 "article_body": (dd.get("articleBody") or "")[:200],
                 "score": item.get("resultScore", 0),
-                "entity_id": "",
+                "entity_id": r.get("@id", ""),   # e.g. "kg:/m/0d9jr"
                 "provider": "google_knowledge_graph",
             })
         return results
@@ -187,12 +187,50 @@ def _lookup_wikidata_sync(query: str, limit: int) -> list[dict]:
         return []
 
 
+_STOP_WORDS = {"and", "or", "with", "the", "a", "an", "of", "in", "for"}
+
+# Multi-word queries (e.g. "mahogany teakwood") resolve to 0 Wikidata entities
+# because Wikidata indexes individual concepts, not fragrance blends. Split on
+# whitespace and look up each term that isn't a stop word, then deduplicate by
+# entity_id so a term that appears in two queries isn't returned twice.
 def _lookup_kg_entities_sync(query: str, limit: int = 3) -> list[dict]:
-    """Dispatch to Google KG (if GOOGLE_KG_API_KEY is set) or fall back to Wikidata."""
+    """Dispatch to Google KG (if GOOGLE_KG_API_KEY is set) or fall back to Wikidata.
+
+    Multi-word compound queries (fragrance blends, two-ingredient combos) are
+    split into individual terms; each term is looked up separately and results
+    are deduplicated by entity_id. Single-entity two-word phrases like
+    "shea butter" or "cherry blossom" resolve directly without splitting.
+    """
     kg_key = os.environ.get("GOOGLE_KG_API_KEY")
-    if kg_key:
-        return _lookup_google_kg_sync(query, limit, kg_key)
-    return _lookup_wikidata_sync(query, limit)
+    lookup = (
+        lambda q, n: _lookup_google_kg_sync(q, n, kg_key)
+        if kg_key
+        else _lookup_wikidata_sync(q, n)
+    )
+
+    # Try the full query first.
+    results = lookup(query, limit)
+    if results:
+        return results
+
+    # Full query returned nothing — it's likely a blend ("mahogany teakwood").
+    # Split into individual words, drop stop words, look up each.
+    terms = [w for w in query.lower().split() if w not in _STOP_WORDS and len(w) > 2]
+    if len(terms) <= 1:
+        return results  # nothing more to try
+
+    seen: set[str] = set()
+    combined: list[dict] = []
+    per_term = max(1, limit // len(terms))
+    for term in terms:
+        for entity in lookup(term, per_term):
+            eid = entity.get("entity_id") or entity.get("name", "")
+            if eid and eid not in seen:
+                seen.add(eid)
+                combined.append(entity)
+        if len(combined) >= limit:
+            break
+    return combined[:limit]
 
 
 async def _lookup_kg_entities(query: str, limit: int = 3) -> list[dict]:

@@ -18,13 +18,20 @@ import datetime
 import json
 import logging
 import os
+import sys
 import time
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
-from ..api.tools import ALL_TOOL_FUNCTIONS, get_tool_declarations
-from .gates import run_gates
+# examples/ must be on sys.path so gemini.api.* can be imported by name.
+_examples_dir = str(Path(__file__).parent.parent.parent)
+if _examples_dir not in sys.path:
+    sys.path.insert(0, _examples_dir)
+
+from gemini.api.tools import ALL_TOOL_FUNCTIONS, get_tool_declarations  # noqa: E402
+from gates import run_gates  # noqa: E402  # gates.py is in the same directory
 
 log = logging.getLogger(__name__)
 
@@ -83,8 +90,8 @@ class GenAIMerchantOrchestrator:
     def __init__(self, store_name: str) -> None:
         self._store_name = store_name
         self._sessions: dict[str, GenAISession] = {}
-        # Defer client construction until the first request so the env var
-        # GOOGLE_API_KEY can be set during the lifespan startup hook.
+        # Defer client construction until the first request so GOOGLE_API_KEY
+        # can be set during the lifespan startup hook before this runs.
         self._client: Any = None
         self._model = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
 

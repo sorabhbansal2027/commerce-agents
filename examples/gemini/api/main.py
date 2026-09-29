@@ -244,7 +244,14 @@ async def listings(q: str = "", limit: int = 50, x_session_id: str | None = Head
 
     try:
         results = await _backend.search_listings(_session(), q, None, limit)
-        return {"listings": [r.model_dump(mode="json", exclude_none=True) for r in results]}
+        out = []
+        for r in results:
+            d = r.model_dump(mode="json", exclude_none=True)
+            if not d.get("image_url"):
+                seed = d.get("listing_id", "product").lower().replace(" ", "-")
+                d["image_url"] = f"https://picsum.photos/seed/{seed}/400/400"
+            out.append(d)
+        return {"listings": out}
     except Exception as exc:
         log.warning("listings failed: %s", exc)
         return {"listings": []}
@@ -262,7 +269,11 @@ async def get_listing(listing_id: str, x_session_id: str | None = Header(default
     result = await _backend.get_listing(_session(), listing_id)
     if result is None:
         raise HTTPException(status_code=404, detail=f"Listing {listing_id} not found")
-    return result.model_dump(mode="json", exclude_none=True)
+    d = result.model_dump(mode="json", exclude_none=True)
+    if not d.get("image_url"):
+        seed = listing_id.lower().replace(" ", "-")
+        d["image_url"] = f"https://picsum.photos/seed/{seed}/400/400"
+    return d
 
 
 @app.get("/api/merchant/alerts")

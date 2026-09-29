@@ -23,13 +23,21 @@ from typing import Any
 log = logging.getLogger(__name__)
 
 _backend: Any = None
-_model: str = "gemini-2.0-flash"
+_DEFAULT_MODEL = "gemini-2.5-flash"
+_model: str | None = None  # resolved lazily from env at first use
+
+
+def _get_model() -> str:
+    global _model
+    if _model is None:
+        _model = os.environ.get("GEMINI_MODEL", _DEFAULT_MODEL)
+    return _model
 
 
 def set_merchandising_backend(backend: Any) -> None:
     global _backend, _model
     _backend = backend
-    _model = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
+    _model = os.environ.get("GEMINI_MODEL", _DEFAULT_MODEL)
 
 
 def _client():
@@ -75,7 +83,7 @@ async def _generate_json(prompt: str) -> dict | list:
 
     client = _client()
     response = await client.aio.models.generate_content(
-        model=_model,
+        model=_get_model(),
         contents=prompt,
         config=gtypes.GenerateContentConfig(
             response_mime_type="application/json",

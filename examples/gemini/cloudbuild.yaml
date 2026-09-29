@@ -2,30 +2,36 @@
 # Cloud Build substitution rules: $_VAR and $PROJECT_ID/$BUILD_ID are Cloud Build vars.
 # All other bash vars/subshells must use $$ to escape: $$VAR, $$(cmd).
 #
-# Full deploy (from repo root):
+# CI/CD (GitHub trigger — fires on push to main):
+#   Connect repo in GCP Console → Cloud Build → Triggers, then create a trigger:
+#     Branch: ^main$
+#     Config: examples/gemini/cloudbuild.yaml
+#   API keys are pulled from Secret Manager (no substitutions needed).
+#   One-time setup: see scripts/setup_gcp_cicd.sh
+#
+# Manual full deploy (from repo root):
 #   gcloud builds submit . \
 #     --project=spartan-concord-510108-p2 \
 #     --config=examples/gemini/cloudbuild.yaml \
-#     --substitutions=_GOOGLE_API_KEY=KEY,_GOOGLE_KG_API_KEY=KEY \
 #     --region=us-central1
 #
-# API-only redeploy (preserves existing env vars on the service, no keys needed):
-#   gcloud builds submit . \
-#     --project=spartan-concord-510108-p2 \
-#     --config=examples/gemini/cloudbuild.yaml \
-#     --substitutions=_WEB_API_URL=https://gemini-merchant-api-t4nrmsjpcq-uc.a.run.app \
-#     --region=us-central1
-#
-# deploy-api uses --update-env-vars so existing GOOGLE_API_KEY/KG keys are preserved
-# when _GOOGLE_API_KEY/_GOOGLE_KG_API_KEY are left empty.
+# Manual deploy with explicit model override:
+#   gcloud builds submit . ... --substitutions=_GEMINI_MODEL=gemini-3.8-flash
 
 substitutions:
   _REGION: us-central1
   _REPO: commerce
-  _GOOGLE_API_KEY: ''
-  _GOOGLE_KG_API_KEY: ''
-  _GEMINI_MODEL: 'gemini-2.5-flash'
+  _GEMINI_MODEL: 'gemini-3.8-flash'
+  # API URL override — if empty the URL is queried from Cloud Run after deploy.
+  # Set this to skip rebuilding the web when only the API changed.
   _WEB_API_URL: ''
+
+availableSecrets:
+  secretManager:
+    - versionName: projects/$PROJECT_ID/secrets/GOOGLE_API_KEY/versions/latest
+      env: GOOGLE_API_KEY
+    - versionName: projects/$PROJECT_ID/secrets/GOOGLE_KG_API_KEY/versions/latest
+      env: GOOGLE_KG_API_KEY
 
 steps:
   # ── 1. Ensure Artifact Registry repo exists ───────────────────────────────
@@ -67,21 +73,14 @@ steps:
     waitFor: [build-api]
 
   # ── 4. Deploy merchant-api to Cloud Run ───────────────────────────────────
-  # Always sets GEMINI_MODEL; only updates GOOGLE_API_KEY/KG when non-empty
-  # so a code-only redeploy (keys not passed) preserves existing key values.
+  # Reads GOOGLE_API_KEY and GOOGLE_KG_API_KEY from Secret Manager.
   - id: deploy-api
     name: gcr.io/google.com/cloudsdktool/cloud-sdk
     entrypoint: bash
+    secretEnv: [GOOGLE_API_KEY, GOOGLE_KG_API_KEY]
     args:
       - -c
       - |
-        ENV_VARS="GEMINI_MODEL=${_GEMINI_MODEL}"
-        if [ -n "${_GOOGLE_API_KEY}" ]; then
-          ENV_VARS="$$ENV_VARS,GOOGLE_API_KEY=${_GOOGLE_API_KEY}"
-        fi
-        if [ -n "${_GOOGLE_KG_API_KEY}" ]; then
-          ENV_VARS="$$ENV_VARS,GOOGLE_KG_API_KEY=${_GOOGLE_KG_API_KEY}"
-        fi
         gcloud run deploy gemini-merchant-api \
           --image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/merchant-api:$BUILD_ID \
           --project=$PROJECT_ID \
@@ -89,12 +88,11 @@ steps:
           --platform=managed \
           --allow-unauthenticated \
           --port=8000 \
-          --update-env-vars="$$ENV_VARS"
+          --update-env-vars="GEMINI_MODEL=${_GEMINI_MODEL},GOOGLE_API_KEY=$$GOOGLE_API_KEY,GOOGLE_KG_API_KEY=$$GOOGLE_KG_API_KEY"
     waitFor: [push-api]
 
   # ── 5. Resolve API URL ────────────────────────────────────────────────────
   # Uses _WEB_API_URL if supplied, otherwise queries Cloud Run after deploy.
-  # $$ escapes are required: Cloud Build replaces $VAR; $$ becomes $ in bash.
   - id: resolve-api-url
     name: gcr.io/google.com/cloudsdktool/cloud-sdk
     entrypoint: bash

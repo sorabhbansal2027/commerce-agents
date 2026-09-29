@@ -495,7 +495,7 @@ function KGEntityCard({ entity }: { entity: KGEntity }) {
               <a
                 href={
                   entity.entity_id.startsWith("kg:")
-                    ? `https://g.co/kg/${entity.entity_id.replace("kg:/", "")}`
+                    ? `https://www.google.com/search?kgmid=${entity.entity_id.replace("kg:", "")}`
                     : `https://www.wikidata.org/wiki/${entity.entity_id}`
                 }
                 target="_blank"
